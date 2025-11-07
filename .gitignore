@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Claude
+.claude
+
+# Node.js (Raycast extension)
+DriveIndex-Raycast/node_modules/
+DriveIndex-Raycast/dist/
+*.log
+npm-debug.log*
+
+# Xcode (Swift app)
+DriveIndex/*.xcodeproj/xcuserdata/
+DriveIndex/*.xcodeproj/project.xcworkspace/xcuserdata/
+DriveIndex/DerivedData/
+DriveIndex/build/
+DriveIndex/*.swp
+DriveIndex/*~.nib
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Generated files
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
