@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Main popover content view
 //

@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Settings panel for exclusion patterns
 //
@@ -59,6 +59,9 @@ struct SettingsView: View {
                             .font(.system(.body, design: .monospaced))
                             .frame(height: 100)
                             .padding(4)
+                            .scrollContentBackground(.hidden)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(4)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 4)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
@@ -84,6 +87,9 @@ struct SettingsView: View {
                             .font(.system(.body, design: .monospaced))
                             .frame(height: 100)
                             .padding(4)
+                            .scrollContentBackground(.hidden)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(4)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 4)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
@@ -160,6 +166,7 @@ struct SettingsView: View {
             .padding()
         }
         .frame(width: 500, height: 500)
+        .interactiveDismissDisabled()
         .onAppear {
             loadSettings()
         }

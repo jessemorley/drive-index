@@ -34,7 +34,7 @@ A lightweight macOS menu bar application that indexes external drives and provid
 └─────────────────┬───────────────────┘
                   │
                   │ Shared SQLite DB
-                  │ ~/Library/Application Support/DriveIndexer/index.db
+                  │ ~/Library/Application Support/DriveIndex/index.db
                   │
 ┌─────────────────▼───────────────────┐
 │   Raycast Extension (TypeScript)    │
@@ -143,10 +143,10 @@ See [CLAUDE.md](CLAUDE.md) for detailed development guidance including:
 ### Menu bar app won't index drives
 - Ensure Full Disk Access is granted in System Settings
 - Check that the drive is mounted at `/Volumes/[DriveName]`
-- Look for errors in Console.app (filter by "DriveIndexer")
+- Look for errors in Console.app (filter by "DriveIndex")
 
 ### Raycast extension shows "No Results"
-- Verify the database exists: `~/Library/Application Support/DriveIndexer/index.db`
+- Verify the database exists: `~/Library/Application Support/DriveIndex/index.db`
 - Check that drives have been indexed (menu bar app should show file counts)
 - Grant Raycast permission to access the database when prompted
 

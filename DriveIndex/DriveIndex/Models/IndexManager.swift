@@ -1,6 +1,6 @@
 //
 //  IndexManager.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Manages indexing operations and state
 //

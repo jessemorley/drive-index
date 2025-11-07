@@ -4,7 +4,7 @@ A fast Raycast extension that searches indexed external drives using SQLite FTS5
 
 ## Overview
 
-This extension provides lightning-fast file search across all your indexed drives, even when they're disconnected. It uses the SQLite database created by the DriveIndexer menu bar app.
+This extension provides lightning-fast file search across all your indexed drives, even when they're disconnected. It uses the SQLite database created by the DriveIndex menu bar app.
 
 ## Features
 
@@ -19,8 +19,8 @@ This extension provides lightning-fast file search across all your indexed drive
 
 ### Prerequisites
 
-1. **DriveIndexer menu bar app** must be built and running
-2. **At least one drive indexed** by DriveIndexer
+1. **DriveIndex menu bar app** must be built and running
+2. **At least one drive indexed** by DriveIndex
 3. **Raycast** installed
 
 ### Setup
@@ -73,9 +73,9 @@ Access preferences via Raycast settings:
 
 ### Database Location
 
-The extension reads the SQLite database created by DriveIndexer:
+The extension reads the SQLite database created by DriveIndex:
 ```
-~/Library/Application Support/DriveIndexer/index.db
+~/Library/Application Support/DriveIndex/index.db
 ```
 
 ### Search Query
@@ -95,7 +95,7 @@ LIMIT ?
 
 Tracks recently accessed files in:
 ```
-~/Library/Application Support/DriveIndexer/click-history.json
+~/Library/Application Support/DriveIndex/click-history.json
 ```
 
 ## File Structure
@@ -154,7 +154,7 @@ Note: The `fastest-levenshtein` dependency can be removed if you delete the lega
 **Problem:** Search returns empty
 
 **Solutions:**
-1. Verify database exists: `ls -lh ~/Library/Application\ Support/DriveIndexer/index.db`
+1. Verify database exists: `ls -lh ~/Library/Application\ Support/DriveIndex/index.db`
 2. Check drives are indexed in menu bar app
 3. Try searching for a file you know exists
 4. Check console for errors: View → Toggle Developer Tools
@@ -164,7 +164,7 @@ Note: The `fastest-levenshtein` dependency can be removed if you delete the lega
 **Problem:** Search takes >1 second
 
 **Solutions:**
-1. Check database size: `du -h ~/Library/Application\ Support/DriveIndexer/index.db`
+1. Check database size: `du -h ~/Library/Application\ Support/DriveIndex/index.db`
 2. If >500MB, consider adding exclusion patterns in menu bar app
 3. Restart Raycast: Quit and relaunch
 
@@ -227,14 +227,14 @@ If you were using the old DriveBuddy extension:
 1. **Backup click history** (if you want to keep it):
    ```bash
    cp ~/Library/Application\ Support/DriveBuddy/click-history.json \
-      ~/Library/Application\ Support/DriveIndexer/click-history.json
+      ~/Library/Application\ Support/DriveIndex/click-history.json
    ```
 
 2. **Update package.json** (already done):
    - Changed `"main": "src/search.tsx"` to `"main": "src/search-new.tsx"`
 
 3. **Rebuild indexes**:
-   - Use DriveIndexer menu bar app to index your drives
+   - Use DriveIndex menu bar app to index your drives
    - Old JSON indexes are no longer used
 
 ## License

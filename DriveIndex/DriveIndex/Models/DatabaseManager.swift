@@ -1,6 +1,6 @@
 //
 //  DatabaseManager.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Handles all SQLite database operations including FTS5 search
 //
@@ -39,15 +39,15 @@ actor DatabaseManager {
             in: .userDomainMask
         ).first!
 
-        let driveIndexerDir = appSupport.appendingPathComponent("DriveIndexer")
+        let driveIndexDir = appSupport.appendingPathComponent("DriveIndex")
 
         // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(
-            at: driveIndexerDir,
+            at: driveIndexDir,
             withIntermediateDirectories: true
         )
 
-        dbPath = driveIndexerDir.appendingPathComponent("index.db").path
+        dbPath = driveIndexDir.appendingPathComponent("index.db").path
 
         Task {
             try await openDatabase()

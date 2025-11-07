@@ -1,6 +1,6 @@
 //
 //  DriveMonitor.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Monitors external drive connections using NSWorkspace notifications
 //
@@ -73,12 +73,13 @@ class DriveMonitor: ObservableObject {
 
     @objc private func driveDidMount(_ notification: NSNotification) {
         guard let userInfo = notification.userInfo,
-              let volumeURL = userInfo[NSWorkspace.volumeURLKey] as? URL else {
+              let volumeURL = userInfo["NSDevicePath"] as? String,
+              let url = URL(string: "file://\(volumeURL)") else {
             return
         }
 
         Task {
-            await handleDriveMounted(volumeURL: volumeURL)
+            await handleDriveMounted(volumeURL: url)
         }
     }
 

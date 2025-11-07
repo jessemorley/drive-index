@@ -1,6 +1,6 @@
 //
-//  DriveIndexerApp.swift
-//  DriveIndexer
+//  DriveIndexApp.swift
+//  DriveIndex
 //
 //  Main application entry point for the menu bar app
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct DriveIndexerApp: App {
+struct DriveIndexApp: App {
     @StateObject private var driveMonitor = DriveMonitor()
     @StateObject private var indexManager = IndexManager()
 

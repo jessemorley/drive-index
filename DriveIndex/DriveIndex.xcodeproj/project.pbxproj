@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1A000001 /* DriveIndexerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000 /* DriveIndexerApp.swift */; };
+		1A000001 /* DriveIndexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000 /* DriveIndexApp.swift */; };
 		1A000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002 /* ContentView.swift */; };
 		1A000005 /* DriveListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000004 /* DriveListView.swift */; };
 		1A000007 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000006 /* SettingsView.swift */; };
@@ -18,7 +18,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		1A000000 /* DriveIndexerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveIndexerApp.swift; sourceTree = "<group>"; };
+		1A000000 /* DriveIndexApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveIndexApp.swift; sourceTree = "<group>"; };
 		1A000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A000004 /* DriveListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveListView.swift; sourceTree = "<group>"; };
 		1A000006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -27,7 +27,8 @@
 		1A00000C /* FileIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIndexer.swift; sourceTree = "<group>"; };
 		1A00000E /* IndexManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexManager.swift; sourceTree = "<group>"; };
 		1A000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		1AXXXXXX /* DriveIndexer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriveIndexer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A000011 /* DriveIndex.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DriveIndex.entitlements; sourceTree = "<group>"; };
+		1AXXXXXX /* DriveIndex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriveIndex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,26 +45,27 @@
 		1A100000 = {
 			isa = PBXGroup;
 			children = (
-				1A100001 /* DriveIndexer */,
+				1A100001 /* DriveIndex */,
 				1A100002 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		1A100001 /* DriveIndexer */ = {
+		1A100001 /* DriveIndex */ = {
 			isa = PBXGroup;
 			children = (
-				1A000000 /* DriveIndexerApp.swift */,
+				1A000000 /* DriveIndexApp.swift */,
 				1A100003 /* Views */,
 				1A100004 /* Models */,
 				1A000010 /* Info.plist */,
+				1A000011 /* DriveIndex.entitlements */,
 			);
-			path = DriveIndexer;
+			path = DriveIndex;
 			sourceTree = "<group>";
 		};
 		1A100002 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1AXXXXXX /* DriveIndexer.app */,
+				1AXXXXXX /* DriveIndex.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,9 +94,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1AYYYYYY /* DriveIndexer */ = {
+		1AYYYYYY /* DriveIndex */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1AZZZZZ1 /* Build configuration list for PBXNativeTarget "DriveIndexer" */;
+			buildConfigurationList = 1AZZZZZ1 /* Build configuration list for PBXNativeTarget "DriveIndex" */;
 			buildPhases = (
 				1AZZZZZ2 /* Sources */,
 				1AFFFFFF /* Frameworks */,
@@ -104,9 +106,9 @@
 			);
 			dependencies = (
 			);
-			name = DriveIndexer;
-			productName = DriveIndexer;
-			productReference = 1AXXXXXX /* DriveIndexer.app */;
+			name = DriveIndex;
+			productName = DriveIndex;
+			productReference = 1AXXXXXX /* DriveIndex.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -124,7 +126,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 1A200001 /* Build configuration list for PBXProject "DriveIndexer" */;
+			buildConfigurationList = 1A200001 /* Build configuration list for PBXProject "DriveIndex" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -137,7 +139,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				1AYYYYYY /* DriveIndexer */,
+				1AYYYYYY /* DriveIndex */,
 			);
 		};
 /* End PBXProject section */
@@ -157,7 +159,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1A000001 /* DriveIndexerApp.swift in Sources */,
+				1A000001 /* DriveIndexApp.swift in Sources */,
 				1A000003 /* ContentView.swift in Sources */,
 				1A000005 /* DriveListView.swift in Sources */,
 				1A000007 /* SettingsView.swift in Sources */,
@@ -294,7 +296,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = DriveIndexer/DriveIndexer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DriveIndex/DriveIndex.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -302,7 +304,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = DriveIndexer/Info.plist;
+				INFOPLIST_FILE = DriveIndex/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -310,7 +312,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.driveindexer.DriveIndexer;
+				PRODUCT_BUNDLE_IDENTIFIER = com.driveindex.DriveIndex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -322,7 +324,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = DriveIndexer/DriveIndexer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = DriveIndex/DriveIndex.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -330,7 +332,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = DriveIndexer/Info.plist;
+				INFOPLIST_FILE = DriveIndex/Info.plist;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -338,7 +340,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.driveindexer.DriveIndexer;
+				PRODUCT_BUNDLE_IDENTIFIER = com.driveindex.DriveIndex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -348,7 +350,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1A200001 /* Build configuration list for PBXProject "DriveIndexer" */ = {
+		1A200001 /* Build configuration list for PBXProject "DriveIndex" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1A300000 /* Debug */,
@@ -357,7 +359,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1AZZZZZ1 /* Build configuration list for PBXNativeTarget "DriveIndexer" */ = {
+		1AZZZZZ1 /* Build configuration list for PBXNativeTarget "DriveIndex" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1A300002 /* Debug */,

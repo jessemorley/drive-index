@@ -36,17 +36,17 @@ export interface ClickHistory {
 }
 
 /**
- * Gets the path to the DriveIndexer SQLite database
+ * Gets the path to the DriveIndex SQLite database
  */
 export function getDatabasePath(): string {
-  return join(homedir(), "Library/Application Support/DriveIndexer/index.db");
+  return join(homedir(), "Library/Application Support/DriveIndex/index.db");
 }
 
 /**
  * Gets the path to the click history file
  */
 function getClickHistoryPath(): string {
-  return join(homedir(), "Library/Application Support/DriveIndexer/click-history.json");
+  return join(homedir(), "Library/Application Support/DriveIndex/click-history.json");
 }
 
 /**

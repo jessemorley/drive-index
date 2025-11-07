@@ -1,4 +1,4 @@
-# DriveIndexer
+# DriveIndex
 
 A lightweight macOS menu bar application that indexes external drives and provides fast, efficient file searching through a Raycast extension.
 
@@ -23,14 +23,14 @@ A lightweight macOS menu bar application that indexes external drives and provid
 
 ```
 ┌─────────────────────────────────────┐
-│   DriveIndexer (Swift Menu Bar)     │
+│   DriveIndex (Swift Menu Bar)       │
 │   - Monitors drive connections      │
 │   - Indexes file systems            │
 │   - Writes to SQLite database       │
 └─────────────────┬───────────────────┘
                   │
                   │ Shared SQLite DB
-                  │ ~/Library/Application Support/DriveIndexer/index.db
+                  │ ~/Library/Application Support/DriveIndex/index.db
                   │
 ┌─────────────────▼───────────────────┐
 │   Raycast Extension (TypeScript)    │
@@ -48,7 +48,7 @@ A lightweight macOS menu bar application that indexes external drives and provid
 
 ## Building the Menu Bar App
 
-1. Open `DriveIndexer.xcodeproj` in Xcode
+1. Open `DriveIndex.xcodeproj` in Xcode
 2. Build and run the project (⌘R)
 3. Grant Full Disk Access when prompted (needed for indexing all directories)
 4. The app will appear in your menu bar
@@ -56,7 +56,7 @@ A lightweight macOS menu bar application that indexes external drives and provid
 ### Granting Full Disk Access
 
 1. Open **System Settings** → **Privacy & Security** → **Full Disk Access**
-2. Click the **+** button and add DriveIndexer.app
+2. Click the **+** button and add DriveIndex.app
 3. This allows the app to index all files on your external drives
 
 ## Installing the Raycast Extension
@@ -70,7 +70,7 @@ A lightweight macOS menu bar application that indexes external drives and provid
 
 ### First Time Setup
 
-1. **Launch DriveIndexer**: The menu bar icon will appear
+1. **Launch DriveIndex**: The menu bar icon will appear
 2. **Connect an external drive**: The app will automatically begin indexing
 3. **Monitor progress**: Click the menu bar icon to see indexing status
 4. **Configure exclusions** (optional): Click the gear icon to set exclusion patterns
@@ -147,10 +147,10 @@ CREATE TABLE drives (
 ### Menu bar app won't index drives
 - Ensure Full Disk Access is granted in System Settings
 - Check that the drive is mounted at `/Volumes/[DriveName]`
-- Look for errors in Console.app (filter by "DriveIndexer")
+- Look for errors in Console.app (filter by "DriveIndex")
 
 ### Raycast extension shows "No Results"
-- Verify the database exists: `~/Library/Application Support/DriveIndexer/index.db`
+- Verify the database exists: `~/Library/Application Support/DriveIndex/index.db`
 - Check that drives have been indexed (menu bar app should show file counts)
 - Grant Raycast permission to access the database when prompted
 
@@ -168,9 +168,9 @@ CREATE TABLE drives (
 
 ### Project Structure
 ```
-DriveIndexer/
-├── DriveIndexer/
-│   ├── DriveIndexerApp.swift       # App entry point
+DriveIndex/
+├── DriveIndex/
+│   ├── DriveIndexApp.swift         # App entry point
 │   ├── Models/
 │   │   ├── DatabaseManager.swift   # SQLite operations
 │   │   ├── DriveMonitor.swift      # NSWorkspace integration
@@ -181,7 +181,7 @@ DriveIndexer/
 │   │   ├── DriveListView.swift     # Drive list + capacity bars
 │   │   └── SettingsView.swift      # Exclusion settings
 │   └── Info.plist                  # LSUIElement = true
-└── DriveIndexer.xcodeproj
+└── DriveIndex.xcodeproj
 
 raycast-extension/
 ├── src/

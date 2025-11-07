@@ -1,6 +1,6 @@
 //
 //  DriveListView.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Displays list of drives with capacity bars
 //

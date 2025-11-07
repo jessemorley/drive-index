@@ -1,6 +1,6 @@
 //
 //  FileIndexer.swift
-//  DriveIndexer
+//  DriveIndex
 //
 //  Async file system indexer with exclusion support
 //
