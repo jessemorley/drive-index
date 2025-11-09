@@ -12,36 +12,20 @@ struct ContentView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
     @State private var settingsWindow: NSWindow?
+    @State private var searchText = ""
+    @State private var searchResults: [SearchResult] = []
+    @State private var isSearching = false
+
+    private let searchManager = SearchManager()
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header - simplified to match Liquid Glass principles
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Drive Index")
-                        .font(.headline)
-                        .fontWeight(.bold)
-
-                    if !driveMonitor.drives.isEmpty {
-                        Text("\(driveMonitor.drives.count) drive\(driveMonitor.drives.count == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                Button(action: { openSettingsWindow() }) {
-                    Image(systemName: "gearshape")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .keyboardShortcut(",", modifiers: .command)
-                .help("Settings")
-            }
-            .padding(.horizontal, Spacing.Container.horizontalPadding)
-            .padding(.vertical, Spacing.medium)
-            .background(.ultraThinMaterial)
+            // Search bar - replaces header
+            SearchBar(
+                searchText: $searchText,
+                driveCount: driveMonitor.drives.count,
+                onSettingsClick: openSettingsWindow
+            )
 
             Divider()
 
@@ -53,10 +37,12 @@ struct ContentView: View {
                 Divider()
             }
 
-            // Drive list
+            // Conditional content: search results or drive list
             if driveMonitor.drives.isEmpty {
                 EmptyStateView()
                     .frame(height: 300)
+            } else if !searchText.isEmpty {
+                SearchResultsView(results: searchResults, isLoading: isSearching)
             } else {
                 DriveListView()
                     .frame(height: calculateContentHeight())
@@ -74,6 +60,31 @@ struct ContentView: View {
                 await driveMonitor.loadDrives()
             }
         }
+        .onChange(of: searchText) { newValue in
+            Task {
+                await performSearch(newValue)
+            }
+        }
+    }
+
+    private func performSearch(_ query: String) async {
+        guard !query.isEmpty else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+
+        do {
+            let results = try await searchManager.search(query)
+            searchResults = results
+        } catch {
+            print("Search error: \(error)")
+            searchResults = []
+        }
+
+        isSearching = false
     }
 
     private func calculateContentHeight() -> CGFloat {

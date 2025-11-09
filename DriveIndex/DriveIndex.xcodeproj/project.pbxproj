@@ -17,6 +17,9 @@
 		1A00000F /* IndexManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000E /* IndexManager.swift */; };
 		867891A82EC0655800E2CDAD /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A52EC0655800E2CDAD /* Spacing.swift */; };
 		867891A92EC0655800E2CDAD /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A62EC0655800E2CDAD /* Typography.swift */; };
+		867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AA2EC0A52600E2CDAD /* SearchManager.swift */; };
+		867891AD2EC0A53F00E2CDAD /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AC2EC0A53F00E2CDAD /* SearchBar.swift */; };
+		867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */; };
 		86B531A42EC04845007DC54C /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A02EC04845007DC54C /* AboutView.swift */; };
 		86B531A52EC04845007DC54C /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A12EC04845007DC54C /* AdvancedSettingsView.swift */; };
 		86B531A62EC04845007DC54C /* ExclusionsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A22EC04845007DC54C /* ExclusionsSettingsView.swift */; };
@@ -38,6 +41,9 @@
 		1AXXXXXX /* DriveIndex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriveIndex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		867891A52EC0655800E2CDAD /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		867891A62EC0655800E2CDAD /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		867891AA2EC0A52600E2CDAD /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
+		867891AC2EC0A53F00E2CDAD /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
+		867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchResultsView.swift; sourceTree = "<group>"; };
 		86B531A02EC04845007DC54C /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		86B531A12EC04845007DC54C /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
 		86B531A22EC04845007DC54C /* ExclusionsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionsSettingsView.swift; sourceTree = "<group>"; };
@@ -88,6 +94,7 @@
 		1A100003 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */,
 				86B531A92EC04858007DC54C /* Components */,
 				86B531A32EC04845007DC54C /* Settings */,
 				1A000002 /* ContentView.swift */,
@@ -100,6 +107,7 @@
 		1A100004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				867891AA2EC0A52600E2CDAD /* SearchManager.swift */,
 				1A000008 /* DatabaseManager.swift */,
 				1A00000A /* DriveMonitor.swift */,
 				1A00000C /* FileIndexer.swift */,
@@ -130,6 +138,7 @@
 		86B531A92EC04858007DC54C /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				867891AC2EC0A53F00E2CDAD /* SearchBar.swift */,
 				86B531A72EC04858007DC54C /* DriveStatusBadge.swift */,
 				86B531A82EC04858007DC54C /* SettingsSection.swift */,
 			);
@@ -205,6 +214,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */,
+				867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */,
 				86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */,
 				1A000001 /* DriveIndexApp.swift in Sources */,
 				1A000003 /* ContentView.swift in Sources */,
@@ -219,6 +229,8 @@
 				86B531A42EC04845007DC54C /* AboutView.swift in Sources */,
 				86B531A52EC04845007DC54C /* AdvancedSettingsView.swift in Sources */,
 				86B531A62EC04845007DC54C /* ExclusionsSettingsView.swift in Sources */,
+				867891AD2EC0A53F00E2CDAD /* SearchBar.swift in Sources */,
+				867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -496,6 +496,26 @@ actor DatabaseManager {
             throw DatabaseError.executeFailed(message)
         }
     }
+
+    /// Execute a query and process results with a closure
+    func executeQuery<T>(_ sql: String, process: (OpaquePointer) throws -> T) throws -> T {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        guard let statement = stmt else {
+            throw DatabaseError.prepareFailed("Statement is nil")
+        }
+
+        return try process(statement)
+    }
 }
 
 // MARK: - Error Types
