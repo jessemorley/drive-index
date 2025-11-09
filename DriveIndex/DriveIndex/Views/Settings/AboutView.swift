@@ -24,32 +24,13 @@ struct AboutView: View {
                         Text("Version 1.0.0")
                             .font(.caption)
                             .foregroundColor(.secondary)
+
+                        Text("© 2025 Jesse Morley")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .padding(.top, Spacing.xSmall)
                     }
                 }
-
-                // Features
-                VStack(alignment: .leading, spacing: Spacing.medium) {
-                    Text("Features")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    AboutItem(
-                        title: "Fast Offline Search",
-                        description: "SQLite FTS5 full-text search for instant results"
-                    )
-
-                    AboutItem(
-                        title: "Automatic Indexing",
-                        description: "Scans drives automatically when connected"
-                    )
-
-                    AboutItem(
-                        title: "Raycast Integration",
-                        description: "Search your drives directly from Raycast"
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Technical info
                 VStack(alignment: .leading, spacing: Spacing.medium) {

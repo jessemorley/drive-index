@@ -12,23 +12,23 @@ struct SettingsView: View {
     @EnvironmentObject var indexManager: IndexManager
     @EnvironmentObject var driveMonitor: DriveMonitor
 
-    @State private var selectedTab: SettingsTab = .exclusions
+    @State private var selectedTab: SettingsTab = .stats
     @State private var excludedDirectories: String = ""
     @State private var excludedExtensions: String = ""
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
 
     enum SettingsTab: String, CaseIterable, Identifiable {
-        case exclusions = "Exclusions"
-        case advanced = "Advanced"
+        case stats = "Stats"
+        case config = "Config"
         case about = "About"
 
         var id: String { rawValue }
 
         var icon: String {
             switch self {
-            case .exclusions: return "line.3.horizontal.decrease.circle"
-            case .advanced: return "gearshape.2"
+            case .stats: return "chart.bar"
+            case .config: return "gearshape"
             case .about: return "info.circle"
             }
         }
@@ -43,20 +43,20 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ExclusionsSettingsView(
+            StatsView()
+                .tabItem {
+                    Label("Stats", systemImage: "chart.bar")
+                }
+                .tag(SettingsTab.stats)
+
+            ConfigView(
                 excludedDirectories: $excludedDirectories,
                 excludedExtensions: $excludedExtensions
             )
             .tabItem {
-                Label("Exclusions", systemImage: "line.3.horizontal.decrease.circle")
+                Label("Config", systemImage: "gearshape")
             }
-            .tag(SettingsTab.exclusions)
-
-            AdvancedSettingsView()
-                .tabItem {
-                    Label("Advanced", systemImage: "gearshape.2")
-                }
-                .tag(SettingsTab.advanced)
+            .tag(SettingsTab.config)
 
             AboutView()
                 .tabItem {
@@ -66,8 +66,8 @@ struct SettingsView: View {
         }
         .frame(width: 600, height: 500)
         .toolbar {
-            // Only show save/cancel for exclusions tab
-            if selectedTab == .exclusions {
+            // Only show save/cancel for config tab
+            if selectedTab == .config {
                 ToolbarItemGroup(placement: .cancellationAction) {
                     if case .saving = saveStatus {
                         HStack(spacing: Spacing.small) {

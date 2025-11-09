@@ -1,13 +1,13 @@
 //
-//  ExclusionsSettingsView.swift
+//  ConfigView.swift
 //  DriveIndex
 //
-//  Exclusions settings tab
+//  Config settings tab
 //
 
 import SwiftUI
 
-struct ExclusionsSettingsView: View {
+struct ConfigView: View {
     @Binding var excludedDirectories: String
     @Binding var excludedExtensions: String
 
@@ -92,7 +92,7 @@ struct ExclusionsSettingsView: View {
 }
 
 #Preview {
-    ExclusionsSettingsView(
+    ConfigView(
         excludedDirectories: .constant(".git, node_modules"),
         excludedExtensions: .constant(".tmp, .cache")
     )

@@ -1,13 +1,13 @@
 //
-//  AdvancedSettingsView.swift
+//  StatsView.swift
 //  DriveIndex
 //
-//  Advanced settings tab
+//  Stats tab
 //
 
 import SwiftUI
 
-struct AdvancedSettingsView: View {
+struct StatsView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
 
     private let databasePath = "~/Library/Application Support/DriveIndex/"
@@ -95,7 +95,7 @@ struct AdvancedSettingsView: View {
 }
 
 #Preview {
-    AdvancedSettingsView()
+    StatsView()
         .environmentObject(DriveMonitor())
         .frame(width: 600, height: 400)
 }
