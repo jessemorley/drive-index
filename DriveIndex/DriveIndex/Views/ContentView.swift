@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var settingsWindow: NSWindow?
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
+    @State private var previousSearchResults: [SearchResult] = []
     @State private var isSearching = false
 
     private let searchManager = SearchManager()
@@ -42,7 +43,11 @@ struct ContentView: View {
                 EmptyStateView()
                     .frame(height: 300)
             } else if !searchText.isEmpty {
-                SearchResultsView(results: searchResults, isLoading: isSearching)
+                SearchResultsView(
+                    results: searchResults,
+                    previousResults: previousSearchResults,
+                    isLoading: isSearching
+                )
             } else {
                 DriveListView()
                     .frame(height: calculateContentHeight())
@@ -70,8 +75,14 @@ struct ContentView: View {
     private func performSearch(_ query: String) async {
         guard !query.isEmpty else {
             searchResults = []
+            previousSearchResults = []
             isSearching = false
             return
+        }
+
+        // Preserve previous results before starting new search
+        if !searchResults.isEmpty {
+            previousSearchResults = searchResults
         }
 
         isSearching = true

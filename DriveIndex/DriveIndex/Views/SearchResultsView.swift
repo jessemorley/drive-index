@@ -9,15 +9,17 @@ import SwiftUI
 
 struct SearchResultsView: View {
     let results: [SearchResult]
+    let previousResults: [SearchResult]
     let isLoading: Bool
 
     var body: some View {
-        if isLoading {
+        if isLoading && previousResults.isEmpty {
             loadingView
-        } else if results.isEmpty {
+        } else if results.isEmpty && !isLoading {
             emptyStateView
         } else {
-            resultsListView
+            // Show previous results while loading, or current results when done
+            resultsListView(displayResults: isLoading && !previousResults.isEmpty ? previousResults : results)
         }
     }
 
@@ -46,17 +48,17 @@ struct SearchResultsView: View {
         .padding(.vertical, Spacing.large * 2)
     }
 
-    private var resultsListView: some View {
+    private func resultsListView(displayResults: [SearchResult]) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                ForEach(results) { result in
+                ForEach(displayResults) { result in
                     SearchResultRow(result: result)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             revealInFinder(result)
                         }
 
-                    if result.id != results.last?.id {
+                    if result.id != displayResults.last?.id {
                         Divider()
                             .padding(.leading, Spacing.large)
                     }
@@ -151,17 +153,18 @@ struct SearchResultRow: View {
                 isConnected: false
             ),
         ],
+        previousResults: [],
         isLoading: false
     )
     .frame(width: 400)
 }
 
 #Preview("Loading") {
-    SearchResultsView(results: [], isLoading: true)
+    SearchResultsView(results: [], previousResults: [], isLoading: true)
         .frame(width: 400)
 }
 
 #Preview("Empty") {
-    SearchResultsView(results: [], isLoading: false)
+    SearchResultsView(results: [], previousResults: [], isLoading: false)
         .frame(width: 400)
 }
