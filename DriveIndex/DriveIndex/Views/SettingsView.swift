@@ -42,125 +42,82 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            VStack(spacing: Spacing.small) {
-                HStack {
-                    Text("Settings")
-                        .font(AppTypography.sectionHeader)
-
-                    Spacer()
-
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.cancelAction)
-                }
-                .padding(Spacing.Container.headerPadding)
-
-                // Tab selector
-                Picker("Settings", selection: $selectedTab) {
-                    ForEach(SettingsTab.allCases) { tab in
-                        Label(tab.rawValue, systemImage: tab.icon)
-                            .tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, Spacing.Container.horizontalPadding)
-                .padding(.bottom, Spacing.medium)
+        TabView(selection: $selectedTab) {
+            ExclusionsSettingsView(
+                excludedDirectories: $excludedDirectories,
+                excludedExtensions: $excludedExtensions
+            )
+            .tabItem {
+                Label("Exclusions", systemImage: "line.3.horizontal.decrease.circle")
             }
+            .tag(SettingsTab.exclusions)
 
-            Divider()
-
-            // Content area with smooth transition
-            Group {
-                switch selectedTab {
-                case .exclusions:
-                    ExclusionsSettingsView(
-                        excludedDirectories: $excludedDirectories,
-                        excludedExtensions: $excludedExtensions
-                    )
-                    .transition(.opacity)
-
-                case .advanced:
-                    AdvancedSettingsView()
-                        .transition(.opacity)
-
-                case .about:
-                    AboutView()
-                        .transition(.opacity)
+            AdvancedSettingsView()
+                .tabItem {
+                    Label("Advanced", systemImage: "gearshape.2")
                 }
-            }
-            .animation(.easeInOut(duration: 0.2), value: selectedTab)
+                .tag(SettingsTab.advanced)
 
-            // Footer (only show for exclusions tab)
+            AboutView()
+                .tabItem {
+                    Label("About", systemImage: "info.circle")
+                }
+                .tag(SettingsTab.about)
+        }
+        .frame(width: 600, height: 500)
+        .toolbar {
+            // Only show save/cancel for exclusions tab
             if selectedTab == .exclusions {
-                Divider()
+                ToolbarItemGroup(placement: .cancellationAction) {
+                    if case .saving = saveStatus {
+                        HStack(spacing: Spacing.small) {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .controlSize(.small)
+                            Text("Saving...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } else if case .saved = saveStatus {
+                        HStack(spacing: Spacing.small) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .imageScale(.small)
+                            Text("Saved")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                    } else if case .error(let message) = saveStatus {
+                        HStack(spacing: Spacing.small) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                                .imageScale(.small)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .lineLimit(1)
+                        }
+                    }
+                }
 
-                HStack(spacing: Spacing.medium) {
-                    // Status message
-                    SaveStatusIndicator
-
-                    Spacer()
-
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
                     .keyboardShortcut(.cancelAction)
+                }
 
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         saveSettings()
                     }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
                 }
-                .padding(Spacing.Container.headerPadding)
             }
         }
-        .frame(width: 600, height: 550)
-        .interactiveDismissDisabled()
         .onAppear {
             loadSettings()
         }
-    }
-
-    private var SaveStatusIndicator: some View {
-        Group {
-            switch saveStatus {
-            case .none:
-                EmptyView()
-            case .saving:
-                HStack(spacing: Spacing.small) {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Text("Saving...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            case .saved:
-                HStack(spacing: Spacing.small) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("Saved")
-                        .font(.caption)
-                        .foregroundColor(.green)
-                }
-                .transition(.scale.combined(with: .opacity))
-            case .error(let message):
-                HStack(spacing: Spacing.small) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                    Text(message)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .lineLimit(1)
-                }
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: saveStatus)
     }
 
     private func loadSettings() {
@@ -217,4 +174,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView()
         .environmentObject(IndexManager())
+        .environmentObject(DriveMonitor())
 }

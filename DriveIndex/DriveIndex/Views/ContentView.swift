@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
@@ -30,24 +31,13 @@ struct ContentView: View {
 
                 Spacer()
 
-                HStack(spacing: Spacing.medium) {
-                    Button(action: { openSettingsWindow() }) {
-                        Image(systemName: "gearshape")
-                            .imageScale(.large)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(",", modifiers: .command)
-                    .help("Settings (⌘,)")
-
-                    Button(action: { NSApp.terminate(nil) }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .imageScale(.large)
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut("q", modifiers: .command)
-                    .help("Quit (⌘Q)")
+                Button(action: { openSettingsWindow() }) {
+                    Image(systemName: "gearshape")
+                        .imageScale(.large)
                 }
+                .buttonStyle(.plain)
+                .keyboardShortcut(",", modifiers: .command)
+                .help("Settings")
             }
             .padding(Spacing.Container.headerPadding)
 
@@ -69,6 +59,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 400, height: 500)
+        .background(VisualEffectBackground())
         .onAppear {
             Task {
                 await driveMonitor.loadDrives()
@@ -89,10 +80,10 @@ struct ContentView: View {
             return
         }
 
-        // Create new window
+        // Create new window with Liquid Glass styling
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 500),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -100,6 +91,8 @@ struct ContentView: View {
         window.title = "Settings"
         window.center()
         window.isReleasedWhenClosed = false
+        window.titlebarAppearsTransparent = false
+        window.toolbarStyle = .unified
 
         let settingsView = SettingsView()
             .environmentObject(indexManager)
@@ -239,6 +232,21 @@ struct IndexingProgressView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Visual Effect Background
+struct VisualEffectBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.state = .active
+        view.blendingMode = .behindWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        // No updates needed
     }
 }
 
