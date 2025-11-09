@@ -181,119 +181,137 @@ actor FileIndexer {
 
     private func walkDirectory(at url: URL, basePath: String, driveUUID: String) -> AsyncStream<FileEntry> {
         AsyncStream { continuation in
-            Task {
-                let fileManager = FileManager.default
-
-                let resourceKeys: Set<URLResourceKey> = [
-                    .nameKey,
-                    .isDirectoryKey,
-                    .isRegularFileKey,
-                    .fileSizeKey,
-                    .creationDateKey,
-                    .contentModificationDateKey
-                ]
-
-                let options: FileManager.DirectoryEnumerationOptions = [
-                    .skipsHiddenFiles,
-                    .skipsPackageDescendants
-                ]
-
-                guard let enumerator = fileManager.enumerator(
+            // Capture needed state for the synchronous enumeration
+            let excludedDirs = excludedDirectories
+            let excludedExts = excludedExtensions
+            
+            // Perform file enumeration on a background thread
+            DispatchQueue.global(qos: .userInitiated).async {
+                Self.enumerateFiles(
                     at: url,
-                    includingPropertiesForKeys: Array(resourceKeys),
-                    options: options,
-                    errorHandler: { url, error in
-                        // Skip permission denied errors silently
-                        let nsError = error as NSError
-                        if nsError.domain == NSCocoaErrorDomain &&
-                           nsError.code == NSFileReadNoPermissionError {
-                            return true
-                        }
-                        print("Error enumerating \(url.path): \(error)")
-                        return true
-                    }
-                ) else {
-                    continuation.finish()
-                    return
-                }
-
-                // Iterate over enumerator - suppressing Swift 6 concurrency warning
-                // This is safe because we're in an isolated Task
-                nonisolated(unsafe) let items = enumerator
-                for case let fileURL as URL in items {
-                    // Yield control periodically
-                    await Task.yield()
-
-                    do {
-                        // Check if should skip this file/directory
-                        if shouldSkip(fileURL) {
-                            if isDirectory(fileURL) {
-                                enumerator.skipDescendants()
-                            }
-                            continue
-                        }
-
-                        let values = try fileURL.resourceValues(forKeys: resourceKeys)
-
-                        guard let name = values.name else {
-                            continue
-                        }
-
-                        // Calculate relative path
-                        let fullPath = fileURL.path
-                        let relativePath: String
-                        if fullPath.hasPrefix(basePath) {
-                            relativePath = String(fullPath.dropFirst(basePath.count + 1))
-                        } else {
-                            relativePath = fullPath
-                        }
-
-                        let entry = FileEntry(
-                            id: nil,
-                            driveUUID: driveUUID,
-                            name: name,
-                            relativePath: relativePath,
-                            size: Int64(values.fileSize ?? 0),
-                            createdAt: values.creationDate,
-                            modifiedAt: values.contentModificationDate,
-                            isDirectory: values.isDirectory ?? false
-                        )
-
-                        continuation.yield(entry)
-
-                    } catch {
-                        // Skip files we can't read
-                        continue
-                    }
-                }
-
-                continuation.finish()
+                    basePath: basePath,
+                    driveUUID: driveUUID,
+                    excludedDirs: excludedDirs,
+                    excludedExts: excludedExts,
+                    continuation: continuation
+                )
             }
         }
     }
+    
+    private static func enumerateFiles(
+        at url: URL,
+        basePath: String,
+        driveUUID: String,
+        excludedDirs: Set<String>,
+        excludedExts: Set<String>,
+        continuation: AsyncStream<FileEntry>.Continuation
+    ) {
+        let fileManager = FileManager.default
 
-    private func shouldSkip(_ url: URL) -> Bool {
+        let resourceKeys: Set<URLResourceKey> = [
+            .nameKey,
+            .isDirectoryKey,
+            .isRegularFileKey,
+            .fileSizeKey,
+            .creationDateKey,
+            .contentModificationDateKey
+        ]
+
+        let options: FileManager.DirectoryEnumerationOptions = [
+            .skipsHiddenFiles,
+            .skipsPackageDescendants
+        ]
+
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: Array(resourceKeys),
+            options: options,
+            errorHandler: { url, error in
+                // Skip permission denied errors silently
+                let nsError = error as NSError
+                if nsError.domain == NSCocoaErrorDomain &&
+                   nsError.code == NSFileReadNoPermissionError {
+                    return true
+                }
+                print("Error enumerating \(url.path): \(error)")
+                return true
+            }
+        ) else {
+            continuation.finish()
+            return
+        }
+
+        // Process files synchronously
+        for case let fileURL as URL in enumerator {
+            // Check if should skip this file/directory
+            if shouldSkip(fileURL, excludedDirs: excludedDirs, excludedExts: excludedExts) {
+                if isDirectory(fileURL) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            do {
+                let values = try fileURL.resourceValues(forKeys: resourceKeys)
+
+                guard let name = values.name else {
+                    continue
+                }
+
+                // Calculate relative path
+                let fullPath = fileURL.path
+                let relativePath: String
+                if fullPath.hasPrefix(basePath) {
+                    relativePath = String(fullPath.dropFirst(basePath.count + 1))
+                } else {
+                    relativePath = fullPath
+                }
+
+                let entry = FileEntry(
+                    id: nil,
+                    driveUUID: driveUUID,
+                    name: name,
+                    relativePath: relativePath,
+                    size: Int64(values.fileSize ?? 0),
+                    createdAt: values.creationDate,
+                    modifiedAt: values.contentModificationDate,
+                    isDirectory: values.isDirectory ?? false
+                )
+
+                continuation.yield(entry)
+
+            } catch {
+                // Skip files we can't read
+                continue
+            }
+        }
+
+        continuation.finish()
+    }
+
+    private static func shouldSkip(_ url: URL, excludedDirs: Set<String>, excludedExts: Set<String>) -> Bool {
         let filename = url.lastPathComponent
 
         // Check excluded extensions
         let ext = url.pathExtension
-        if !ext.isEmpty && excludedExtensions.contains(".\(ext)") {
+        if !ext.isEmpty && excludedExts.contains(".\(ext)") {
             return true
         }
 
-        if excludedExtensions.contains(filename) {
+        if excludedExts.contains(filename) {
             return true
         }
 
         // Check excluded directories
-        if excludedDirectories.contains(filename) {
+        if excludedDirs.contains(filename) {
             return true
         }
 
         return false
     }
 
-    private func isDirectory(_ url: URL) -> Bool {
+    private static func isDirectory(_ url: URL) -> Bool {
         do {
             let values = try url.resourceValues(forKeys: [.isDirectoryKey])
             return values.isDirectory ?? false
