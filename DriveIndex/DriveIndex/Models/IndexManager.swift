@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import UserNotifications
 
 @MainActor
 class IndexManager: ObservableObject {
@@ -116,19 +117,33 @@ class IndexManager: ObservableObject {
     }
 
     private func showCompletionNotification(driveName: String, filesProcessed: Int) {
-        let notification = NSUserNotification()
-        notification.title = "Indexing Complete"
-        notification.informativeText = "Indexed \(filesProcessed) files on \(driveName)"
-        notification.soundName = NSUserNotificationDefaultSoundName
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = "Indexing Complete"
+        content.body = "Indexed \(filesProcessed) files on \(driveName)"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func showErrorNotification(driveName: String, error: Error) {
-        let notification = NSUserNotification()
-        notification.title = "Indexing Failed"
-        notification.informativeText = "Failed to index \(driveName): \(error.localizedDescription)"
-        notification.soundName = NSUserNotificationDefaultSoundName
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = "Indexing Failed"
+        content.body = "Failed to index \(driveName): \(error.localizedDescription)"
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 }
 

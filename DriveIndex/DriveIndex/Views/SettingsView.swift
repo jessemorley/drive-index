@@ -10,13 +10,31 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var indexManager: IndexManager
+    @EnvironmentObject var driveMonitor: DriveMonitor
 
+    @State private var selectedTab: SettingsTab = .exclusions
     @State private var excludedDirectories: String = ""
     @State private var excludedExtensions: String = ""
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
 
-    enum SaveStatus {
+    enum SettingsTab: String, CaseIterable, Identifiable {
+        case exclusions = "Exclusions"
+        case advanced = "Advanced"
+        case about = "About"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .exclusions: return "line.3.horizontal.decrease.circle"
+            case .advanced: return "gearshape.2"
+            case .about: return "info.circle"
+            }
+        }
+    }
+
+    enum SaveStatus: Equatable {
         case none
         case saving
         case saved
@@ -26,150 +44,123 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text("Settings")
-                    .font(.headline)
+            VStack(spacing: Spacing.small) {
+                HStack {
+                    Text("Settings")
+                        .font(AppTypography.sectionHeader)
 
-                Spacer()
+                    Spacer()
 
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
                 }
-                .buttonStyle(.plain)
-            }
-            .padding()
+                .padding(Spacing.Container.headerPadding)
 
-            Divider()
-
-            // Settings content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Excluded Directories
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Excluded Directories")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-
-                        Text("Directory names to skip during indexing (comma-separated)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        TextEditor(text: $excludedDirectories)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(height: 100)
-                            .padding(4)
-                            .scrollContentBackground(.hidden)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .cornerRadius(4)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-
-                        Text("Default: .git, node_modules, Library, .Trashes, etc.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .italic()
+                // Tab selector
+                Picker("Settings", selection: $selectedTab) {
+                    ForEach(SettingsTab.allCases) { tab in
+                        Label(tab.rawValue, systemImage: tab.icon)
+                            .tag(tab)
                     }
-
-                    // Excluded Extensions
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Excluded File Extensions")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-
-                        Text("File extensions and names to skip (comma-separated)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        TextEditor(text: $excludedExtensions)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(height: 100)
-                            .padding(4)
-                            .scrollContentBackground(.hidden)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .cornerRadius(4)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                            )
-
-                        Text("Default: .tmp, .cache, .DS_Store, .localized")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .italic()
-                    }
-
-                    // Info
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundColor(.blue)
-
-                        Text("Changes will apply to the next drive scan. Existing indexed files will not be removed.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding()
-                    .background(Color.blue.opacity(0.1))
-                    .cornerRadius(8)
                 }
-                .padding()
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.bottom, Spacing.medium)
             }
 
             Divider()
 
-            // Footer
-            HStack {
-                // Status message
-                switch saveStatus {
-                case .none:
-                    EmptyView()
-                case .saving:
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                        Text("Saving...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                case .saved:
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Saved")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                case .error(let message):
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                        Text(message)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
-                }
+            // Content area with smooth transition
+            Group {
+                switch selectedTab {
+                case .exclusions:
+                    ExclusionsSettingsView(
+                        excludedDirectories: $excludedDirectories,
+                        excludedExtensions: $excludedExtensions
+                    )
+                    .transition(.opacity)
 
-                Spacer()
+                case .advanced:
+                    AdvancedSettingsView()
+                        .transition(.opacity)
 
-                Button("Cancel") {
-                    dismiss()
+                case .about:
+                    AboutView()
+                        .transition(.opacity)
                 }
-
-                Button("Save") {
-                    saveSettings()
-                }
-                .buttonStyle(.borderedProminent)
             }
-            .padding()
+            .animation(.easeInOut(duration: 0.2), value: selectedTab)
+
+            // Footer (only show for exclusions tab)
+            if selectedTab == .exclusions {
+                Divider()
+
+                HStack(spacing: Spacing.medium) {
+                    // Status message
+                    SaveStatusIndicator
+
+                    Spacer()
+
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .keyboardShortcut(.cancelAction)
+
+                    Button("Save") {
+                        saveSettings()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(Spacing.Container.headerPadding)
+            }
         }
-        .frame(width: 500, height: 500)
+        .frame(width: 600, height: 550)
         .interactiveDismissDisabled()
         .onAppear {
             loadSettings()
         }
+    }
+
+    private var SaveStatusIndicator: some View {
+        Group {
+            switch saveStatus {
+            case .none:
+                EmptyView()
+            case .saving:
+                HStack(spacing: Spacing.small) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Saving...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            case .saved:
+                HStack(spacing: Spacing.small) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("Saved")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .transition(.scale.combined(with: .opacity))
+            case .error(let message):
+                HStack(spacing: Spacing.small) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: saveStatus)
     }
 
     private func loadSettings() {

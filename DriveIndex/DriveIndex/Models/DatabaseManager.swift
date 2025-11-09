@@ -29,10 +29,13 @@ struct DriveMetadata {
 }
 
 actor DatabaseManager {
+    static let shared = DatabaseManager()
+
     private var db: OpaquePointer?
     private let dbPath: String
+    private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    init() {
+    private init() {
         // Store database in Application Support directory
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
@@ -116,16 +119,17 @@ actor DatabaseManager {
 
         try execute("""
             CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
-                DELETE FROM files_fts WHERE rowid = old.id;
+                INSERT INTO files_fts(files_fts, rowid, name, relative_path)
+                VALUES('delete', old.id, old.name, old.relative_path);
             END
         """)
 
         try execute("""
             CREATE TRIGGER IF NOT EXISTS files_au AFTER UPDATE ON files BEGIN
-                UPDATE files_fts SET
-                    name = new.name,
-                    relative_path = new.relative_path
-                WHERE rowid = new.id;
+                INSERT INTO files_fts(files_fts, rowid, name, relative_path)
+                VALUES('delete', old.id, old.name, old.relative_path);
+                INSERT INTO files_fts(rowid, name, relative_path)
+                VALUES(new.id, new.name, new.relative_path);
             END
         """)
 
@@ -162,52 +166,67 @@ actor DatabaseManager {
 
         try execute("BEGIN TRANSACTION")
 
-        defer {
-            try? execute("COMMIT")
-        }
+        do {
+            let insertSQL = """
+                INSERT OR REPLACE INTO files
+                (drive_uuid, name, relative_path, size, created_at, modified_at, is_directory)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
 
-        let insertSQL = """
-            INSERT OR REPLACE INTO files
-            (drive_uuid, name, relative_path, size, created_at, modified_at, is_directory)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """
-
-        var stmt: OpaquePointer?
-        defer {
-            if stmt != nil {
-                sqlite3_finalize(stmt)
-            }
-        }
-
-        guard sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK else {
-            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
-        }
-
-        for entry in entries {
-            sqlite3_bind_text(stmt, 1, entry.driveUUID, -1, nil)
-            sqlite3_bind_text(stmt, 2, entry.name, -1, nil)
-            sqlite3_bind_text(stmt, 3, entry.relativePath, -1, nil)
-            sqlite3_bind_int64(stmt, 4, entry.size)
-
-            if let createdAt = entry.createdAt {
-                sqlite3_bind_int64(stmt, 5, Int64(createdAt.timeIntervalSince1970))
-            } else {
-                sqlite3_bind_null(stmt, 5)
+            var stmt: OpaquePointer?
+            defer {
+                if stmt != nil {
+                    sqlite3_finalize(stmt)
+                }
             }
 
-            if let modifiedAt = entry.modifiedAt {
-                sqlite3_bind_int64(stmt, 6, Int64(modifiedAt.timeIntervalSince1970))
-            } else {
-                sqlite3_bind_null(stmt, 6)
+            guard sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK else {
+                try? execute("ROLLBACK")
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
             }
 
-            sqlite3_bind_int(stmt, 7, entry.isDirectory ? 1 : 0)
+            for entry in entries {
+                sqlite3_bind_text(stmt, 1, (entry.driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (entry.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (entry.relativePath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int64(stmt, 4, entry.size)
 
-            guard sqlite3_step(stmt) == SQLITE_DONE else {
-                throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+                if let createdAt = entry.createdAt {
+                    sqlite3_bind_int64(stmt, 5, Int64(createdAt.timeIntervalSince1970))
+                } else {
+                    sqlite3_bind_null(stmt, 5)
+                }
+
+                if let modifiedAt = entry.modifiedAt {
+                    sqlite3_bind_int64(stmt, 6, Int64(modifiedAt.timeIntervalSince1970))
+                } else {
+                    sqlite3_bind_null(stmt, 6)
+                }
+
+                sqlite3_bind_int(stmt, 7, entry.isDirectory ? 1 : 0)
+
+                let result = sqlite3_step(stmt)
+                guard result == SQLITE_DONE else {
+                    let errorMsg = String(cString: sqlite3_errmsg(db))
+                    let errorCode = sqlite3_errcode(db)
+                    let extendedErrorCode = sqlite3_extended_errcode(db)
+                    print("❌ SQLite error during insert:")
+                    print("   Error code: \(errorCode), Extended: \(extendedErrorCode)")
+                    print("   Message: \(errorMsg)")
+                    print("   Entry: \(entry.name) in \(entry.relativePath)")
+                    try? execute("ROLLBACK")
+                    throw DatabaseError.executeFailed("\(errorMsg) (code: \(errorCode)/\(extendedErrorCode))")
+                }
+
+                sqlite3_reset(stmt)
             }
 
-            sqlite3_reset(stmt)
+            // Only commit if all inserts succeeded
+            try execute("COMMIT")
+        } catch {
+            // Ensure rollback on any error
+            try? execute("ROLLBACK")
+            throw error
         }
     }
 
@@ -225,7 +244,7 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, driveUUID, -1, nil)
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
@@ -246,7 +265,7 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, driveUUID, -1, nil)
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_ROW else {
             return 0
@@ -258,6 +277,8 @@ actor DatabaseManager {
     // MARK: - Drive Metadata Operations
 
     func upsertDriveMetadata(_ metadata: DriveMetadata) throws {
+        print("📝 upsertDriveMetadata called for: \(metadata.name) (UUID: \(metadata.uuid))")
+
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -272,11 +293,13 @@ actor DatabaseManager {
         """
 
         guard sqlite3_prepare_v2(db, upsertSQL, -1, &stmt, nil) == SQLITE_OK else {
-            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            let error = String(cString: sqlite3_errmsg(db))
+            print("❌ prepare failed: \(error)")
+            throw DatabaseError.prepareFailed(error)
         }
 
-        sqlite3_bind_text(stmt, 1, metadata.uuid, -1, nil)
-        sqlite3_bind_text(stmt, 2, metadata.name, -1, nil)
+        sqlite3_bind_text(stmt, 1, (metadata.uuid as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (metadata.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 3, Int64(metadata.lastSeen.timeIntervalSince1970))
         sqlite3_bind_int64(stmt, 4, metadata.totalCapacity)
 
@@ -288,9 +311,14 @@ actor DatabaseManager {
 
         sqlite3_bind_int(stmt, 6, Int32(metadata.fileCount))
 
-        guard sqlite3_step(stmt) == SQLITE_DONE else {
-            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        let result = sqlite3_step(stmt)
+        guard result == SQLITE_DONE else {
+            let error = String(cString: sqlite3_errmsg(db))
+            print("❌ execute failed: \(error) (code: \(result))")
+            throw DatabaseError.executeFailed(error)
         }
+
+        print("✅ Drive metadata upserted successfully")
     }
 
     func getDriveMetadata(_ uuid: String) throws -> DriveMetadata? {
@@ -310,7 +338,7 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, uuid, -1, nil)
+        sqlite3_bind_text(stmt, 1, (uuid as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_ROW else {
             return nil
@@ -399,7 +427,7 @@ actor DatabaseManager {
         }
 
         sqlite3_bind_int64(stmt, 1, Int64(date.timeIntervalSince1970))
-        sqlite3_bind_text(stmt, 2, driveUUID, -1, nil)
+        sqlite3_bind_text(stmt, 2, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
@@ -422,7 +450,7 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, key, -1, nil)
+        sqlite3_bind_text(stmt, 1, (key as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_ROW else {
             return nil
@@ -445,8 +473,8 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, key, -1, nil)
-        sqlite3_bind_text(stmt, 2, value, -1, nil)
+        sqlite3_bind_text(stmt, 1, (key as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (value as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))

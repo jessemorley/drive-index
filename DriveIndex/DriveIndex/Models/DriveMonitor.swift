@@ -44,7 +44,7 @@ struct DriveInfo: Identifiable {
 @MainActor
 class DriveMonitor: ObservableObject {
     @Published var drives: [DriveInfo] = []
-    private let database = DatabaseManager()
+    private let database = DatabaseManager.shared
 
     init() {
         setupNotifications()
@@ -69,6 +69,20 @@ class DriveMonitor: ObservableObject {
             name: NSWorkspace.didUnmountNotification,
             object: nil
         )
+
+        // Listen for indexing completion to refresh drive list
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(indexingDidComplete(_:)),
+            name: .driveIndexingComplete,
+            object: nil
+        )
+    }
+
+    @objc private func indexingDidComplete(_ notification: NSNotification) {
+        Task {
+            await loadDrives()
+        }
     }
 
     @objc private func driveDidMount(_ notification: NSNotification) {
@@ -100,20 +114,21 @@ class DriveMonitor: ObservableObject {
                 .volumeNameKey,
                 .volumeIsRemovableKey,
                 .volumeIsEjectableKey,
+                .volumeIsInternalKey,
                 .volumeTotalCapacityKey,
                 .volumeAvailableCapacityKey,
                 .volumeUUIDStringKey
             ])
 
-            // Only process external/removable drives
-            guard values.volumeIsRemovable == true || values.volumeIsEjectable == true else {
+            // Only process external drives (non-internal)
+            guard values.volumeIsInternal == false else {
                 return
             }
 
             guard let volumeName = values.volumeName,
                   let uuid = values.volumeUUIDString,
                   let totalCapacity = values.volumeTotalCapacity,
-                  let availableCapacity = values.volumeAvailableCapacity else {
+                  values.volumeAvailableCapacity != nil else {
                 return
             }
 
@@ -163,6 +178,7 @@ class DriveMonitor: ObservableObject {
                     .volumeNameKey,
                     .volumeIsRemovableKey,
                     .volumeIsEjectableKey,
+                    .volumeIsInternalKey,
                     .volumeTotalCapacityKey,
                     .volumeAvailableCapacityKey,
                     .volumeUUIDStringKey
@@ -182,13 +198,14 @@ class DriveMonitor: ObservableObject {
                         .volumeNameKey,
                         .volumeIsRemovableKey,
                         .volumeIsEjectableKey,
+                        .volumeIsInternalKey,
                         .volumeTotalCapacityKey,
                         .volumeAvailableCapacityKey,
                         .volumeUUIDStringKey
                     ])
 
-                    // Only show external/removable drives
-                    guard values.volumeIsRemovable == true || values.volumeIsEjectable == true else {
+                    // Only show external drives (non-internal)
+                    guard values.volumeIsInternal == false else {
                         continue
                     }
 
@@ -203,6 +220,19 @@ class DriveMonitor: ObservableObject {
 
                     // Find metadata from database
                     let metadata = dbDrives.first { $0.uuid == uuid }
+
+                    // If drive not in database, create entry
+                    if metadata == nil {
+                        let newMetadata = DriveMetadata(
+                            uuid: uuid,
+                            name: volumeName,
+                            lastSeen: Date(),
+                            totalCapacity: Int64(totalCapacity),
+                            lastScanDate: nil,
+                            fileCount: 0
+                        )
+                        try? await database.upsertDriveMetadata(newMetadata)
+                    }
 
                     let driveInfo = DriveInfo(
                         id: uuid,

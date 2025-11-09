@@ -14,12 +14,14 @@ struct IndexProgress {
 }
 
 actor FileIndexer {
-    private let database = DatabaseManager()
+    private let database = DatabaseManager.shared
     private var excludedDirectories: Set<String> = []
     private var excludedExtensions: Set<String> = []
 
     init() {
         Task {
+            // Wait a moment for database to initialize
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
             await loadExclusionSettings()
         }
     }
@@ -61,6 +63,28 @@ actor FileIndexer {
 
         } catch {
             print("Error loading exclusion settings: \(error)")
+            // Use defaults if loading fails
+            if excludedDirectories.isEmpty {
+                excludedDirectories = [
+                    ".git",
+                    "node_modules",
+                    ".Spotlight-V100",
+                    ".Trashes",
+                    ".fseventsd",
+                    ".TemporaryItems",
+                    "Library",
+                    "$RECYCLE.BIN",
+                    "System Volume Information"
+                ]
+            }
+            if excludedExtensions.isEmpty {
+                excludedExtensions = [
+                    ".tmp",
+                    ".cache",
+                    ".DS_Store",
+                    ".localized"
+                ]
+            }
         }
     }
 
@@ -102,7 +126,7 @@ actor FileIndexer {
         let basePath = driveURL.path
 
         // Walk directory tree
-        let fileStream = walkDirectory(at: driveURL, basePath: basePath)
+        let fileStream = walkDirectory(at: driveURL, basePath: basePath, driveUUID: driveUUID)
 
         for await fileEntry in fileStream {
             batch.append(fileEntry)
@@ -155,7 +179,7 @@ actor FileIndexer {
         print("Indexing complete: \(filesProcessed) files processed")
     }
 
-    private func walkDirectory(at url: URL, basePath: String) -> AsyncStream<FileEntry> {
+    private func walkDirectory(at url: URL, basePath: String, driveUUID: String) -> AsyncStream<FileEntry> {
         AsyncStream { continuation in
             Task {
                 let fileManager = FileManager.default
@@ -193,7 +217,10 @@ actor FileIndexer {
                     return
                 }
 
-                for case let fileURL as URL in enumerator {
+                // Iterate over enumerator - suppressing Swift 6 concurrency warning
+                // This is safe because we're in an isolated Task
+                nonisolated(unsafe) let items = enumerator
+                for case let fileURL as URL in items {
                     // Yield control periodically
                     await Task.yield()
 
@@ -223,7 +250,7 @@ actor FileIndexer {
 
                         let entry = FileEntry(
                             id: nil,
-                            driveUUID: url.lastPathComponent, // Will be replaced with actual UUID
+                            driveUUID: driveUUID,
                             name: name,
                             relativePath: relativePath,
                             size: Int64(values.fileSize ?? 0),

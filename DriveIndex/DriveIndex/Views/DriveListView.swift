@@ -13,12 +13,18 @@ struct DriveListView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: Spacing.medium) {
                 ForEach(driveMonitor.drives) { drive in
                     DriveRow(drive: drive)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .bottom)),
+                            removal: .opacity.combined(with: .move(edge: .top))
+                        ))
                 }
             }
-            .padding()
+            .padding(.horizontal, Spacing.Container.horizontalPadding)
+            .padding(.vertical, Spacing.Container.verticalPadding)
+            .animation(.easeInOut(duration: 0.3), value: driveMonitor.drives.count)
         }
     }
 }
@@ -27,27 +33,29 @@ struct DriveRow: View {
     let drive: DriveInfo
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header row
-            HStack {
-                Image(systemName: drive.isConnected ? "externaldrive.fill.badge.checkmark" : "externaldrive.fill")
-                    .foregroundColor(drive.isConnected ? .green : .gray)
-                    .font(.title3)
+        VStack(alignment: .leading, spacing: Spacing.medium) {
+            // Header: Drive name + status
+            HStack(spacing: Spacing.medium) {
+                Circle()
+                    .fill(drive.isConnected ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
 
                 Text(drive.name)
                     .font(.headline)
+                    .fontWeight(.semibold)
                     .lineLimit(1)
 
                 Spacer()
 
-                Circle()
-                    .fill(drive.isConnected ? Color.green : Color.gray)
-                    .frame(width: 8, height: 8)
+                if !drive.isConnected {
+                    DriveStatusBadge(isConnected: false, isIndexing: false)
+                }
             }
 
-            // Capacity bar
+            // Capacity visualization
             if drive.isConnected {
                 CapacityBar(
                     used: drive.usedCapacity,
@@ -56,46 +64,55 @@ struct DriveRow: View {
                 )
             }
 
-            // Info row
-            HStack {
+            // Info row: capacity + file count
+            HStack(spacing: Spacing.large) {
                 if drive.isConnected {
-                    Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("Offline")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Label {
+                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                            .font(AppTypography.technicalData)
+                    } icon: {
+                        Image(systemName: "internaldrive")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.secondary)
                 }
 
-                Spacer()
-
                 if drive.fileCount > 0 {
-                    Text("\(drive.fileCount.formatted()) files")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    Label {
+                        Text("\(drive.fileCount.formatted()) files")
+                            .font(AppTypography.technicalData)
+                    } icon: {
+                        Image(systemName: "doc.text")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.secondary)
                 }
             }
 
-            // Last scanned
+            // Last scanned status
             if let lastScan = drive.lastScanDate {
                 Text("Last scanned: \(formatRelativeTime(lastScan))")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else if drive.isConnected {
-                Text("Never scanned")
-                    .font(.caption2)
-                    .foregroundColor(.orange)
+                HStack(spacing: Spacing.xSmall) {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.caption2)
+                    Text("Never scanned")
+                        .font(.caption2)
+                }
+                .foregroundColor(.orange)
             }
 
-            // Actions
-            HStack(spacing: 8) {
+            // Action buttons
+            HStack(spacing: Spacing.medium) {
                 if drive.isConnected {
                     Button(action: {
                         scanDrive(drive)
                     }) {
-                        Label("Scan Now", systemImage: "arrow.clockwise")
+                        Label("Scan", systemImage: "arrow.clockwise")
                             .font(.caption)
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                     .disabled(indexManager.isIndexing)
@@ -104,16 +121,22 @@ struct DriveRow: View {
                 Button(action: {
                     openInFinder(drive)
                 }) {
-                    Label("Open in Finder", systemImage: "folder")
+                    Label("Finder", systemImage: "folder")
                         .font(.caption)
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!drive.isConnected)
             }
         }
-        .padding()
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(8)
+        .padding(Spacing.Container.headerPadding)
+        .background(Color.secondary.opacity(isHovered ? 0.08 : 0.05))
+        .cornerRadius(12)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 
     private func scanDrive(_ drive: DriveInfo) {
