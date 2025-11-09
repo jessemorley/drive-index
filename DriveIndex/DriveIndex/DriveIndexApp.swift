@@ -20,7 +20,6 @@ struct DriveIndexApp: App {
             ContentView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-                .frame(width: 400, height: 500)
         }
         .menuBarExtraStyle(.window)
     }

@@ -15,16 +15,16 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack(spacing: Spacing.large) {
-                VStack(alignment: .leading, spacing: Spacing.xSmall) {
-                    Text("Drive Indexer")
-                        .font(.title2)
+            // Header - simplified to match Liquid Glass principles
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Drive Index")
+                        .font(.headline)
                         .fontWeight(.bold)
 
                     if !driveMonitor.drives.isEmpty {
                         Text("\(driveMonitor.drives.count) drive\(driveMonitor.drives.count == 1 ? "" : "s")")
-                            .font(.caption2)
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
@@ -33,13 +33,15 @@ struct ContentView: View {
 
                 Button(action: { openSettingsWindow() }) {
                     Image(systemName: "gearshape")
-                        .imageScale(.large)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .keyboardShortcut(",", modifiers: .command)
                 .help("Settings")
             }
-            .padding(Spacing.Container.headerPadding)
+            .padding(.horizontal, Spacing.Container.horizontalPadding)
+            .padding(.vertical, Spacing.medium)
+            .background(.ultraThinMaterial)
 
             Divider()
 
@@ -54,11 +56,13 @@ struct ContentView: View {
             // Drive list
             if driveMonitor.drives.isEmpty {
                 EmptyStateView()
+                    .frame(height: 300)
             } else {
                 DriveListView()
+                    .frame(height: calculateContentHeight())
             }
         }
-        .frame(width: 400, height: 500)
+        .frame(width: 400)
         .background(VisualEffectBackground())
         .onAppear {
             Task {
@@ -70,6 +74,28 @@ struct ContentView: View {
                 await driveMonitor.loadDrives()
             }
         }
+    }
+
+    private func calculateContentHeight() -> CGFloat {
+        let driveCount = driveMonitor.drives.count
+
+        // Height varies based on whether drive is online (has capacity bar) or offline
+        let connectedCardHeight: CGFloat = 158  // With capacity bar
+        let offlineCardHeight: CGFloat = 128    // Without capacity bar
+
+        // Calculate actual height based on drive states
+        var totalCardHeight: CGFloat = 0
+        let visibleDrives = min(driveCount, 3)
+
+        for drive in driveMonitor.drives.prefix(visibleDrives) {
+            totalCardHeight += drive.isConnected ? connectedCardHeight : offlineCardHeight
+        }
+
+        let cardSpacing: CGFloat = 12
+        let spacingHeight = CGFloat(max(0, visibleDrives - 1)) * cardSpacing
+        let containerPadding: CGFloat = 32 // top and bottom padding from DriveListView
+
+        return totalCardHeight + spacingHeight + containerPadding
     }
 
     private func openSettingsWindow() {
