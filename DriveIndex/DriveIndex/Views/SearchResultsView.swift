@@ -27,7 +27,7 @@ struct SearchResultsView: View {
                 .scaleEffect(0.8)
             Text("Searching...")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.large * 2)
@@ -37,10 +37,10 @@ struct SearchResultsView: View {
         VStack(spacing: Spacing.small) {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 32))
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundStyle(.tertiary)
             Text("No files found")
                 .font(.callout)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.large * 2)
@@ -90,7 +90,7 @@ struct SearchResultRow: View {
             // File icon
             Image(systemName: "doc.fill")
                 .font(.title3)
-                .foregroundColor(.blue)
+                .foregroundStyle(.blue)
                 .frame(width: 24)
 
             // File info
@@ -102,7 +102,7 @@ struct SearchResultRow: View {
 
                 Text(result.relativePath)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
@@ -112,7 +112,7 @@ struct SearchResultRow: View {
             HStack(spacing: Spacing.xSmall) {
                 Text(result.driveName)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 Circle()

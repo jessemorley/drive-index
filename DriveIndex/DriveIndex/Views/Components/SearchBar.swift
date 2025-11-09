@@ -17,14 +17,14 @@ struct SearchBar: View {
     var body: some View {
         HStack(spacing: Spacing.small) {
             Image(systemName: "magnifyingglass")
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .font(.body)
 
             TextField(
                 "",
                 text: $searchText,
                 prompt: Text(placeholderText)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.tertiary)
             )
             .textFieldStyle(.plain)
             .focused($isSearchFocused)
@@ -36,7 +36,7 @@ struct SearchBar: View {
                     isSearchFocused = true
                 }) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .font(.body)
                 }
                 .buttonStyle(.borderless)
@@ -44,7 +44,7 @@ struct SearchBar: View {
 
             Button(action: onSettingsClick) {
                 Image(systemName: "gearshape")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .font(.body)
             }
             .buttonStyle(.borderless)

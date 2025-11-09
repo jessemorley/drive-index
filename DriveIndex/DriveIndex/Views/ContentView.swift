@@ -60,7 +60,7 @@ struct ContentView: View {
                 await driveMonitor.loadDrives()
             }
         }
-        .onChange(of: searchText) { newValue in
+        .onChange(of: searchText) { oldValue, newValue in
             Task {
                 await performSearch(newValue)
             }
