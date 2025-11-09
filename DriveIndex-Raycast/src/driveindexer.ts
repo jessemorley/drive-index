@@ -37,6 +37,7 @@ export interface ClickHistory {
 
 /**
  * Gets the path to the DriveIndex SQLite database
+ * Using production (non-sandboxed) path with existing data
  */
 export function getDatabasePath(): string {
   return join(homedir(), "Library/Application Support/DriveIndex/index.db");
@@ -44,6 +45,7 @@ export function getDatabasePath(): string {
 
 /**
  * Gets the path to the click history file
+ * Using production (non-sandboxed) path
  */
 function getClickHistoryPath(): string {
   return join(homedir(), "Library/Application Support/DriveIndex/click-history.json");
