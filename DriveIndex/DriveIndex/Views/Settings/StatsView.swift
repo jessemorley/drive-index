@@ -152,52 +152,41 @@ struct DriveStatsRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            // Drive name
-            Text(drive.name)
-                .font(.callout)
-                .fontWeight(.medium)
-                .frame(width: 90, alignment: .leading)
-                .lineLimit(1)
+        HStack(alignment: .center, spacing: 12) {
+            // Connection status dot + Drive name
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(drive.isConnected ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
+
+                Text(drive.name)
+                    .font(.callout)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+            }
+            .frame(width: 120, alignment: .leading)
 
             // Drive capacity
             Text(drive.formattedTotal)
-                .font(.caption)
+                .font(AppTypography.technicalData)
                 .foregroundColor(.secondary)
-                .frame(width: 55, alignment: .leading)
+                .frame(width: 60, alignment: .leading)
 
             // File count
             HStack(spacing: 3) {
                 Image(systemName: "doc.text")
                     .font(.caption2)
                 Text("\(drive.fileCount.formatted()) files")
-                    .font(.caption)
+                    .font(AppTypography.technicalData)
             }
             .foregroundColor(.secondary)
-            .frame(width: 85, alignment: .leading)
+            .frame(width: 90, alignment: .leading)
 
             // Last indexed
             Text(drive.formattedLastScan)
-                .font(.caption)
+                .font(AppTypography.technicalData)
                 .foregroundColor(.secondary)
-                .frame(width: 100, alignment: .leading)
                 .lineLimit(1)
-
-            // Connection status badge
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(drive.isConnected ? Color.green : Color.secondary)
-                    .frame(width: 6, height: 6)
-                Text(drive.isConnected ? "Online" : "Offline")
-                    .font(.caption2)
-                    .foregroundColor(drive.isConnected ? .green : .secondary)
-            }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(drive.isConnected ? Color.green.opacity(0.1) : Color.secondary.opacity(0.1))
-            )
 
             Spacer()
 
