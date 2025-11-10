@@ -2,7 +2,7 @@
 
 #### High
 
-- Finish hotkey implementation
+- ~~Finish hotkey implementation~~
 - Increase search results window size/height
 - Add capacity bar to offline drives; remove "% full"
 
