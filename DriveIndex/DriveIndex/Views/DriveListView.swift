@@ -160,6 +160,7 @@ struct CapacityBar: View {
     let total: Int64
     let percentage: Double
     let isConnected: Bool
+    var height: CGFloat = 8
 
     private var fillColor: Color {
         // Use gray for disconnected drives
@@ -193,7 +194,7 @@ struct CapacityBar: View {
                     .cornerRadius(4)
             }
         }
-        .frame(height: 8)
+        .frame(height: height)
     }
 }
 
