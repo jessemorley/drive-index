@@ -44,11 +44,16 @@ struct StatsView: View {
                                     },
                                     onRefresh: {
                                         // Trigger drive rescan
-                                        NotificationCenter.default.post(
-                                            name: .shouldIndexDrive,
-                                            object: nil,
-                                            userInfo: ["driveUUID": drive.id]
-                                        )
+                                        if let driveURL = driveMonitor.getDriveURL(for: drive) {
+                                            NotificationCenter.default.post(
+                                                name: .shouldIndexDrive,
+                                                object: nil,
+                                                userInfo: [
+                                                    "driveURL": driveURL,
+                                                    "driveUUID": drive.id
+                                                ]
+                                            )
+                                        }
                                     }
                                 )
                                 .background(Color.secondary.opacity(0.05))
@@ -73,28 +78,26 @@ struct StatsView: View {
 
                         Spacer()
 
-                        Button(action: {
-                            let path = NSString(string: databasePath).expandingTildeInPath
-                            NSWorkspace.shared.open(URL(fileURLWithPath: path))
-                        }) {
-                            Image(systemName: "folder")
-                        }
-                        .buttonStyle(.plain)
-                        .help("Open in Finder")
+                        HStack(spacing: Spacing.small) {
+                            Button(action: {
+                                let path = NSString(string: databasePath).expandingTildeInPath
+                                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                            }) {
+                                Label("Finder", systemImage: "folder")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Open in Finder")
 
-                        Button(action: {
-                            showDeleteDatabaseConfirmation = true
-                        }) {
-                            Text("Delete")
-                                .font(.caption)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.red)
-                                .cornerRadius(6)
+                            Button(action: {
+                                showDeleteDatabaseConfirmation = true
+                            }) {
+                                Label("Delete", systemImage: "trash")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .help("Delete entire database")
                         }
-                        .buttonStyle(.plain)
-                        .help("Delete entire database")
                     }
                     .padding(Spacing.small)
                     .background(Color.secondary.opacity(0.05))
@@ -181,25 +184,23 @@ struct DriveStatsRow: View {
                 Spacer()
 
                 // Action buttons
-                HStack(spacing: Spacing.medium) {
+                HStack(spacing: Spacing.small) {
                     // Refresh button (only when connected)
                     if drive.isConnected {
                         Button(action: onRefresh) {
-                            Image(systemName: "arrow.clockwise.circle")
-                                .imageScale(.large)
-                                .foregroundColor(.blue)
+                            Image(systemName: "arrow.clockwise")
+                                .font(.caption)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.bordered)
                         .help("Rescan drive")
                     }
 
                     // Delete button
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .imageScale(.large)
-                            .foregroundColor(.red)
+                            .font(.caption)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
                     .help("Remove drive from database")
                 }
             }
