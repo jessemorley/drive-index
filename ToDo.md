@@ -4,13 +4,14 @@
 
 - ~~Finish hotkey implementation~~
 - Increase search results window size/height
-- Add capacity bar to offline drives; remove "% full"
+- ~~Add capacity bar to offline drives; remove "% full"~~
 - Window size for 1 drive incorrect
+- ~~Change exclusion text to chips~~
 
 ### Medium
 
-- Keyboard navigation. (Pressing down from search highlights first result. Can move through and press enter to open in finder. Maybe an indication of what the action is going to be?
-- Settings window appears on top)
+- Keyboard navigation. (Pressing down from search highlights first result. Can move through and press enter to open in finder. Maybe an indication of what the action is going to be?)
+- Settings window appears on top
 
 ### Low
 

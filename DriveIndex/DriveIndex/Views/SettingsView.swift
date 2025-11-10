@@ -13,8 +13,8 @@ struct SettingsView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
 
     @State private var selectedTab: SettingsTab = .stats
-    @State private var excludedDirectories: String = ""
-    @State private var excludedExtensions: String = ""
+    @State private var excludedDirectories: [String] = []
+    @State private var excludedExtensions: [String] = []
     @State private var keyboardShortcut: KeyboardShortcut?
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
@@ -131,8 +131,8 @@ struct SettingsView: View {
             let exts = await indexManager.getExcludedExtensions()
 
             await MainActor.run {
-                excludedDirectories = dirs.joined(separator: ", ")
-                excludedExtensions = exts.joined(separator: ", ")
+                excludedDirectories = dirs
+                excludedExtensions = exts
                 keyboardShortcut = HotkeyManager.shared.currentShortcut
                 isLoading = false
             }
@@ -144,16 +144,9 @@ struct SettingsView: View {
 
         Task {
             do {
-                // Parse comma-separated values
-                let dirs = excludedDirectories
-                    .components(separatedBy: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-
-                let exts = excludedExtensions
-                    .components(separatedBy: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
+                // Filter out empty values (already trimmed by TagInputView)
+                let dirs = excludedDirectories.filter { !$0.isEmpty }
+                let exts = excludedExtensions.filter { !$0.isEmpty }
 
                 try await indexManager.updateExcludedDirectories(dirs)
                 try await indexManager.updateExcludedExtensions(exts)

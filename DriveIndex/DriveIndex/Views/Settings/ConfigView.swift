@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct ConfigView: View {
-    @Binding var excludedDirectories: String
-    @Binding var excludedExtensions: String
+    @Binding var excludedDirectories: [String]
+    @Binding var excludedExtensions: [String]
     @Binding var keyboardShortcut: KeyboardShortcut?
 
     var body: some View {
@@ -37,17 +37,10 @@ struct ConfigView: View {
                     description: "Directory names to skip during indexing",
                     symbol: "folder.badge.minus"
                 ) {
-                    TextEditor(text: $excludedDirectories)
-                        .font(AppTypography.technicalData)
-                        .frame(height: 120)
-                        .padding(Spacing.small)
-                        .scrollContentBackground(.hidden)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
+                    TagInputView(
+                        tags: $excludedDirectories,
+                        placeholder: "Type directory name and press comma or return..."
+                    )
 
                     Text("Common patterns: .git, node_modules, Library, .Trashes, Cache")
                         .font(.caption2)
@@ -61,17 +54,10 @@ struct ConfigView: View {
                     description: "File extensions and names to skip",
                     symbol: "doc.badge.gearshape"
                 ) {
-                    TextEditor(text: $excludedExtensions)
-                        .font(AppTypography.technicalData)
-                        .frame(height: 120)
-                        .padding(Spacing.small)
-                        .scrollContentBackground(.hidden)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                        )
+                    TagInputView(
+                        tags: $excludedExtensions,
+                        placeholder: "Type extension and press comma or return..."
+                    )
 
                     Text("Common patterns: .tmp, .cache, .DS_Store, .localized, Thumbs.db")
                         .font(.caption2)
@@ -110,8 +96,8 @@ struct ConfigView: View {
 
 #Preview {
     ConfigView(
-        excludedDirectories: .constant(".git, node_modules"),
-        excludedExtensions: .constant(".tmp, .cache"),
+        excludedDirectories: .constant([".git", "node_modules", "Library"]),
+        excludedExtensions: .constant([".tmp", ".cache", ".DS_Store"]),
         keyboardShortcut: .constant(.default)
     )
     .frame(width: 600, height: 400)
