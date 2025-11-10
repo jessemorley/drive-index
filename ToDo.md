@@ -5,6 +5,7 @@
 - ~~Finish hotkey implementation~~
 - Increase search results window size/height
 - Add capacity bar to offline drives; remove "% full"
+- Window size for 1 drive incorrect
 
 ### Medium
 

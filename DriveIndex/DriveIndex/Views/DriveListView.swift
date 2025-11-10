@@ -65,16 +65,14 @@ struct DriveRow: View {
 
             // Info row: capacity + file count
             HStack(spacing: Spacing.large) {
-                if drive.isConnected {
-                    Label {
-                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
-                            .font(AppTypography.technicalData)
-                    } icon: {
-                        Image(systemName: "internaldrive")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.secondary)
+                Label {
+                    Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                        .font(AppTypography.technicalData)
+                } icon: {
+                    Image(systemName: "internaldrive")
+                        .font(.caption)
                 }
+                .foregroundColor(.secondary)
 
                 if drive.fileCount > 0 {
                     Label {

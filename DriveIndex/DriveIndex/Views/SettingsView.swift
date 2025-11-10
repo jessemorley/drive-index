@@ -70,34 +70,37 @@ struct SettingsView: View {
         .toolbar {
             // Only show save/cancel for config tab
             if selectedTab == .config {
-                ToolbarItemGroup(placement: .cancellationAction) {
-                    if case .saving = saveStatus {
-                        HStack(spacing: Spacing.small) {
-                            ProgressView()
-                                .scaleEffect(0.7)
-                                .controlSize(.small)
-                            Text("Saving...")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else if case .saved = saveStatus {
-                        HStack(spacing: Spacing.small) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                                .imageScale(.small)
-                            Text("Saved")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-                    } else if case .error(let message) = saveStatus {
-                        HStack(spacing: Spacing.small) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.red)
-                                .imageScale(.small)
-                            Text(message)
-                                .font(.caption)
-                                .foregroundColor(.red)
-                                .lineLimit(1)
+                // Status indicator on the left side
+                ToolbarItem(placement: .status) {
+                    Group {
+                        if case .saving = saveStatus {
+                            HStack(spacing: Spacing.small) {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .controlSize(.small)
+                                Text("Saving...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else if case .saved = saveStatus {
+                            HStack(spacing: Spacing.small) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .imageScale(.small)
+                                Text("Saved")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                        } else if case .error(let message) = saveStatus {
+                            HStack(spacing: Spacing.small) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.red)
+                                    .imageScale(.small)
+                                Text(message)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                    .lineLimit(1)
+                            }
                         }
                     }
                 }
