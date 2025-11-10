@@ -59,7 +59,6 @@ struct ContentView: View {
             }
         }
         .frame(width: 400)
-        .background(VisualEffectBackground())
         .onAppear {
             // Auto-focus search field when window appears
             isSearchFocused = true
@@ -298,21 +297,6 @@ struct IndexingProgressView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.orange.opacity(0.2), lineWidth: 1)
         )
-    }
-}
-
-// MARK: - Visual Effect Background
-struct VisualEffectBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .popover
-        view.state = .active
-        view.blendingMode = .behindWindow
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        // No updates needed
     }
 }
 
