@@ -56,13 +56,12 @@ struct DriveRow: View {
             }
 
             // Capacity visualization
-            if drive.isConnected {
-                CapacityBar(
-                    used: drive.usedCapacity,
-                    total: drive.totalCapacity,
-                    percentage: drive.usedPercentage
-                )
-            }
+            CapacityBar(
+                used: drive.usedCapacity,
+                total: drive.totalCapacity,
+                percentage: drive.usedPercentage,
+                isConnected: drive.isConnected
+            )
 
             // Info row: capacity + file count
             HStack(spacing: Spacing.large) {
@@ -168,8 +167,14 @@ struct CapacityBar: View {
     let used: Int64
     let total: Int64
     let percentage: Double
+    let isConnected: Bool
 
     private var fillColor: Color {
+        // Use gray for disconnected drives
+        if !isConnected {
+            return .gray
+        }
+
         if percentage >= 90 {
             return .red
         } else if percentage >= 75 {
@@ -182,27 +187,21 @@ struct CapacityBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .cornerRadius(4)
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Background
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
 
-                    // Fill
-                    Rectangle()
-                        .fill(fillColor)
-                        .frame(width: geometry.size.width * (percentage / 100))
-                        .cornerRadius(4)
-                }
+                // Fill
+                Rectangle()
+                    .fill(fillColor)
+                    .frame(width: geometry.size.width * (percentage / 100))
+                    .cornerRadius(4)
             }
-            .frame(height: 8)
-
-            Text("\(Int(percentage))% full")
-                .font(.caption2)
-                .foregroundColor(.secondary)
         }
+        .frame(height: 8)
     }
 }
 

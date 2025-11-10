@@ -136,11 +136,13 @@ class DriveMonitor: ObservableObject {
             print("Drive mounted: \(volumeName) (UUID: \(uuid))")
 
             // Update database
+            let usedCapacity = Int64(totalCapacity) - Int64(values.volumeAvailableCapacity!)
             let metadata = DriveMetadata(
                 uuid: uuid,
                 name: volumeName,
                 lastSeen: Date(),
                 totalCapacity: Int64(totalCapacity),
+                usedCapacity: usedCapacity,
                 lastScanDate: nil,
                 fileCount: 0
             )
@@ -224,11 +226,13 @@ class DriveMonitor: ObservableObject {
 
                     // If drive not in database, create entry
                     if metadata == nil {
+                        let usedCapacity = Int64(totalCapacity) - Int64(availableCapacity)
                         let newMetadata = DriveMetadata(
                             uuid: uuid,
                             name: volumeName,
                             lastSeen: Date(),
                             totalCapacity: Int64(totalCapacity),
+                            usedCapacity: usedCapacity,
                             lastScanDate: nil,
                             fileCount: 0
                         )
@@ -257,12 +261,14 @@ class DriveMonitor: ObservableObject {
             // Add offline drives from database
             for dbDrive in dbDrives {
                 if !mountedDriveUUIDs.contains(dbDrive.uuid) {
+                    // For offline drives, calculate available capacity from stored used capacity
+                    let availableCapacity = dbDrive.totalCapacity - dbDrive.usedCapacity
                     let driveInfo = DriveInfo(
                         id: dbDrive.uuid,
                         name: dbDrive.name,
                         path: "",
                         totalCapacity: dbDrive.totalCapacity,
-                        availableCapacity: 0,
+                        availableCapacity: availableCapacity,
                         isConnected: false,
                         lastSeen: dbDrive.lastSeen,
                         lastScanDate: dbDrive.lastScanDate,

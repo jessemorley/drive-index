@@ -24,6 +24,7 @@ struct DriveMetadata {
     let name: String
     let lastSeen: Date
     let totalCapacity: Int64
+    let usedCapacity: Int64
     let lastScanDate: Date?
     let fileCount: Int
 }
@@ -145,10 +146,15 @@ actor DatabaseManager {
                 name TEXT NOT NULL,
                 last_seen INTEGER,
                 total_capacity INTEGER,
+                used_capacity INTEGER,
                 last_scan_date INTEGER,
                 file_count INTEGER
             )
         """)
+
+        // Migration: Add used_capacity column if it doesn't exist
+        // Check if column exists by trying to add it (will fail silently if exists)
+        try? execute("ALTER TABLE drives ADD COLUMN used_capacity INTEGER DEFAULT 0")
 
         // Settings table
         try execute("""
@@ -288,8 +294,8 @@ actor DatabaseManager {
 
         let upsertSQL = """
             INSERT OR REPLACE INTO drives
-            (uuid, name, last_seen, total_capacity, last_scan_date, file_count)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
 
         guard sqlite3_prepare_v2(db, upsertSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -302,14 +308,15 @@ actor DatabaseManager {
         sqlite3_bind_text(stmt, 2, (metadata.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 3, Int64(metadata.lastSeen.timeIntervalSince1970))
         sqlite3_bind_int64(stmt, 4, metadata.totalCapacity)
+        sqlite3_bind_int64(stmt, 5, metadata.usedCapacity)
 
         if let lastScanDate = metadata.lastScanDate {
-            sqlite3_bind_int64(stmt, 5, Int64(lastScanDate.timeIntervalSince1970))
+            sqlite3_bind_int64(stmt, 6, Int64(lastScanDate.timeIntervalSince1970))
         } else {
-            sqlite3_bind_null(stmt, 5)
+            sqlite3_bind_null(stmt, 6)
         }
 
-        sqlite3_bind_int(stmt, 6, Int32(metadata.fileCount))
+        sqlite3_bind_int(stmt, 7, Int32(metadata.fileCount))
 
         let result = sqlite3_step(stmt)
         guard result == SQLITE_DONE else {
@@ -330,7 +337,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, last_scan_date, file_count
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count
             FROM drives WHERE uuid = ?
         """
 
@@ -348,19 +355,21 @@ actor DatabaseManager {
         let name = String(cString: sqlite3_column_text(stmt, 1))
         let lastSeen = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
         let totalCapacity = sqlite3_column_int64(stmt, 3)
+        let usedCapacity = sqlite3_column_int64(stmt, 4)
 
         var lastScanDate: Date?
-        if sqlite3_column_type(stmt, 4) != SQLITE_NULL {
-            lastScanDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 4)))
+        if sqlite3_column_type(stmt, 5) != SQLITE_NULL {
+            lastScanDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 5)))
         }
 
-        let fileCount = Int(sqlite3_column_int(stmt, 5))
+        let fileCount = Int(sqlite3_column_int(stmt, 6))
 
         return DriveMetadata(
             uuid: uuidStr,
             name: name,
             lastSeen: lastSeen,
             totalCapacity: totalCapacity,
+            usedCapacity: usedCapacity,
             lastScanDate: lastScanDate,
             fileCount: fileCount
         )
@@ -375,7 +384,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, last_scan_date, file_count
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count
             FROM drives
             ORDER BY last_seen DESC
         """
@@ -391,19 +400,21 @@ actor DatabaseManager {
             let name = String(cString: sqlite3_column_text(stmt, 1))
             let lastSeen = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
             let totalCapacity = sqlite3_column_int64(stmt, 3)
+            let usedCapacity = sqlite3_column_int64(stmt, 4)
 
             var lastScanDate: Date?
-            if sqlite3_column_type(stmt, 4) != SQLITE_NULL {
-                lastScanDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 4)))
+            if sqlite3_column_type(stmt, 5) != SQLITE_NULL {
+                lastScanDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 5)))
             }
 
-            let fileCount = Int(sqlite3_column_int(stmt, 5))
+            let fileCount = Int(sqlite3_column_int(stmt, 6))
 
             results.append(DriveMetadata(
                 uuid: uuid,
                 name: name,
                 lastSeen: lastSeen,
                 totalCapacity: totalCapacity,
+                usedCapacity: usedCapacity,
                 lastScanDate: lastScanDate,
                 fileCount: fileCount
             ))

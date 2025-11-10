@@ -164,6 +164,7 @@ actor FileIndexer {
                 name: metadata.name,
                 lastSeen: metadata.lastSeen,
                 totalCapacity: metadata.totalCapacity,
+                usedCapacity: metadata.usedCapacity,
                 lastScanDate: Date(),
                 fileCount: fileCount
             )
