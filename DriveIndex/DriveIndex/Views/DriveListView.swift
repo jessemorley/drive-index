@@ -87,8 +87,8 @@ struct DriveRow: View {
             }
 
             // Last scanned status
-            if let lastScan = drive.lastScanDate {
-                Text("Last scanned: \(formatRelativeTime(lastScan))")
+            if drive.lastScanDate != nil {
+                Text("Last scanned: \(drive.formattedLastScan)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else if drive.isConnected {
@@ -152,12 +152,6 @@ struct DriveRow: View {
         }
 
         NSWorkspace.shared.open(driveURL)
-    }
-
-    private func formatRelativeTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 

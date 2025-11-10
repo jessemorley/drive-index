@@ -152,10 +152,6 @@ actor DatabaseManager {
             )
         """)
 
-        // Migration: Add used_capacity column if it doesn't exist
-        // Check if column exists by trying to add it (will fail silently if exists)
-        try? execute("ALTER TABLE drives ADD COLUMN used_capacity INTEGER DEFAULT 0")
-
         // Settings table
         try execute("""
             CREATE TABLE IF NOT EXISTS settings (

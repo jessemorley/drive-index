@@ -39,6 +39,16 @@ struct DriveInfo: Identifiable {
     var formattedUsed: String {
         ByteCountFormatter.string(fromByteCount: usedCapacity, countStyle: .file)
     }
+
+    var formattedLastScan: String {
+        guard let lastScanDate = lastScanDate else {
+            return "Never"
+        }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Scanned " + formatter.localizedString(for: lastScanDate, relativeTo: Date())
+    }
 }
 
 @MainActor

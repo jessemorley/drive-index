@@ -45,7 +45,7 @@ struct StatsView: View {
                                 }
                             }
                         }
-                        .padding(Spacing.medium)
+                        .padding(Spacing.small)
                         .background(Color.secondary.opacity(0.05))
                         .cornerRadius(8)
                     }
@@ -78,8 +78,13 @@ struct StatsView: View {
                         Button(action: {
                             showDeleteDatabaseConfirmation = true
                         }) {
-                            Image(systemName: "trash")
-                                .foregroundColor(.red)
+                            Text("Delete")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.red)
+                                .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
                         .help("Delete entire database")
@@ -147,47 +152,70 @@ struct DriveStatsRow: View {
     let onDelete: () -> Void
 
     var body: some View {
-        HStack(spacing: Spacing.medium) {
-            // Drive info
-            VStack(alignment: .leading, spacing: Spacing.xSmall) {
-                HStack(spacing: Spacing.small) {
-                    Text(drive.name)
-                        .font(.callout)
-                        .fontWeight(.medium)
+        HStack(alignment: .center, spacing: 8) {
+            // Drive name
+            Text(drive.name)
+                .font(.callout)
+                .fontWeight(.medium)
+                .frame(width: 90, alignment: .leading)
+                .lineLimit(1)
 
-                    // Connection status badge
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(drive.isConnected ? Color.green : Color.secondary)
-                            .frame(width: 6, height: 6)
-                        Text(drive.isConnected ? "Online" : "Offline")
-                            .font(.caption2)
-                            .foregroundColor(drive.isConnected ? .green : .secondary)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(drive.isConnected ? Color.green.opacity(0.1) : Color.secondary.opacity(0.1))
-                    )
-                }
+            // Drive capacity
+            Text(drive.formattedTotal)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 55, alignment: .leading)
 
+            // File count
+            HStack(spacing: 3) {
+                Image(systemName: "doc.text")
+                    .font(.caption2)
                 Text("\(drive.fileCount.formatted()) files")
                     .font(.caption)
-                    .foregroundColor(.secondary)
             }
+            .foregroundColor(.secondary)
+            .frame(width: 85, alignment: .leading)
+
+            // Last indexed
+            Text(drive.formattedLastScan)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(width: 100, alignment: .leading)
+                .lineLimit(1)
+
+            // Connection status badge
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(drive.isConnected ? Color.green : Color.secondary)
+                    .frame(width: 6, height: 6)
+                Text(drive.isConnected ? "Online" : "Offline")
+                    .font(.caption2)
+                    .foregroundColor(drive.isConnected ? .green : .secondary)
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(drive.isConnected ? Color.green.opacity(0.1) : Color.secondary.opacity(0.1))
+            )
 
             Spacer()
 
             // Delete button
             Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
+                Text("Remove")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.red)
+                    .cornerRadius(6)
             }
             .buttonStyle(.plain)
             .help("Remove drive from database")
+            .fixedSize()
         }
-        .padding(.vertical, Spacing.xSmall)
+        .padding(.vertical, Spacing.small)
     }
 }
 
