@@ -321,6 +321,12 @@ class DriveMonitor: ObservableObject {
 
         return nil
     }
+
+    func deleteDrive(_ driveUUID: String) async throws {
+        print("🗑️ DriveMonitor: deleting drive with UUID: \(driveUUID)")
+        try await database.deleteDrive(driveUUID)
+        await loadDrives()
+    }
 }
 
 // MARK: - Notification Names

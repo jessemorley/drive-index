@@ -445,6 +445,39 @@ actor DatabaseManager {
         }
     }
 
+    func deleteDrive(_ driveUUID: String) throws {
+        print("🗑️ deleteDrive called for UUID: \(driveUUID)")
+
+        // Delete all files for this drive first (FTS5 triggers will auto-clean the search index)
+        try clearDrive(driveUUID)
+
+        // Delete the drive metadata
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let deleteSQL = "DELETE FROM drives WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
+            let error = String(cString: sqlite3_errmsg(db))
+            print("❌ prepare failed: \(error)")
+            throw DatabaseError.prepareFailed(error)
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            let error = String(cString: sqlite3_errmsg(db))
+            print("❌ execute failed: \(error)")
+            throw DatabaseError.executeFailed(error)
+        }
+
+        print("✅ Drive deleted successfully")
+    }
+
     // MARK: - Settings Operations
 
     func getSetting(_ key: String) throws -> String? {
