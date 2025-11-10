@@ -10,9 +10,8 @@ import SwiftUI
 struct SearchBar: View {
     @Binding var searchText: String
     let driveCount: Int
+    @FocusState var isSearchFocused: Bool
     let onSettingsClick: () -> Void
-
-    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         HStack(spacing: Spacing.small) {
@@ -68,18 +67,31 @@ struct SearchBar: View {
 }
 
 #Preview {
-    VStack {
-        SearchBar(
-            searchText: .constant(""),
-            driveCount: 2,
-            onSettingsClick: {}
-        )
+    struct PreviewWrapper: View {
+        @FocusState var isFocused1: Bool
+        @FocusState var isFocused2: Bool
+        @State var searchText1 = ""
+        @State var searchText2 = "test file"
 
-        SearchBar(
-            searchText: .constant("test file"),
-            driveCount: 5,
-            onSettingsClick: {}
-        )
+        var body: some View {
+            VStack {
+                SearchBar(
+                    searchText: $searchText1,
+                    driveCount: 2,
+                    isSearchFocused: _isFocused1,
+                    onSettingsClick: {}
+                )
+
+                SearchBar(
+                    searchText: $searchText2,
+                    driveCount: 5,
+                    isSearchFocused: _isFocused2,
+                    onSettingsClick: {}
+                )
+            }
+            .frame(width: 400)
+        }
     }
-    .frame(width: 400)
+
+    return PreviewWrapper()
 }

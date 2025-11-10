@@ -16,8 +16,10 @@ struct ContentView: View {
     @State private var searchResults: [SearchResult] = []
     @State private var previousSearchResults: [SearchResult] = []
     @State private var isSearching = false
+    @FocusState private var isSearchFocused: Bool
 
     private let searchManager = SearchManager()
+    private let searchResultsHeight: CGFloat = 474  // Fixed height for search results
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +27,7 @@ struct ContentView: View {
             SearchBar(
                 searchText: $searchText,
                 driveCount: driveMonitor.drives.count,
+                isSearchFocused: _isSearchFocused,
                 onSettingsClick: openSettingsWindow
             )
 
@@ -46,8 +49,10 @@ struct ContentView: View {
                 SearchResultsView(
                     results: searchResults,
                     previousResults: previousSearchResults,
-                    isLoading: isSearching
+                    isLoading: isSearching,
+                    contentHeight: searchResultsHeight
                 )
+                .frame(height: searchResultsHeight)
             } else {
                 DriveListView()
                     .frame(height: calculateContentHeight())
@@ -56,11 +61,24 @@ struct ContentView: View {
         .frame(width: 400)
         .background(VisualEffectBackground())
         .onAppear {
+            // Auto-focus search field when window appears
+            isSearchFocused = true
+
             Task {
                 await driveMonitor.loadDrives()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .driveIndexingComplete)) { _ in
+            Task {
+                await driveMonitor.loadDrives()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .searchWindowDidShow)) { _ in
+            // Clear search text to show drive list
+            searchText = ""
+
+            // Refresh drives and focus search when window is shown via hotkey
+            isSearchFocused = true
             Task {
                 await driveMonitor.loadDrives()
             }

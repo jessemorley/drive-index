@@ -10,10 +10,27 @@ import SwiftUI
 struct ConfigView: View {
     @Binding var excludedDirectories: String
     @Binding var excludedExtensions: String
+    @Binding var keyboardShortcut: KeyboardShortcut?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxLarge) {
+                // Keyboard Shortcut
+                SettingsSection(
+                    title: "Global Shortcut",
+                    description: "Keyboard shortcut to open the search window",
+                    symbol: "keyboard"
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.small) {
+                        ShortcutRecorder(shortcut: $keyboardShortcut)
+
+                        Text("Press a key combination with at least one modifier (⌘, ⌃, ⌥, or ⇧)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .italic()
+                    }
+                }
+
                 // Excluded Directories
                 SettingsSection(
                     title: "Excluded Directories",
@@ -94,7 +111,8 @@ struct ConfigView: View {
 #Preview {
     ConfigView(
         excludedDirectories: .constant(".git, node_modules"),
-        excludedExtensions: .constant(".tmp, .cache")
+        excludedExtensions: .constant(".tmp, .cache"),
+        keyboardShortcut: .constant(.default)
     )
     .frame(width: 600, height: 400)
 }

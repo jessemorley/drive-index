@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab = .stats
     @State private var excludedDirectories: String = ""
     @State private var excludedExtensions: String = ""
+    @State private var keyboardShortcut: KeyboardShortcut?
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
 
@@ -51,7 +52,8 @@ struct SettingsView: View {
 
             ConfigView(
                 excludedDirectories: $excludedDirectories,
-                excludedExtensions: $excludedExtensions
+                excludedExtensions: $excludedExtensions,
+                keyboardShortcut: $keyboardShortcut
             )
             .tabItem {
                 Label("Config", systemImage: "gearshape")
@@ -128,6 +130,7 @@ struct SettingsView: View {
             await MainActor.run {
                 excludedDirectories = dirs.joined(separator: ", ")
                 excludedExtensions = exts.joined(separator: ", ")
+                keyboardShortcut = HotkeyManager.shared.currentShortcut
                 isLoading = false
             }
         }
@@ -151,6 +154,15 @@ struct SettingsView: View {
 
                 try await indexManager.updateExcludedDirectories(dirs)
                 try await indexManager.updateExcludedExtensions(exts)
+
+                // Update keyboard shortcut
+                await MainActor.run {
+                    if let shortcut = keyboardShortcut {
+                        HotkeyManager.shared.updateShortcut(shortcut)
+                    } else {
+                        HotkeyManager.shared.clearShortcut()
+                    }
+                }
 
                 await MainActor.run {
                     saveStatus = .saved

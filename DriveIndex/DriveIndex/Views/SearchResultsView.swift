@@ -11,6 +11,7 @@ struct SearchResultsView: View {
     let results: [SearchResult]
     let previousResults: [SearchResult]
     let isLoading: Bool
+    var contentHeight: CGFloat = 400
 
     var body: some View {
         if isLoading && previousResults.isEmpty {
@@ -31,8 +32,8 @@ struct SearchResultsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.large * 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(height: contentHeight)
     }
 
     private var emptyStateView: some View {
@@ -44,8 +45,8 @@ struct SearchResultsView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.large * 2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(height: contentHeight)
     }
 
     private func resultsListView(displayResults: [SearchResult]) -> some View {
@@ -65,7 +66,7 @@ struct SearchResultsView: View {
                 }
             }
         }
-        .frame(maxHeight: 400)
+        .frame(height: contentHeight)
     }
 
     private func revealInFinder(_ result: SearchResult) {

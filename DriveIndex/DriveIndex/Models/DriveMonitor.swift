@@ -48,6 +48,7 @@ class DriveMonitor: ObservableObject {
 
     init() {
         setupNotifications()
+        // Load drives immediately on initialization
         Task {
             await loadDrives()
         }
@@ -280,7 +281,10 @@ class DriveMonitor: ObservableObject {
                 return drive1.name < drive2.name
             }
 
-            drives = updatedDrives
+            // Explicitly update on main actor to ensure UI refresh
+            await MainActor.run {
+                self.drives = updatedDrives
+            }
 
         } catch {
             print("Error loading drives: \(error)")
