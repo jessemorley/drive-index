@@ -69,7 +69,7 @@ struct StatsView: View {
                                         }
                                     }
                                 )
-                                .background(Color.secondary.opacity(0.05))
+                                .background(drive.isConnected ? Color.green.opacity(0.05) : Color.secondary.opacity(0.05))
                                 .cornerRadius(8)
                             }
                         }
@@ -273,9 +273,9 @@ struct DriveStatsRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
-            // Top row: Drive name + action buttons
+            // Top row: Drive name + capacity + remove button
             HStack(spacing: Spacing.medium) {
-                // Status dot + Drive name
+                // Status dot + Drive name + Capacity badge
                 HStack(spacing: 6) {
                     Circle()
                         .fill(drive.isConnected ? Color.green : Color.gray)
@@ -285,50 +285,29 @@ struct DriveStatsRow: View {
                         .font(.callout)
                         .fontWeight(.medium)
                         .lineLimit(1)
+
+                    if drive.totalCapacity > 0 {
+                        Text(drive.formattedTotal)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            )
+                    }
                 }
 
                 Spacer()
 
-                // Action buttons: Finder, Eject, Refresh, Remove
-                HStack(spacing: Spacing.small) {
-                    // Finder button (only when connected)
-                    if drive.isConnected {
-                        Button(action: onRevealInFinder) {
-                            Image(systemName: "folder")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .help("Reveal in Finder")
-                    }
-
-                    // Eject button (only when connected)
-                    if drive.isConnected {
-                        Button(action: onEject) {
-                            Image(systemName: "eject")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .help("Eject drive")
-                    }
-
-                    // Refresh button (only when connected)
-                    if drive.isConnected {
-                        Button(action: onRefresh) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .help("Rescan drive")
-                    }
-
-                    // Delete button (always shown)
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.bordered)
-                    .help("Remove drive from database")
+                // Delete button (always shown)
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.caption)
                 }
+                .buttonStyle(.bordered)
+                .help("Remove drive from database")
             }
 
             // Capacity bar (full width)
@@ -366,8 +345,49 @@ struct DriveStatsRow: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
+
+            // Action buttons: Scan and Reveal on left, Eject on right
+            if drive.isConnected {
+                HStack(spacing: Spacing.small) {
+                    Button(action: onRefresh) {
+                        Label("Scan", systemImage: "arrow.clockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onRevealInFinder) {
+                        Label("Reveal", systemImage: "folder")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button(action: onEject) {
+                        Label("Eject", systemImage: "eject")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                    )
+                    .help("Eject drive")
+                }
+                .padding(Spacing.small)
+                .background(Color.green.opacity(0.08))
+                .cornerRadius(6)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .move(edge: .top)
+                ))
+            }
         }
         .padding(Spacing.medium)
+        .animation(.easeInOut(duration: 0.3), value: drive.isConnected)
     }
 }
 

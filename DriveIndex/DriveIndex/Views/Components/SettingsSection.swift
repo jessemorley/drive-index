@@ -21,15 +21,9 @@ struct SettingsSection<Content: View>: View {
                     .foregroundColor(.blue)
                     .frame(width: 20)
 
-                VStack(alignment: .leading, spacing: Spacing.xSmall) {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                Text(title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
             }
 
             content()
