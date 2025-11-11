@@ -92,7 +92,7 @@ struct SettingsView: View {
                 }
                 .tag(SettingsTab.about)
         }
-        .frame(width: 600, height: 500)
+        .frame(width: 720, height: 600)
         .toolbar {
             // Only show save/cancel for config tab
             if selectedTab == .config {

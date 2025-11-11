@@ -40,24 +40,18 @@ struct SearchBar: View {
                 }
                 .buttonStyle(.borderless)
             }
-
-            Button(action: onSettingsClick) {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(.secondary)
-                    .font(.body)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(.horizontal, Spacing.medium)
         .padding(.vertical, Spacing.small)
-        .background(.ultraThinMaterial)
+        .background(.bar)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal, Spacing.large)
-        .padding(.vertical, Spacing.medium)
+        .padding(.top, Spacing.small)
+        .padding(.bottom, Spacing.medium)
     }
 
     private var placeholderText: String {
