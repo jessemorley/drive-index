@@ -19,6 +19,26 @@ struct SettingsView: View {
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
 
+    // Default values from FileIndexer
+    private let defaultExcludedDirectories = [
+        ".git",
+        "node_modules",
+        ".Spotlight-V100",
+        ".Trashes",
+        ".fseventsd",
+        ".TemporaryItems",
+        "Library",
+        "$RECYCLE.BIN",
+        "System Volume Information"
+    ]
+
+    private let defaultExcludedExtensions = [
+        ".tmp",
+        ".cache",
+        ".DS_Store",
+        ".localized"
+    ]
+
     enum SettingsTab: String, CaseIterable, Identifiable {
         case stats = "Stats"
         case config = "Config"
@@ -53,7 +73,13 @@ struct SettingsView: View {
             ConfigView(
                 excludedDirectories: $excludedDirectories,
                 excludedExtensions: $excludedExtensions,
-                keyboardShortcut: $keyboardShortcut
+                keyboardShortcut: $keyboardShortcut,
+                onRestoreDirectoriesDefaults: {
+                    excludedDirectories = defaultExcludedDirectories
+                },
+                onRestoreExtensionsDefaults: {
+                    excludedExtensions = defaultExcludedExtensions
+                }
             )
             .tabItem {
                 Label("Config", systemImage: "gearshape")

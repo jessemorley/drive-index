@@ -12,6 +12,9 @@ struct ConfigView: View {
     @Binding var excludedExtensions: [String]
     @Binding var keyboardShortcut: KeyboardShortcut?
 
+    var onRestoreDirectoriesDefaults: () -> Void
+    var onRestoreExtensionsDefaults: () -> Void
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxLarge) {
@@ -42,10 +45,12 @@ struct ConfigView: View {
                         placeholder: "Type directory name and press comma or return..."
                     )
 
-                    Text("Common patterns: .git, node_modules, Library, .Trashes, Cache")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .italic()
+                    Button(action: onRestoreDirectoriesDefaults) {
+                        Label("Restore Defaults", systemImage: "arrow.counterclockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.blue)
                 }
 
                 // Excluded Extensions
@@ -59,10 +64,12 @@ struct ConfigView: View {
                         placeholder: "Type extension and press comma or return..."
                     )
 
-                    Text("Common patterns: .tmp, .cache, .DS_Store, .localized, Thumbs.db")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .italic()
+                    Button(action: onRestoreExtensionsDefaults) {
+                        Label("Restore Defaults", systemImage: "arrow.counterclockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.blue)
                 }
 
                 // Info callout
@@ -98,7 +105,9 @@ struct ConfigView: View {
     ConfigView(
         excludedDirectories: .constant([".git", "node_modules", "Library"]),
         excludedExtensions: .constant([".tmp", ".cache", ".DS_Store"]),
-        keyboardShortcut: .constant(.default)
+        keyboardShortcut: .constant(.default),
+        onRestoreDirectoriesDefaults: {},
+        onRestoreExtensionsDefaults: {}
     )
     .frame(width: 600, height: 400)
 }

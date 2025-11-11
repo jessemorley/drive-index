@@ -219,13 +219,13 @@ export default function Command() {
         />
       )}
 
-      {/* Only show DONKEY or placeholder when we have search text */}
+      {/* Only show placeholder when we have search text */}
       {searchText && results.length === 0 && (
         <>
           {hasSearchResults && !isLoading ? (
             <List.EmptyView
               icon={Icon.MagnifyingGlass}
-              title="DONKEY"
+              title="No Results"
               description={`No files or folders matching "${searchText}"`}
             />
           ) : (

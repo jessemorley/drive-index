@@ -58,7 +58,7 @@ struct ContentView: View {
                     .frame(height: calculateContentHeight())
             }
         }
-        .frame(width: 400)
+        .frame(width: 450)
         .onAppear {
             // Auto-focus search field when window appears
             isSearchFocused = true
