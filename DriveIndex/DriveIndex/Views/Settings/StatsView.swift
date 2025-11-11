@@ -17,95 +17,12 @@ struct StatsView: View {
     private let databasePath = "~/Library/Application Support/DriveIndex/"
 
     var body: some View {
-        VStack(spacing: 0) {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxLarge) {
-                // Indexing progress indicator
-                if indexManager.isIndexing {
-                    VStack(alignment: .leading, spacing: Spacing.medium) {
-                        // Header with status
-                        HStack(spacing: Spacing.medium) {
-                            HStack(spacing: Spacing.xSmall) {
-                                Circle()
-                                    .fill(Color.orange)
-                                    .frame(width: 6, height: 6)
-
-                                Text("INDEXING")
-                                    .font(AppTypography.statusText)
-                                    .foregroundColor(.orange)
-                            }
-
-                            Text(indexManager.indexingDriveName)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Button("Cancel") {
-                                indexManager.cancelIndexing()
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.red)
-                            .font(.caption)
-                        }
-
-                        // Progress info
-                        if let progress = indexManager.currentProgress {
-                            HStack(spacing: Spacing.large) {
-                                HStack(spacing: Spacing.small) {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                        .frame(width: 16, height: 16)
-
-                                    VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                        Text("Files Processed")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-
-                                        Text("\(progress.filesProcessed)")
-                                            .font(AppTypography.technicalData)
-                                            .fontWeight(.semibold)
-                                    }
-                                }
-
-                                if !progress.currentFile.isEmpty {
-                                    Divider()
-                                        .frame(height: 24)
-
-                                    VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                        Text("Current File")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-
-                                        Text(progress.currentFile)
-                                            .font(.caption)
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-
-                                Spacer()
-                            }
-                        } else {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
-                    }
-                    .padding(Spacing.medium)
-                    .background(Color.orange.opacity(0.05))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                    )
-
-                    Divider()
-                        .padding(.bottom, Spacing.medium)
-                }
-
-                // Indexed Drives
+        ZStack(alignment: .bottom) {
+            // Main content
+            VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xxLarge) {
+                    // Indexed Drives
                 SettingsSection(
                     title: "Indexed Drives",
                     description: "Drives stored in the database",
@@ -169,7 +86,7 @@ struct StatsView: View {
                                 let path = NSString(string: databasePath).expandingTildeInPath
                                 NSWorkspace.shared.open(URL(fileURLWithPath: path))
                             }) {
-                                Label("Finder", systemImage: "folder")
+                                Image(systemName: "folder")
                                     .font(.caption)
                             }
                             .buttonStyle(.bordered)
@@ -178,7 +95,7 @@ struct StatsView: View {
                             Button(action: {
                                 showDeleteDatabaseConfirmation = true
                             }) {
-                                Label("Delete", systemImage: "trash")
+                                Image(systemName: "trash")
                                     .font(.caption)
                             }
                             .buttonStyle(.bordered)
@@ -192,7 +109,98 @@ struct StatsView: View {
             }
             .padding(Spacing.Container.horizontalPadding)
             .padding(.vertical, Spacing.large)
-        }
+            }
+            }
+
+            // Indexing progress overlay at bottom
+            if indexManager.isIndexing {
+                VStack(alignment: .leading, spacing: Spacing.medium) {
+                    // Header with status
+                    HStack(spacing: Spacing.medium) {
+                        HStack(spacing: Spacing.xSmall) {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 6, height: 6)
+
+                            Text("INDEXING")
+                                .font(AppTypography.statusText)
+                                .foregroundColor(.orange)
+                        }
+
+                        Text(indexManager.indexingDriveName)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            indexManager.cancelIndexing()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                    }
+
+                    // Progress info
+                    if let progress = indexManager.currentProgress {
+                        HStack(spacing: Spacing.large) {
+                            HStack(spacing: Spacing.small) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .frame(width: 16, height: 16)
+
+                                VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                    Text("Files Processed")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+
+                                    Text("\(progress.filesProcessed)")
+                                        .font(AppTypography.technicalData)
+                                        .fontWeight(.semibold)
+                                }
+                            }
+
+                            if !progress.currentFile.isEmpty {
+                                Divider()
+                                    .frame(height: 24)
+
+                                VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                    Text("Current File")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+
+                                    Text(progress.currentFile)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            Spacer()
+                        }
+                        .frame(minHeight: 44)
+                    } else {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Spacer()
+                        }
+                        .frame(minHeight: 44)
+                    }
+                }
+                .padding(Spacing.medium)
+                .background(Color.orange.opacity(0.05))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.bottom, Spacing.medium)
+                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+            }
         }
         .confirmationDialog(
             "Are you sure you want to remove \"\(driveToDelete?.name ?? "this drive")\" from the database?",
