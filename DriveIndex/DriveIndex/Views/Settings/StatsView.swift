@@ -57,6 +57,16 @@ struct StatsView: View {
                                                 ]
                                             )
                                         }
+                                    },
+                                    onRevealInFinder: {
+                                        if let driveURL = driveMonitor.getDriveURL(for: drive) {
+                                            NSWorkspace.shared.open(driveURL)
+                                        }
+                                    },
+                                    onEject: {
+                                        if let driveURL = driveMonitor.getDriveURL(for: drive) {
+                                            try? NSWorkspace.shared.unmountAndEjectDevice(at: driveURL)
+                                        }
                                     }
                                 )
                                 .background(Color.secondary.opacity(0.05))
@@ -258,6 +268,8 @@ struct DriveStatsRow: View {
     let drive: DriveInfo
     let onDelete: () -> Void
     let onRefresh: () -> Void
+    let onRevealInFinder: () -> Void
+    let onEject: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
@@ -277,8 +289,28 @@ struct DriveStatsRow: View {
 
                 Spacer()
 
-                // Action buttons
+                // Action buttons: Finder, Eject, Refresh, Remove
                 HStack(spacing: Spacing.small) {
+                    // Finder button (only when connected)
+                    if drive.isConnected {
+                        Button(action: onRevealInFinder) {
+                            Image(systemName: "folder")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Reveal in Finder")
+                    }
+
+                    // Eject button (only when connected)
+                    if drive.isConnected {
+                        Button(action: onEject) {
+                            Image(systemName: "eject")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Eject drive")
+                    }
+
                     // Refresh button (only when connected)
                     if drive.isConnected {
                         Button(action: onRefresh) {
@@ -289,7 +321,7 @@ struct DriveStatsRow: View {
                         .help("Rescan drive")
                     }
 
-                    // Delete button
+                    // Delete button (always shown)
                     Button(action: onDelete) {
                         Image(systemName: "trash")
                             .font(.caption)
