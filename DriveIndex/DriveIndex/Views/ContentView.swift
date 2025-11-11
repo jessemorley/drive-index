@@ -23,7 +23,36 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar - replaces header
+            // Fixed header bar with app name and action buttons
+            HStack(spacing: Spacing.medium) {
+                Text("DriveIndex")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: openSettingsWindow) {
+                    Image(systemName: "gearshape")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Settings")
+
+                Button(action: {
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Quit DriveIndex")
+            }
+            .padding(.horizontal, Spacing.large)
+            .padding(.vertical, Spacing.medium)
+
+            // Search bar below header
             SearchBar(
                 searchText: $searchText,
                 driveCount: driveMonitor.drives.count,

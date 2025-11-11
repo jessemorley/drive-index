@@ -40,13 +40,6 @@ struct SearchBar: View {
                 }
                 .buttonStyle(.borderless)
             }
-
-            Button(action: onSettingsClick) {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(.secondary)
-                    .font(.body)
-            }
-            .buttonStyle(.borderless)
         }
         .padding(.horizontal, Spacing.medium)
         .padding(.vertical, Spacing.small)
