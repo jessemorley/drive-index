@@ -50,7 +50,8 @@ struct ContentView: View {
                 .help("Quit DriveIndex")
             }
             .padding(.horizontal, Spacing.large)
-            .padding(.vertical, Spacing.medium)
+            .padding(.top, Spacing.small)
+            .padding(.bottom, Spacing.small)
 
             // Search bar below header
             SearchBar(
@@ -71,7 +72,7 @@ struct ContentView: View {
             }
 
             // Conditional content: search results or drive list
-            if driveMonitor.drives.isEmpty {
+            if connectedDrives.isEmpty {
                 EmptyStateView()
                     .frame(height: 300)
             } else if !searchText.isEmpty {
@@ -88,6 +89,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 450)
+        .background(.bar)
         .onAppear {
             // Auto-focus search field when window appears
             isSearchFocused = true
@@ -144,20 +146,19 @@ struct ContentView: View {
         isSearching = false
     }
 
+    private var connectedDrives: [DriveInfo] {
+        driveMonitor.drives.filter { $0.isConnected }
+    }
+
     private func calculateContentHeight() -> CGFloat {
-        let driveCount = driveMonitor.drives.count
+        let driveCount = connectedDrives.count
 
-        // Height varies based on whether drive is online (has capacity bar) or offline
+        // All drives shown in menu bar are connected, so use connected card height
         let connectedCardHeight: CGFloat = 158  // With capacity bar
-        let offlineCardHeight: CGFloat = 128    // Without capacity bar
 
-        // Calculate actual height based on drive states
-        var totalCardHeight: CGFloat = 0
+        // Calculate actual height based on drive count
         let visibleDrives = min(driveCount, 3)
-
-        for drive in driveMonitor.drives.prefix(visibleDrives) {
-            totalCardHeight += drive.isConnected ? connectedCardHeight : offlineCardHeight
-        }
+        let totalCardHeight = CGFloat(visibleDrives) * connectedCardHeight
 
         let cardSpacing: CGFloat = 12
         let spacingHeight = CGFloat(max(0, visibleDrives - 1)) * cardSpacing
@@ -176,7 +177,7 @@ struct ContentView: View {
 
         // Create new window with Liquid Glass styling
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false

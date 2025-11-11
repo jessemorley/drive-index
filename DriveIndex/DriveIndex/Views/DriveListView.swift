@@ -14,7 +14,7 @@ struct DriveListView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: Spacing.medium) {
-                ForEach(driveMonitor.drives) { drive in
+                ForEach(connectedDrives) { drive in
                     DriveRow(drive: drive)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .bottom)),
@@ -24,8 +24,12 @@ struct DriveListView: View {
             }
             .padding(.horizontal, Spacing.Container.horizontalPadding)
             .padding(.vertical, Spacing.Container.verticalPadding)
-            .animation(.easeInOut(duration: 0.3), value: driveMonitor.drives.count)
+            .animation(.easeInOut(duration: 0.3), value: connectedDrives.count)
         }
+    }
+
+    private var connectedDrives: [DriveInfo] {
+        driveMonitor.drives.filter { $0.isConnected }
     }
 }
 

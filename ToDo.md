@@ -10,8 +10,8 @@
 - Window size for 1 drive incorrect
 - ~~Change exclusion text to chips~~
 - ~~Remove buttons don't work~~
-- No re-indexing feedback in settings
-- Only show connected drives in menu bar
+- ~~No re-indexing feedback in settings~~
+- ~~Only show connected drives in menu bar~~
 - Add eject button for connected drives (menu and settings)
 - Add quit button
 
