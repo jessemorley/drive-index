@@ -22,6 +22,7 @@ class FloatingPanel: NSPanel {
     // MARK: - Properties
 
     private let positionKey = "FloatingPanelPosition"
+    private var isPositioningProgrammatically = false
 
     // MARK: - Initialization
 
@@ -52,7 +53,7 @@ class FloatingPanel: NSPanel {
     private func configureWindow() {
         // Window level and behavior
         level = .floating // Always on top
-        collectionBehavior = [.fullScreenAuxiliary] // Removed .canJoinAllSpaces - only show on current space
+        collectionBehavior = [] // Empty - allows window to appear on current space
 
         // Visual appearance
         isOpaque = false
@@ -117,6 +118,9 @@ class FloatingPanel: NSPanel {
 
     /// Save the current window position to UserDefaults
     private func savePosition() {
+        // Only save if the window is being moved by the user, not programmatically
+        guard !isPositioningProgrammatically else { return }
+
         let frameString = NSStringFromRect(frame)
         UserDefaults.standard.set(frameString, forKey: positionKey)
     }
@@ -126,22 +130,43 @@ class FloatingPanel: NSPanel {
     /// Show the panel and optionally center it on screen
     /// - Parameter centerOnFirstShow: Whether to center the window if no saved position exists
     func show(centerOnFirstShow: Bool = true) {
-        // Restore position or center BEFORE showing to prevent wobble
+        // Get the screen containing the mouse cursor (where user invoked the window)
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first!
+
         var targetFrame: NSRect
 
         if let savedPosition = UserDefaults.standard.string(forKey: positionKey) {
             // Restore saved position
-            targetFrame = NSRectFromString(savedPosition)
-        } else if centerOnFirstShow {
-            // No saved position - calculate centered frame
-            if let screen = NSScreen.main {
-                let screenFrame = screen.visibleFrame
-                let x = screenFrame.origin.x + (screenFrame.width - frame.width) / 2
-                let y = screenFrame.origin.y + (screenFrame.height - frame.height) / 2
-                targetFrame = NSRect(x: x, y: y, width: frame.width, height: frame.height)
-            } else {
-                targetFrame = frame
+            var restoredFrame = NSRectFromString(savedPosition)
+
+            // Validate that the frame has reasonable dimensions
+            if restoredFrame.width <= 0 || restoredFrame.height <= 0 {
+                restoredFrame = NSRect(x: 0, y: 0, width: 450, height: 474)
             }
+
+            // Check if saved position is visible on target screen
+            if NSIntersectsRect(restoredFrame, targetScreen.visibleFrame) {
+                // Position is valid on target screen, use it as-is
+                targetFrame = restoredFrame
+            } else {
+                // Position is off-screen, center on target screen
+                let screenFrame = targetScreen.visibleFrame
+                targetFrame = NSRect(
+                    x: screenFrame.origin.x + (screenFrame.width - restoredFrame.width) / 2,
+                    y: screenFrame.origin.y + (screenFrame.height - restoredFrame.height) / 2,
+                    width: restoredFrame.width,
+                    height: restoredFrame.height
+                )
+            }
+        } else if centerOnFirstShow {
+            // No saved position - calculate centered frame on target screen
+            let screenFrame = targetScreen.visibleFrame
+            let x = screenFrame.origin.x + (screenFrame.width - frame.width) / 2
+            let y = screenFrame.origin.y + (screenFrame.height - frame.height) / 2
+            targetFrame = NSRect(x: x, y: y, width: frame.width, height: frame.height)
         } else {
             targetFrame = frame
         }
@@ -152,8 +177,10 @@ class FloatingPanel: NSPanel {
         // Start invisible
         alphaValue = 0.0
 
-        // Set frame without display or animation
+        // Set frame without display or animation (don't trigger position save)
+        isPositioningProgrammatically = true
         setFrame(alignedFrame, display: false, animate: false)
+        isPositioningProgrammatically = false
 
         // Make window visible but transparent
         orderFront(nil)
