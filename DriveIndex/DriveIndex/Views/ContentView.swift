@@ -72,10 +72,7 @@ struct ContentView: View {
             }
 
             // Conditional content: search results or drive list
-            if connectedDrives.isEmpty {
-                EmptyStateView()
-                    .frame(height: 300)
-            } else if !searchText.isEmpty {
+            if !searchText.isEmpty {
                 SearchResultsView(
                     results: searchResults,
                     previousResults: previousSearchResults,
@@ -83,6 +80,9 @@ struct ContentView: View {
                     contentHeight: searchResultsHeight
                 )
                 .frame(height: searchResultsHeight)
+            } else if connectedDrives.isEmpty {
+                EmptyStateView()
+                    .frame(height: 300)
             } else {
                 DriveListView()
                     .frame(height: calculateContentHeight())
