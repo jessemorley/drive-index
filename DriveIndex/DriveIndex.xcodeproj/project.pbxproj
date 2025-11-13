@@ -15,8 +15,9 @@
 		1A00000B /* DriveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000A /* DriveMonitor.swift */; };
 		1A00000D /* FileIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000C /* FileIndexer.swift */; };
 		1A00000F /* IndexManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000E /* IndexManager.swift */; };
-		865C71FE2EC18BEE0084A309 /* MenuBarExtraAccess in Frameworks */ = {isa = PBXBuildFile; productRef = 865C71FD2EC18BEE0084A309 /* MenuBarExtraAccess */; };
 		865C72002EC1FDFA0084A309 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865C71FF2EC1FDFA0084A309 /* TagInputView.swift */; };
+		866227B92EC693D300B42819 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866227B82EC693D300B42819 /* AppDelegate.swift */; };
+		86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */; };
 		867891A82EC0655800E2CDAD /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A52EC0655800E2CDAD /* Spacing.swift */; };
 		867891A92EC0655800E2CDAD /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A62EC0655800E2CDAD /* Typography.swift */; };
 		867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AA2EC0A52600E2CDAD /* SearchManager.swift */; };
@@ -45,6 +46,8 @@
 		1A000011 /* DriveIndex.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DriveIndex.entitlements; sourceTree = "<group>"; };
 		1AXXXXXX /* DriveIndex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriveIndex.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		865C71FF2EC1FDFA0084A309 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
+		866227B82EC693D300B42819 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
 		867891A52EC0655800E2CDAD /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		867891A62EC0655800E2CDAD /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
 		867891AA2EC0A52600E2CDAD /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
@@ -65,7 +68,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				865C71FE2EC18BEE0084A309 /* MenuBarExtraAccess in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +85,8 @@
 		1A100001 /* DriveIndex */ = {
 			isa = PBXGroup;
 			children = (
+				86653A0A2EC695FD00DD4FB3 /* Windows */,
+				866227B82EC693D300B42819 /* AppDelegate.swift */,
 				867891A72EC0655800E2CDAD /* Styles */,
 				1A000000 /* DriveIndexApp.swift */,
 				1A100003 /* Views */,
@@ -126,6 +130,14 @@
 				1A00000E /* IndexManager.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		86653A0A2EC695FD00DD4FB3 /* Windows */ = {
+			isa = PBXGroup;
+			children = (
+				86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */,
+			);
+			path = Windows;
 			sourceTree = "<group>";
 		};
 		867891A72EC0655800E2CDAD /* Styles */ = {
@@ -204,7 +216,6 @@
 			);
 			mainGroup = 1A100000;
 			packageReferences = (
-				865C71FC2EC18BEE0084A309 /* XCRemoteSwiftPackageReference "MenuBarExtraAccess" */,
 			);
 			productRefGroup = 1A100002 /* Products */;
 			projectDirPath = "";
@@ -232,6 +243,7 @@
 			files = (
 				867891B22EC0B34E00E2CDAD /* HotkeyManager.swift in Sources */,
 				867891B32EC0B34E00E2CDAD /* KeyboardShortcut.swift in Sources */,
+				86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */,
 				86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */,
 				867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */,
 				86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */,
@@ -252,6 +264,7 @@
 				867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */,
 				865C72002EC1FDFA0084A309 /* TagInputView.swift in Sources */,
 				867891B52EC0B35F00E2CDAD /* ShortcutRecorder.swift in Sources */,
+				866227B92EC693D300B42819 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -466,25 +479,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		865C71FC2EC18BEE0084A309 /* XCRemoteSwiftPackageReference "MenuBarExtraAccess" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/orchetect/MenuBarExtraAccess";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.2;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		865C71FD2EC18BEE0084A309 /* MenuBarExtraAccess */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 865C71FC2EC18BEE0084A309 /* XCRemoteSwiftPackageReference "MenuBarExtraAccess" */;
-			productName = MenuBarExtraAccess;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1A200000 /* Project object */;
 }
