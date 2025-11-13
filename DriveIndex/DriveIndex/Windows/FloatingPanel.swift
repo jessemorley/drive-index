@@ -116,13 +116,26 @@ class FloatingPanel: NSPanel {
 
     // MARK: - Position Persistence
 
-    /// Save the current window position to UserDefaults
+    /// Get a unique identifier for a screen
+    private func screenIdentifier(for screen: NSScreen) -> String {
+        // Use screen's displayID as the identifier
+        if let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+            return "screen_\(screenNumber.intValue)"
+        }
+        return "screen_unknown"
+    }
+
+    /// Save the current window position to UserDefaults for the current screen
     private func savePosition() {
         // Only save if the window is being moved by the user, not programmatically
         guard !isPositioningProgrammatically else { return }
+        guard let currentScreen = screen else { return }
 
         let frameString = NSStringFromRect(frame)
-        UserDefaults.standard.set(frameString, forKey: positionKey)
+        let screenKey = screenIdentifier(for: currentScreen)
+        let fullKey = "\(positionKey)_\(screenKey)"
+
+        UserDefaults.standard.set(frameString, forKey: fullKey)
     }
 
     // MARK: - Public Methods
@@ -138,8 +151,12 @@ class FloatingPanel: NSPanel {
 
         var targetFrame: NSRect
 
-        if let savedPosition = UserDefaults.standard.string(forKey: positionKey) {
-            // Restore saved position
+        // Try to restore position for this specific screen
+        let screenKey = screenIdentifier(for: targetScreen)
+        let fullKey = "\(positionKey)_\(screenKey)"
+
+        if let savedPosition = UserDefaults.standard.string(forKey: fullKey) {
+            // Restore saved position for this screen
             var restoredFrame = NSRectFromString(savedPosition)
 
             // Validate that the frame has reasonable dimensions
@@ -147,12 +164,11 @@ class FloatingPanel: NSPanel {
                 restoredFrame = NSRect(x: 0, y: 0, width: 450, height: 474)
             }
 
-            // Check if saved position is visible on target screen
+            // Verify position is still valid on this screen (in case screen resolution changed)
             if NSIntersectsRect(restoredFrame, targetScreen.visibleFrame) {
-                // Position is valid on target screen, use it as-is
                 targetFrame = restoredFrame
             } else {
-                // Position is off-screen, center on target screen
+                // Resolution changed, center it
                 let screenFrame = targetScreen.visibleFrame
                 targetFrame = NSRect(
                     x: screenFrame.origin.x + (screenFrame.width - restoredFrame.width) / 2,
@@ -185,11 +201,7 @@ class FloatingPanel: NSPanel {
         // Make window visible but transparent
         orderFront(nil)
 
-        // Ensure all content is rendered
-        contentView?.layoutSubtreeIfNeeded()
-        displayIfNeeded()
-
-        // Quick fade in to avoid artifacts
+        // Quick fade in to avoid artifacts (gives time for layout to complete)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.08
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
