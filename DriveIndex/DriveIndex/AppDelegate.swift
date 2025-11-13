@@ -149,7 +149,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
 // MARK: - FloatingPanelDelegate
 
-extension AppDelegate: FloatingPanelDelegate {
+extension AppDelegate: @MainActor FloatingPanelDelegate {
     /// Called when ESC key is pressed in the panel
     func floatingPanelShouldClose(_ panel: FloatingPanel) {
         closePanel()
