@@ -363,7 +363,7 @@ struct DriveStatsRow: View {
             if drive.isConnected {
                 HStack(spacing: Spacing.small) {
                     Button(action: onRefresh) {
-                        Label("Scan", systemImage: "arrow.clockwise")
+                        Label("Rescan", systemImage: "arrow.clockwise")
                             .font(.caption)
                     }
                     .buttonStyle(.bordered)

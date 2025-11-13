@@ -4,6 +4,9 @@
 # Claude
 .claude
 
+# User-Created
+/References/
+
 # Node.js (Raycast extension)
 DriveIndex-Raycast/node_modules/
 DriveIndex-Raycast/dist/

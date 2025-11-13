@@ -93,7 +93,7 @@ struct TagChip: View {
             .help("Remove \(text)")
         }
         .padding(.horizontal, Spacing.xSmall)
-        .padding(.vertical, Spacing.xxSmall)
+        .padding(.vertical, Spacing.xSmall)
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(6)
     }
@@ -101,13 +101,15 @@ struct TagChip: View {
 
 /// A layout that arranges views in a flowing, wrapping pattern
 struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
+    var spacing: CGFloat = 8          // horizontal spacing
+    var lineSpacing: CGFloat = 6     // vertical spacing between lines
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let result = FlowResult(
             in: proposal.replacingUnspecifiedDimensions().width,
             subviews: subviews,
-            spacing: spacing
+            spacing: spacing,
+            lineSpacing: lineSpacing
         )
         return result.size
     }
@@ -116,7 +118,8 @@ struct FlowLayout: Layout {
         let result = FlowResult(
             in: bounds.width,
             subviews: subviews,
-            spacing: spacing
+            spacing: spacing,
+            lineSpacing: lineSpacing
         )
 
         for (index, subview) in subviews.enumerated() {
@@ -133,7 +136,7 @@ struct FlowLayout: Layout {
         var positions: [CGPoint] = []
         var sizes: [CGSize] = []
 
-        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat, lineSpacing: CGFloat) {
             var x: CGFloat = 0
             var y: CGFloat = 0
             var lineHeight: CGFloat = 0
@@ -141,10 +144,10 @@ struct FlowLayout: Layout {
             for subview in subviews {
                 let size = subview.sizeThatFits(.unspecified)
 
-                // Check if we need to wrap to next line
+                // wrap to next line if needed
                 if x + size.width > maxWidth && x > 0 {
                     x = 0
-                    y += lineHeight + spacing
+                    y += lineHeight + lineSpacing
                     lineHeight = 0
                 }
 
@@ -155,7 +158,6 @@ struct FlowLayout: Layout {
                 x += size.width + spacing
             }
 
-            // Calculate total size
             self.size = CGSize(
                 width: maxWidth,
                 height: y + lineHeight
@@ -163,6 +165,7 @@ struct FlowLayout: Layout {
         }
     }
 }
+
 
 #Preview {
     VStack(spacing: 20) {

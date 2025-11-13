@@ -21,7 +21,7 @@ struct AboutView: View {
                         Text("DriveIndex")
                             .font(AppTypography.sectionHeader)
 
-                        Text("Version 1.0.0")
+                        Text("Version 1.0.1")
                             .font(.caption)
                             .foregroundColor(.secondary)
 
