@@ -51,8 +51,8 @@ class FloatingPanel: NSPanel {
 
     private func configureWindow() {
         // Window level and behavior
-        level = .floating // Always on top, works on all Spaces
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        level = .floating // Always on top
+        collectionBehavior = [.fullScreenAuxiliary] // Removed .canJoinAllSpaces - only show on current space
 
         // Visual appearance
         isOpaque = false
@@ -72,8 +72,7 @@ class FloatingPanel: NSPanel {
             self?.savePosition()
         }
 
-        // Restore saved position
-        restorePosition()
+        // Note: Position restoration happens in show() to prevent wobble
 
         // Remove titlebar buttons for clean appearance
         standardWindowButton(.closeButton)?.isHidden = true
@@ -100,6 +99,13 @@ class FloatingPanel: NSPanel {
         }
     }
 
+    // MARK: - Window Behavior
+
+    /// Override to allow panel to become key window despite .nonactivatingPanel style
+    override var canBecomeKey: Bool {
+        return true
+    }
+
     // MARK: - Keyboard Handling
 
     /// Handle ESC key to close the panel
@@ -115,22 +121,18 @@ class FloatingPanel: NSPanel {
         UserDefaults.standard.set(frameString, forKey: positionKey)
     }
 
-    /// Restore the saved window position from UserDefaults
-    private func restorePosition() {
-        guard let frameString = UserDefaults.standard.string(forKey: positionKey) else {
-            return
-        }
-        let savedFrame = NSRectFromString(frameString)
-        setFrame(savedFrame, display: false)
-    }
-
     // MARK: - Public Methods
 
     /// Show the panel and optionally center it on screen
     /// - Parameter centerOnFirstShow: Whether to center the window if no saved position exists
     func show(centerOnFirstShow: Bool = true) {
-        // Only center if no saved position exists
-        if centerOnFirstShow && UserDefaults.standard.string(forKey: positionKey) == nil {
+        // Restore position or center BEFORE showing to prevent wobble
+        if let savedPosition = UserDefaults.standard.string(forKey: positionKey) {
+            // Restore saved position
+            let savedFrame = NSRectFromString(savedPosition)
+            setFrame(savedFrame, display: false, animate: false)
+        } else if centerOnFirstShow {
+            // No saved position - center on screen
             center()
         }
 
