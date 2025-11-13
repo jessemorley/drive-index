@@ -127,20 +127,63 @@ class FloatingPanel: NSPanel {
     /// - Parameter centerOnFirstShow: Whether to center the window if no saved position exists
     func show(centerOnFirstShow: Bool = true) {
         // Restore position or center BEFORE showing to prevent wobble
+        var targetFrame: NSRect
+
         if let savedPosition = UserDefaults.standard.string(forKey: positionKey) {
             // Restore saved position
-            let savedFrame = NSRectFromString(savedPosition)
-            setFrame(savedFrame, display: false, animate: false)
+            targetFrame = NSRectFromString(savedPosition)
         } else if centerOnFirstShow {
-            // No saved position - center on screen
-            center()
+            // No saved position - calculate centered frame
+            if let screen = NSScreen.main {
+                let screenFrame = screen.visibleFrame
+                let x = screenFrame.origin.x + (screenFrame.width - frame.width) / 2
+                let y = screenFrame.origin.y + (screenFrame.height - frame.height) / 2
+                targetFrame = NSRect(x: x, y: y, width: frame.width, height: frame.height)
+            } else {
+                targetFrame = frame
+            }
+        } else {
+            targetFrame = frame
         }
 
-        makeKeyAndOrderFront(nil)
+        // Align frame to pixel boundaries for the target screen to prevent wobble
+        let alignedFrame = backingAlignedRect(targetFrame, options: .alignAllEdgesNearest)
+
+        // Start invisible
+        alphaValue = 0.0
+
+        // Set frame without display or animation
+        setFrame(alignedFrame, display: false, animate: false)
+
+        // Make window visible but transparent
+        orderFront(nil)
+
+        // Ensure all content is rendered
+        contentView?.layoutSubtreeIfNeeded()
+        displayIfNeeded()
+
+        // Quick fade in to avoid artifacts
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.08
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animator().alphaValue = 1.0
+        }
+
+        // Make key after fade starts
+        makeKey()
     }
 
     /// Hide the panel
     func hide() {
-        orderOut(nil)
+        // Quick fade out to avoid artifacts
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.08
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            animator().alphaValue = 0.0
+        }, completionHandler: {
+            self.orderOut(nil)
+            // Reset alpha for next show
+            self.alphaValue = 1.0
+        })
     }
 }
