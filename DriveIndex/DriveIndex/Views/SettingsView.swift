@@ -102,8 +102,8 @@ struct SettingsView: View {
                         if case .saving = saveStatus {
                             HStack(spacing: Spacing.small) {
                                 ProgressView()
-                                    .scaleEffect(0.7)
-                                    .controlSize(.small)
+                                    .scaleEffect(0.8)
+                                    .frame(width: 16, height: 16)
                                 Text("Saving...")
                                     .font(.caption)
                                     .foregroundColor(.secondary)

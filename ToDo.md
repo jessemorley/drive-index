@@ -4,9 +4,8 @@
 
 ### High
 
-- Increase search results window size/height
 - Add eject button to menubar window
-- Add quit button
+- Scan button always says "Rescan"
 
 ### Medium
 
@@ -35,4 +34,4 @@
 - [ ] Last scanned only updates when menu bar is open
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to
-- [ ] Exclusions alphabetised on save
+- [ ] Exclusions alphabetised on save (also error logged)

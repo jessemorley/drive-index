@@ -15,8 +15,12 @@ struct IndexProgress {
 
 actor FileIndexer {
     private let database = DatabaseManager.shared
+    // Sets for O(1) lookup performance during file system traversal
     private var excludedDirectories: Set<String> = []
     private var excludedExtensions: Set<String> = []
+    // Arrays to preserve user-defined order for UI display
+    private var excludedDirectoriesOrdered: [String] = []
+    private var excludedExtensionsOrdered: [String] = []
 
     init() {
         Task {
@@ -30,10 +34,12 @@ actor FileIndexer {
         do {
             // Load excluded directories
             if let dirSettings = try await database.getSetting("excluded_directories") {
-                excludedDirectories = Set(dirSettings.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+                let dirs = dirSettings.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                excludedDirectoriesOrdered = dirs
+                excludedDirectories = Set(dirs)
             } else {
                 // Default exclusions
-                excludedDirectories = [
+                let defaultDirs = [
                     ".git",
                     "node_modules",
                     ".Spotlight-V100",
@@ -44,21 +50,27 @@ actor FileIndexer {
                     "$RECYCLE.BIN",
                     "System Volume Information"
                 ]
-                try await database.setSetting("excluded_directories", value: excludedDirectories.joined(separator: ","))
+                excludedDirectoriesOrdered = defaultDirs
+                excludedDirectories = Set(defaultDirs)
+                try await database.setSetting("excluded_directories", value: defaultDirs.joined(separator: ","))
             }
 
             // Load excluded extensions
             if let extSettings = try await database.getSetting("excluded_extensions") {
-                excludedExtensions = Set(extSettings.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+                let exts = extSettings.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                excludedExtensionsOrdered = exts
+                excludedExtensions = Set(exts)
             } else {
                 // Default exclusions
-                excludedExtensions = [
+                let defaultExts = [
                     ".tmp",
                     ".cache",
                     ".DS_Store",
                     ".localized"
                 ]
-                try await database.setSetting("excluded_extensions", value: excludedExtensions.joined(separator: ","))
+                excludedExtensionsOrdered = defaultExts
+                excludedExtensions = Set(defaultExts)
+                try await database.setSetting("excluded_extensions", value: defaultExts.joined(separator: ","))
             }
 
         } catch let error as DatabaseError {
@@ -78,7 +90,7 @@ actor FileIndexer {
             print("Error loading exclusion settings: \(error)")
             // Use defaults if loading fails
             if excludedDirectories.isEmpty {
-                excludedDirectories = [
+                let defaultDirs = [
                     ".git",
                     "node_modules",
                     ".Spotlight-V100",
@@ -89,20 +101,24 @@ actor FileIndexer {
                     "$RECYCLE.BIN",
                     "System Volume Information"
                 ]
+                excludedDirectoriesOrdered = defaultDirs
+                excludedDirectories = Set(defaultDirs)
             }
             if excludedExtensions.isEmpty {
-                excludedExtensions = [
+                let defaultExts = [
                     ".tmp",
                     ".cache",
                     ".DS_Store",
                     ".localized"
                 ]
+                excludedExtensionsOrdered = defaultExts
+                excludedExtensions = Set(defaultExts)
             }
         } catch {
             print("Error loading exclusion settings: \(error)")
             // Use defaults if loading fails
             if excludedDirectories.isEmpty {
-                excludedDirectories = [
+                let defaultDirs = [
                     ".git",
                     "node_modules",
                     ".Spotlight-V100",
@@ -113,34 +129,40 @@ actor FileIndexer {
                     "$RECYCLE.BIN",
                     "System Volume Information"
                 ]
+                excludedDirectoriesOrdered = defaultDirs
+                excludedDirectories = Set(defaultDirs)
             }
             if excludedExtensions.isEmpty {
-                excludedExtensions = [
+                let defaultExts = [
                     ".tmp",
                     ".cache",
                     ".DS_Store",
                     ".localized"
                 ]
+                excludedExtensionsOrdered = defaultExts
+                excludedExtensions = Set(defaultExts)
             }
         }
     }
 
     func updateExcludedDirectories(_ directories: [String]) async throws {
+        excludedDirectoriesOrdered = directories
         excludedDirectories = Set(directories)
         try await database.setSetting("excluded_directories", value: directories.joined(separator: ","))
     }
 
     func updateExcludedExtensions(_ extensions: [String]) async throws {
+        excludedExtensionsOrdered = extensions
         excludedExtensions = Set(extensions)
         try await database.setSetting("excluded_extensions", value: extensions.joined(separator: ","))
     }
 
     func getExcludedDirectories() -> [String] {
-        Array(excludedDirectories).sorted()
+        excludedDirectoriesOrdered
     }
 
     func getExcludedExtensions() -> [String] {
-        Array(excludedExtensions).sorted()
+        excludedExtensionsOrdered
     }
 
     // MARK: - Indexing
