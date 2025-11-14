@@ -8,9 +8,9 @@ Fast, offline searching of external drives for macOS using SQLite FTS5.
 
 ## Overview
 
-A macOS menu bar app that automatically indexes external drives when connected, storing file metadata in a shared SQLite database. A Raycast extension provides sub-100ms full-text search across all indexed files, even when drives are offline.
+A macOS app with a Spotlight-like floating search window that automatically indexes external drives when connected, storing file metadata in a shared SQLite database, providing sub-100ms full-text search across all indexed files, even when drives are offline.
 
-**Architecture:** Swift menu bar app → SQLite FTS5 database → TypeScript Raycast extension
+**Architecture:** Swift floating panel app → SQLite FTS5 database
 
 ## License
 
