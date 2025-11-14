@@ -46,6 +46,11 @@ struct StatsView: View {
                                         showDeleteConfirmation = true
                                     },
                                     onRefresh: {
+                                        // Un-exclude drive if it was excluded
+                                        Task {
+                                            await driveMonitor.unexcludeDrive(drive.id)
+                                        }
+
                                         // Trigger drive rescan
                                         if let driveURL = driveMonitor.getDriveURL(for: drive) {
                                             NotificationCenter.default.post(

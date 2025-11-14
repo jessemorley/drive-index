@@ -11,6 +11,9 @@ struct ConfigView: View {
     @Binding var excludedDirectories: [String]
     @Binding var excludedExtensions: [String]
     @Binding var keyboardShortcut: KeyboardShortcut?
+    @EnvironmentObject var driveMonitor: DriveMonitor
+
+    @State private var excludedDrives: [DriveMetadata] = []
 
     var onRestoreDirectoriesDefaults: () -> Void
     var onRestoreExtensionsDefaults: () -> Void
@@ -72,6 +75,47 @@ struct ConfigView: View {
                     .foregroundColor(.blue)
                 }
 
+                // Excluded Drives
+                SettingsSection(
+                    title: "Excluded Drives",
+                    description: "Drives that won't be automatically indexed",
+                    symbol: "externaldrive.badge.minus"
+                ) {
+                    if excludedDrives.isEmpty {
+                        Text("No excluded drives")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .padding(.vertical, Spacing.small)
+                    } else {
+                        VStack(spacing: Spacing.small) {
+                            ForEach(excludedDrives, id: \.uuid) { drive in
+                                HStack {
+                                    Image(systemName: "externaldrive")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+
+                                    Text(drive.name)
+                                        .font(.caption)
+
+                                    Spacer()
+
+                                    Button("Include") {
+                                        Task {
+                                            await driveMonitor.unexcludeDrive(drive.uuid)
+                                            await loadExcludedDrives()
+                                        }
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .font(.caption)
+                                }
+                                .padding(.vertical, Spacing.xSmall)
+                            }
+                        }
+                    }
+                }
+
                 // Info callout
                 HStack(alignment: .top, spacing: Spacing.medium) {
                     VStack(spacing: 0) {
@@ -97,6 +141,22 @@ struct ConfigView: View {
             }
             .padding(Spacing.Container.horizontalPadding)
             .padding(.vertical, Spacing.large)
+        }
+        .onAppear {
+            Task {
+                await loadExcludedDrives()
+            }
+        }
+    }
+
+    private func loadExcludedDrives() async {
+        do {
+            let drives = try await DatabaseManager.shared.getExcludedDrives()
+            await MainActor.run {
+                excludedDrives = drives
+            }
+        } catch {
+            print("Error loading excluded drives: \(error)")
         }
     }
 }

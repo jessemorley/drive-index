@@ -54,6 +54,8 @@ struct DriveInfo: Identifiable {
 @MainActor
 class DriveMonitor: ObservableObject {
     @Published var drives: [DriveInfo] = []
+    @Published var pendingDrive: (url: URL, uuid: String, name: String)?
+    @Published var showTrackingDialog = false
     private let database = DatabaseManager.shared
 
     init() {
@@ -145,7 +147,12 @@ class DriveMonitor: ObservableObject {
 
             print("Drive mounted: \(volumeName) (UUID: \(uuid))")
 
-            // Update database
+            // Check if drive exists in database and if it's excluded
+            let existingMetadata = try await database.getDriveMetadata(uuid)
+            let isNewDrive = existingMetadata?.lastScanDate == nil
+            let isExcluded = try await database.isDriveExcluded(uuid: uuid)
+
+            // Update database with current capacity info
             let usedCapacity = Int64(totalCapacity) - Int64(values.volumeAvailableCapacity!)
             let metadata = DriveMetadata(
                 uuid: uuid,
@@ -153,8 +160,9 @@ class DriveMonitor: ObservableObject {
                 lastSeen: Date(),
                 totalCapacity: Int64(totalCapacity),
                 usedCapacity: usedCapacity,
-                lastScanDate: nil,
-                fileCount: 0
+                lastScanDate: existingMetadata?.lastScanDate,
+                fileCount: existingMetadata?.fileCount ?? 0,
+                isExcluded: existingMetadata?.isExcluded ?? false
             )
 
             try await database.upsertDriveMetadata(metadata)
@@ -162,12 +170,20 @@ class DriveMonitor: ObservableObject {
             // Reload drives to update UI
             await loadDrives()
 
-            // Trigger indexing
-            NotificationCenter.default.post(
-                name: .shouldIndexDrive,
-                object: nil,
-                userInfo: ["driveURL": volumeURL, "driveUUID": uuid]
-            )
+            // Handle new/un-indexed drives or excluded drives
+            if isNewDrive && !isExcluded {
+                // Show dialog asking user if they want to track this drive
+                pendingDrive = (url: volumeURL, uuid: uuid, name: volumeName)
+                showTrackingDialog = true
+            } else if !isExcluded {
+                // Automatically index existing non-excluded drives
+                NotificationCenter.default.post(
+                    name: .shouldIndexDrive,
+                    object: nil,
+                    userInfo: ["driveURL": volumeURL, "driveUUID": uuid]
+                )
+            }
+            // If excluded, do nothing (no indexing)
 
         } catch {
             print("Error handling mounted drive: \(error)")
@@ -244,7 +260,8 @@ class DriveMonitor: ObservableObject {
                             totalCapacity: Int64(totalCapacity),
                             usedCapacity: usedCapacity,
                             lastScanDate: nil,
-                            fileCount: 0
+                            fileCount: 0,
+                            isExcluded: false
                         )
                         try? await database.upsertDriveMetadata(newMetadata)
                     }
@@ -336,6 +353,52 @@ class DriveMonitor: ObservableObject {
         print("🗑️ DriveMonitor: deleting drive with UUID: \(driveUUID)")
         try await database.deleteDrive(driveUUID)
         await loadDrives()
+    }
+
+    // MARK: - Drive Tracking Actions
+
+    /// Track a new drive (start indexing it)
+    func trackDrive() {
+        guard let pending = pendingDrive else { return }
+
+        showTrackingDialog = false
+
+        // Trigger indexing for this drive
+        NotificationCenter.default.post(
+            name: .shouldIndexDrive,
+            object: nil,
+            userInfo: ["driveURL": pending.url, "driveUUID": pending.uuid]
+        )
+
+        pendingDrive = nil
+    }
+
+    /// Exclude a drive from automatic tracking
+    func excludeDrive() async {
+        guard let pending = pendingDrive else { return }
+
+        showTrackingDialog = false
+
+        do {
+            try await database.setDriveExcluded(uuid: pending.uuid, excluded: true)
+            print("✅ Drive excluded: \(pending.name)")
+            await loadDrives()
+        } catch {
+            print("❌ Error excluding drive: \(error)")
+        }
+
+        pendingDrive = nil
+    }
+
+    /// Un-exclude a drive (allow it to be tracked again)
+    func unexcludeDrive(_ driveUUID: String) async {
+        do {
+            try await database.setDriveExcluded(uuid: driveUUID, excluded: false)
+            print("✅ Drive un-excluded: \(driveUUID)")
+            await loadDrives()
+        } catch {
+            print("❌ Error un-excluding drive: \(error)")
+        }
     }
 }
 

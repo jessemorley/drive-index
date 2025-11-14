@@ -27,6 +27,7 @@ struct DriveMetadata {
     let usedCapacity: Int64
     let lastScanDate: Date?
     let fileCount: Int
+    let isExcluded: Bool
 }
 
 actor DatabaseManager {
@@ -130,6 +131,38 @@ actor DatabaseManager {
         try execute("PRAGMA temp_store = MEMORY")
     }
 
+    /// Migrate existing drives table to add is_excluded column
+    private func migrateAddIsExcludedColumn() throws {
+        // Check if column already exists
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(drives)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasIsExcluded = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let columnName = String(cString: sqlite3_column_text(stmt, 1))
+            if columnName == "is_excluded" {
+                hasIsExcluded = true
+                break
+            }
+        }
+
+        // Add column if it doesn't exist
+        if !hasIsExcluded {
+            print("📊 Migrating drives table to add is_excluded column")
+            try execute("ALTER TABLE drives ADD COLUMN is_excluded BOOLEAN DEFAULT 0")
+            print("✅ Migration complete")
+        }
+    }
+
     private func createSchema() throws {
         // Main files table
         try execute("""
@@ -195,9 +228,13 @@ actor DatabaseManager {
                 total_capacity INTEGER,
                 used_capacity INTEGER,
                 last_scan_date INTEGER,
-                file_count INTEGER
+                file_count INTEGER,
+                is_excluded BOOLEAN DEFAULT 0
             )
         """)
+
+        // Migrate existing drives table to add is_excluded column if it doesn't exist
+        try migrateAddIsExcludedColumn()
 
         // Settings table
         try execute("""
@@ -482,8 +519,8 @@ actor DatabaseManager {
 
         let upsertSQL = """
             INSERT OR REPLACE INTO drives
-            (uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         guard sqlite3_prepare_v2(db, upsertSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -505,6 +542,7 @@ actor DatabaseManager {
         }
 
         sqlite3_bind_int(stmt, 7, Int32(metadata.fileCount))
+        sqlite3_bind_int(stmt, 8, metadata.isExcluded ? 1 : 0)
 
         let result = sqlite3_step(stmt)
         guard result == SQLITE_DONE else {
@@ -525,7 +563,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
             FROM drives WHERE uuid = ?
         """
 
@@ -551,6 +589,7 @@ actor DatabaseManager {
         }
 
         let fileCount = Int(sqlite3_column_int(stmt, 6))
+        let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
         return DriveMetadata(
             uuid: uuidStr,
@@ -559,7 +598,8 @@ actor DatabaseManager {
             totalCapacity: totalCapacity,
             usedCapacity: usedCapacity,
             lastScanDate: lastScanDate,
-            fileCount: fileCount
+            fileCount: fileCount,
+            isExcluded: isExcluded
         )
     }
 
@@ -572,7 +612,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
             FROM drives
             ORDER BY last_seen DESC
         """
@@ -596,6 +636,7 @@ actor DatabaseManager {
             }
 
             let fileCount = Int(sqlite3_column_int(stmt, 6))
+            let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
             results.append(DriveMetadata(
                 uuid: uuid,
@@ -604,7 +645,8 @@ actor DatabaseManager {
                 totalCapacity: totalCapacity,
                 usedCapacity: usedCapacity,
                 lastScanDate: lastScanDate,
-                fileCount: fileCount
+                fileCount: fileCount,
+                isExcluded: isExcluded
             ))
         }
 
@@ -664,6 +706,110 @@ actor DatabaseManager {
         }
 
         print("✅ Drive deleted successfully")
+    }
+
+    // MARK: - Drive Exclusion Operations
+
+    /// Set whether a drive is excluded from automatic indexing
+    func setDriveExcluded(uuid: String, excluded: Bool) throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let updateSQL = "UPDATE drives SET is_excluded = ? WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int(stmt, 1, excluded ? 1 : 0)
+        sqlite3_bind_text(stmt, 2, (uuid as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        print("✅ Drive exclusion updated: \(uuid) -> \(excluded)")
+    }
+
+    /// Check if a drive is excluded
+    func isDriveExcluded(uuid: String) throws -> Bool {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT is_excluded FROM drives WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (uuid as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            // Drive not found - default to not excluded
+            return false
+        }
+
+        return sqlite3_column_int(stmt, 0) != 0
+    }
+
+    /// Get all excluded drives
+    func getExcludedDrives() throws -> [DriveMetadata] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
+            FROM drives
+            WHERE is_excluded = 1
+            ORDER BY name ASC
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var results: [DriveMetadata] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let uuid = String(cString: sqlite3_column_text(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            let lastSeen = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+            let totalCapacity = sqlite3_column_int64(stmt, 3)
+            let usedCapacity = sqlite3_column_int64(stmt, 4)
+
+            var lastScanDate: Date?
+            if sqlite3_column_type(stmt, 5) != SQLITE_NULL {
+                lastScanDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 5)))
+            }
+
+            let fileCount = Int(sqlite3_column_int(stmt, 6))
+            let isExcluded = sqlite3_column_int(stmt, 7) != 0
+
+            results.append(DriveMetadata(
+                uuid: uuid,
+                name: name,
+                lastSeen: lastSeen,
+                totalCapacity: totalCapacity,
+                usedCapacity: usedCapacity,
+                lastScanDate: lastScanDate,
+                fileCount: fileCount,
+                isExcluded: isExcluded
+            ))
+        }
+
+        return results
     }
 
     // MARK: - Settings Operations

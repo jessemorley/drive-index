@@ -4,23 +4,25 @@
 
 ### High
 
-- Add eject button to menubar window
-- Scan button always says "Rescan"
+- [ ] Add eject button to menubar window
+- [ ] Scan button always says "Rescan"
+- [ ] FSEvents monitoring for indexing after file changes
+- [ ] Drive exclusion (maybe an inital prompt/dialog asking if you'd like to sync or ignore that drive)
+- [ ] Phase 3: Directory Modification Caching (Advanced Optimization)
+
 
 ### Medium
 
 - [ ] Keyboard navigation. (Pressing down from search highlights first result. Can move through and press enter to open in finder. Maybe an indication of what the action is going to be?)
-- [ ]Settings window appears on top
+- [ ] Settings window appears on top
 - [ ] MacOS-style storage use summary
 ![image desc](/References/Screenshot%202025-11-13%20at%2010.48.41 am.png)
 
   
 ### Low
 
-- Custom menubar icon
-- Custom app icon
-- Drive exclusion (maybe an inital prompt/dialog asking if you'd like to sync or ignore that drive)
-- Automatic drive sync (FSEvents)
+- [ ] Custom menubar icon
+- [ ] Custom app icon
 
 ### Stretch
 

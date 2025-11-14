@@ -88,6 +88,22 @@ struct ContentView: View {
                 await performSearch(newValue)
             }
         }
+        .confirmationDialog(
+            "Track Drive?",
+            isPresented: $driveMonitor.showTrackingDialog,
+            presenting: driveMonitor.pendingDrive
+        ) { pending in
+            Button("Track") {
+                driveMonitor.trackDrive()
+            }
+            Button("Don't Track") {
+                Task {
+                    await driveMonitor.excludeDrive()
+                }
+            }
+        } message: { pending in
+            Text("Would you like to track \"\(pending.name)\"? Tracking will index all files on the drive for search.")
+        }
     }
 
     private func performSearch(_ query: String) async {

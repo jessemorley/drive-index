@@ -243,7 +243,8 @@ actor FileIndexer {
                 totalCapacity: metadata.totalCapacity,
                 usedCapacity: metadata.usedCapacity,
                 lastScanDate: Date(),
-                fileCount: fileCount
+                fileCount: fileCount,
+                isExcluded: metadata.isExcluded
             )
             try await database.upsertDriveMetadata(updatedMetadata)
         }
@@ -371,7 +372,8 @@ actor FileIndexer {
                 totalCapacity: metadata.totalCapacity,
                 usedCapacity: metadata.usedCapacity,
                 lastScanDate: Date(),
-                fileCount: fileCount
+                fileCount: fileCount,
+                isExcluded: metadata.isExcluded
             )
             try await database.upsertDriveMetadata(updatedMetadata)
         }
