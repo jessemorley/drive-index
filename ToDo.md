@@ -35,3 +35,4 @@
 - [ ] Last scanned only updates when menu bar is open
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to
+- [ ] Exclusions alphabetised on save

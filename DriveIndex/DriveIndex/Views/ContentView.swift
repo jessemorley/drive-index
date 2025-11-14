@@ -252,7 +252,7 @@ struct IndexingProgressView: View {
                 HStack(spacing: Spacing.large) {
                     HStack(spacing: Spacing.small) {
                         ProgressView()
-                            .scaleEffect(0.8)
+                            .controlSize(.small)
                             .frame(width: 16, height: 16)
 
                         VStack(alignment: .leading, spacing: Spacing.xxSmall) {
@@ -287,7 +287,8 @@ struct IndexingProgressView: View {
                 }
             } else {
                 ProgressView()
-                    .scaleEffect(0.8)
+                    .controlSize(.small)
+                    .frame(width: 16, height: 16)
             }
         }
         .padding(Spacing.medium)
