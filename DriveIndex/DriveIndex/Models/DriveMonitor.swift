@@ -7,6 +7,7 @@
 
 import Foundation
 import AppKit
+import SwiftUI
 
 struct DriveInfo: Identifiable {
     let id: String  // UUID
@@ -18,6 +19,7 @@ struct DriveInfo: Identifiable {
     let lastSeen: Date
     let lastScanDate: Date?
     let fileCount: Int
+    let isExcluded: Bool
 
     var usedCapacity: Int64 {
         totalCapacity - availableCapacity
@@ -48,6 +50,31 @@ struct DriveInfo: Identifiable {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return "Scanned " + formatter.localizedString(for: lastScanDate, relativeTo: Date())
+    }
+
+    var isIndexed: Bool {
+        lastScanDate != nil && !isExcluded
+    }
+
+    /// Background color based on drive state
+    /// - Green with green outline: connected and indexed
+    /// - Grey with green outline: connected and unindexed
+    /// - Grey: not connected (regardless of indexed state)
+    var backgroundColor: Color {
+        if !isConnected {
+            return Color.secondary.opacity(0.05)
+        } else if isIndexed {
+            return Color.green.opacity(0.05)
+        } else {
+            return Color.secondary.opacity(0.05)
+        }
+    }
+
+    var borderColor: Color? {
+        if isConnected {
+            return Color.green
+        }
+        return nil
     }
 }
 
@@ -275,7 +302,8 @@ class DriveMonitor: ObservableObject {
                         isConnected: true,
                         lastSeen: Date(),
                         lastScanDate: metadata?.lastScanDate,
-                        fileCount: metadata?.fileCount ?? 0
+                        fileCount: metadata?.fileCount ?? 0,
+                        isExcluded: metadata?.isExcluded ?? false
                     )
 
                     updatedDrives.append(driveInfo)
@@ -299,7 +327,8 @@ class DriveMonitor: ObservableObject {
                         isConnected: false,
                         lastSeen: dbDrive.lastSeen,
                         lastScanDate: dbDrive.lastScanDate,
-                        fileCount: dbDrive.fileCount
+                        fileCount: dbDrive.fileCount,
+                        isExcluded: dbDrive.isExcluded
                     )
 
                     updatedDrives.append(driveInfo)

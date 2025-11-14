@@ -59,7 +59,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 550)
-        .background(.bar)
+        .background(.thinMaterial)
         .onAppear {
             // Auto-focus search field when window appears
             isSearchFocused = true

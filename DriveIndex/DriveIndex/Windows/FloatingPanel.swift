@@ -92,7 +92,7 @@ class FloatingPanel: NSPanel {
         didSet {
             if let view = contentView {
                 view.wantsLayer = true
-                view.layer?.cornerRadius = 12.0
+                view.layer?.cornerRadius = 25.0
                 view.layer?.masksToBounds = true
             }
             // Invalidate shadow to match new rounded shape

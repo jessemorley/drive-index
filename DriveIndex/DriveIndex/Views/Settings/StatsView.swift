@@ -22,10 +22,10 @@ struct StatsView: View {
             VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xxLarge) {
-                    // Indexed Drives
+                    // Drives
                 SettingsSection(
-                    title: "Indexed Drives",
-                    description: "Drives stored in the database",
+                    title: "Drives",
+                    description: "All connected and previously indexed drives",
                     symbol: "externaldrive"
                 ) {
                     if driveMonitor.drives.isEmpty {
@@ -74,8 +74,6 @@ struct StatsView: View {
                                         }
                                     }
                                 )
-                                .background(drive.isConnected ? Color.green.opacity(0.05) : Color.secondary.opacity(0.05))
-                                .cornerRadius(8)
                             }
                         }
                     }
@@ -365,7 +363,7 @@ struct DriveStatsRow: View {
                 }
             }
             .padding(Spacing.medium)
-            .background(drive.isConnected ? Color.green.opacity(0.02) : Color.secondary.opacity(0.02))
+            .background(drive.backgroundColor)
             .clipShape(
                 .rect(
                     topLeadingRadius: 8,
@@ -373,6 +371,10 @@ struct DriveStatsRow: View {
                     bottomTrailingRadius: drive.isConnected ? 0 : 8,
                     topTrailingRadius: 8
                 )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(drive.borderColor ?? Color.clear, lineWidth: 1)
             )
 
             // Action buttons: Scan and Reveal on left, Eject on right

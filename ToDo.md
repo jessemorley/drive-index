@@ -18,6 +18,7 @@
     - Drive symbol before capacity symbol (like in the floating window)
     - 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
+- [ ] Consider enabling PRAGMA optimize and occasionally running VACUUM for database size reduction
 
 
 ### Medium
