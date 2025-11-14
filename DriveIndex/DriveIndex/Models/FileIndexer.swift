@@ -66,7 +66,12 @@ actor FileIndexer {
                     ".tmp",
                     ".cache",
                     ".DS_Store",
-                    ".localized"
+                    ".localized",
+                    ".cof",
+                    ".cos",
+                    ".cot",
+                    ".cop",
+                    ".comask"
                 ]
                 excludedExtensionsOrdered = defaultExts
                 excludedExtensions = Set(defaultExts)
@@ -109,7 +114,12 @@ actor FileIndexer {
                     ".tmp",
                     ".cache",
                     ".DS_Store",
-                    ".localized"
+                    ".localized",
+                    ".cof",
+                    ".cos",
+                    ".cot",
+                    ".cop",
+                    ".comask"
                 ]
                 excludedExtensionsOrdered = defaultExts
                 excludedExtensions = Set(defaultExts)
@@ -137,7 +147,12 @@ actor FileIndexer {
                     ".tmp",
                     ".cache",
                     ".DS_Store",
-                    ".localized"
+                    ".localized",
+                    ".cof",
+                    ".cos",
+                    ".cot",
+                    ".cop",
+                    ".comask"
                 ]
                 excludedExtensionsOrdered = defaultExts
                 excludedExtensions = Set(defaultExts)

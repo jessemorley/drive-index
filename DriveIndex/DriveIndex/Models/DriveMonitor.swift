@@ -84,6 +84,7 @@ class DriveMonitor: ObservableObject {
     @Published var pendingDrive: (url: URL, uuid: String, name: String)?
     @Published var showTrackingDialog = false
     private let database = DatabaseManager.shared
+    private let fsEventsMonitor = FSEventsMonitor.shared
 
     init() {
         setupNotifications()
@@ -212,6 +213,18 @@ class DriveMonitor: ObservableObject {
             }
             // If excluded, do nothing (no indexing)
 
+            // Start FSEvents monitoring for non-excluded drives
+            if !isExcluded {
+                Task {
+                    do {
+                        try await fsEventsMonitor.startMonitoring(driveURL: volumeURL, driveUUID: uuid)
+                    } catch {
+                        print("⚠️ Failed to start FSEvents monitoring: \(error)")
+                        // Non-fatal: continue without live monitoring
+                    }
+                }
+            }
+
         } catch {
             print("Error handling mounted drive: \(error)")
         }
@@ -219,6 +232,15 @@ class DriveMonitor: ObservableObject {
 
     private func handleDriveUnmounted(devicePath: String) async {
         print("Drive unmounted: \(devicePath)")
+
+        // Try to find UUID from current drives list before reloading
+        let unmountedDrive = drives.first { $0.path == devicePath }
+        if let uuid = unmountedDrive?.id {
+            Task {
+                await fsEventsMonitor.stopMonitoring(driveUUID: uuid)
+            }
+        }
+
         await loadDrives()
     }
 
@@ -437,6 +459,10 @@ class DriveMonitor: ObservableObject {
         do {
             try await database.setDriveExcluded(uuid: pending.uuid, excluded: true)
             print("✅ Drive excluded: \(pending.name)")
+
+            // Stop FSEvents monitoring for excluded drive
+            await fsEventsMonitor.stopMonitoring(driveUUID: pending.uuid)
+
             await loadDrives()
         } catch {
             print("❌ Error excluding drive: \(error)")
@@ -450,6 +476,19 @@ class DriveMonitor: ObservableObject {
         do {
             try await database.setDriveExcluded(uuid: driveUUID, excluded: false)
             print("✅ Drive un-excluded: \(driveUUID)")
+
+            // Start FSEvents monitoring if drive is currently connected
+            if let driveInfo = drives.first(where: { $0.id == driveUUID }),
+               let driveURL = getDriveURL(for: driveInfo) {
+                Task {
+                    do {
+                        try await fsEventsMonitor.startMonitoring(driveURL: driveURL, driveUUID: driveUUID)
+                    } catch {
+                        print("⚠️ Failed to start FSEvents monitoring: \(error)")
+                    }
+                }
+            }
+
             await loadDrives()
         } catch {
             print("❌ Error un-excluding drive: \(error)")

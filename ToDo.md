@@ -5,10 +5,10 @@
 ### High
 
 - [ ] Scan button always says "Rescan"
-- [ ] **FSEvents monitoring for indexing after file changes**
+- [x] **FSEvents monitoring for indexing after file changes** ✅
 - [x] Drive exclusion with track/exclude dialog on drive connect
 - [ ] Phase 3: Directory Modification Caching (Advanced Optimization)
-- [ ] Excluded and un-indexed drives show under Indexed Drives
+- [x] Excluded and un-indexed drives show under Indexed Drives
     - Change "Indexed Drives" to Drives
     - Change drive section colours:
         - Green with green 1px outline for connected and indexed
@@ -39,6 +39,7 @@
 - [ ] Browse drives/file tree interface
 - [ ] Implement Sparkle updates
 - [ ] Cloud sync with CloudKit
+- [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
 
 ## Bugs
 
@@ -46,6 +47,7 @@
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to
 - [x] Exclusions alphabetised on save (also error logged)
+- [ ] Rejoin separate actions area for connected drives
 
 
 

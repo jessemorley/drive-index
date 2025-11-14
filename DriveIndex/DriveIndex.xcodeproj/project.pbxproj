@@ -31,6 +31,7 @@
 		86B531A62EC04845007DC54C /* ConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A22EC04845007DC54C /* ConfigView.swift */; };
 		86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A82EC04858007DC54C /* SettingsSection.swift */; };
 		86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A72EC04858007DC54C /* DriveStatusBadge.swift */; };
+		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +62,7 @@
 		86B531A22EC04845007DC54C /* ConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigView.swift; sourceTree = "<group>"; };
 		86B531A72EC04858007DC54C /* DriveStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveStatusBadge.swift; sourceTree = "<group>"; };
 		86B531A82EC04858007DC54C /* SettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSection.swift; sourceTree = "<group>"; };
+		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +123,7 @@
 		1A100004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */,
 				867891B02EC0B34E00E2CDAD /* HotkeyManager.swift */,
 				867891B12EC0B34E00E2CDAD /* KeyboardShortcut.swift */,
 				867891AA2EC0A52600E2CDAD /* SearchManager.swift */,
@@ -250,6 +253,7 @@
 				1A000001 /* DriveIndexApp.swift in Sources */,
 				1A000003 /* ContentView.swift in Sources */,
 				1A000005 /* DriveListView.swift in Sources */,
+				86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */,
 				867891A82EC0655800E2CDAD /* Spacing.swift in Sources */,
 				867891A92EC0655800E2CDAD /* Typography.swift in Sources */,
 				1A000007 /* SettingsView.swift in Sources */,

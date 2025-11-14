@@ -36,7 +36,12 @@ struct SettingsView: View {
         ".tmp",
         ".cache",
         ".DS_Store",
-        ".localized"
+        ".localized",
+        ".cof",
+        ".cos",
+        ".cot",
+        ".cop",
+        ".comask"
     ]
 
     enum SettingsTab: String, CaseIterable, Identifiable {
