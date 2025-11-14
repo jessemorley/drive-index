@@ -7,8 +7,12 @@
 - [ ] Add eject button to menubar window
 - [ ] Scan button always says "Rescan"
 - [ ] FSEvents monitoring for indexing after file changes
-- [ ] Drive exclusion (maybe an inital prompt/dialog asking if you'd like to sync or ignore that drive)
+- [x] Drive exclusion (maybe an inital prompt/dialog asking if you'd like to sync or ignore that drive)
 - [ ] Phase 3: Directory Modification Caching (Advanced Optimization)
+- [ ] Excluded and un-indexed drives show under Indexed Drives
+    - Green for connected and indexed
+    - Grey for connected and unindexed
+    - Grey for not connected and unindexed
 
 
 ### Medium
@@ -33,7 +37,6 @@
 ## Bugs
 
 - [ ] Database location button sizing
-- [ ] Last scanned only updates when menu bar is open
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to
-- [ ] Exclusions alphabetised on save (also error logged)
+- [x] Exclusions alphabetised on save (also error logged)

@@ -172,9 +172,9 @@ class DriveMonitor: ObservableObject {
 
             // Handle new/un-indexed drives or excluded drives
             if isNewDrive && !isExcluded {
-                // Show dialog asking user if they want to track this drive
+                // Show standalone alert asking user if they want to track this drive
                 pendingDrive = (url: volumeURL, uuid: uuid, name: volumeName)
-                showTrackingDialog = true
+                showTrackingAlert()
             } else if !isExcluded {
                 // Automatically index existing non-excluded drives
                 NotificationCenter.default.post(
@@ -373,6 +373,32 @@ class DriveMonitor: ObservableObject {
         pendingDrive = nil
     }
 
+    /// Show tracking dialog as a standalone alert
+    func showTrackingAlert() {
+        guard let pending = pendingDrive else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Track Drive?"
+        alert.informativeText = "Would you like to track \"\(pending.name)\"? Tracking will index all files on the drive for search."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Track")
+        alert.addButton(withTitle: "Don't Track")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+
+        switch response {
+        case .alertFirstButtonReturn: // Track
+            trackDrive()
+        case .alertSecondButtonReturn: // Don't Track
+            Task {
+                await excludeDrive()
+            }
+        default: // Cancel
+            cancelTrackingDialog()
+        }
+    }
+
     /// Exclude a drive from automatic tracking
     func excludeDrive() async {
         guard let pending = pendingDrive else { return }
@@ -399,6 +425,12 @@ class DriveMonitor: ObservableObject {
         } catch {
             print("❌ Error un-excluding drive: \(error)")
         }
+    }
+
+    /// Cancel the tracking dialog without taking action
+    func cancelTrackingDialog() {
+        showTrackingDialog = false
+        pendingDrive = nil
     }
 }
 
