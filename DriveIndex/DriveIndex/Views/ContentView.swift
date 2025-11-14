@@ -23,37 +23,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Fixed header bar with app name and action buttons
-            HStack(spacing: Spacing.medium) {
-                Text("DriveIndex")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Button(action: openSettingsWindow) {
-                    Image(systemName: "gearshape")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .help("Settings")
-
-                Button(action: {
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-                .help("Quit DriveIndex")
-            }
-            .padding(.horizontal, Spacing.large)
-            .padding(.top, Spacing.small)
-            .padding(.bottom, Spacing.small)
-
-            // Search bar below header
+            // Search bar at top of window
             SearchBar(
                 searchText: $searchText,
                 driveCount: driveMonitor.drives.count,
@@ -88,7 +58,7 @@ struct ContentView: View {
                     .frame(height: calculateContentHeight())
             }
         }
-        .frame(width: 450)
+        .frame(width: 550)
         .background(.bar)
         .onAppear {
             // Auto-focus search field when window appears

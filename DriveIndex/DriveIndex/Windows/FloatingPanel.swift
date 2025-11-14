@@ -161,7 +161,7 @@ class FloatingPanel: NSPanel {
 
             // Validate that the frame has reasonable dimensions
             if restoredFrame.width <= 0 || restoredFrame.height <= 0 {
-                restoredFrame = NSRect(x: 0, y: 0, width: 450, height: 474)
+                restoredFrame = NSRect(x: 0, y: 0, width: 550, height: 474)
             }
 
             // Verify position is still valid on this screen (in case screen resolution changed)

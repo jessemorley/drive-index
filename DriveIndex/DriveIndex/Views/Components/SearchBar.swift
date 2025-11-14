@@ -27,7 +27,7 @@ struct SearchBar: View {
             )
             .textFieldStyle(.plain)
             .focused($isSearchFocused)
-            .font(.body)
+            .font(.title3)
 
             if !searchText.isEmpty {
                 Button(action: {
@@ -40,17 +40,17 @@ struct SearchBar: View {
                 }
                 .buttonStyle(.borderless)
             }
+
+            Button(action: onSettingsClick) {
+                Image(systemName: "gearshape")
+                    .foregroundStyle(.secondary)
+                    .font(.body)
+            }
+            .buttonStyle(.borderless)
+            .help("Settings")
         }
-        .padding(.horizontal, Spacing.medium)
-        .padding(.vertical, Spacing.small)
-        .background(.bar)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
-        )
         .padding(.horizontal, Spacing.large)
-        .padding(.top, Spacing.small)
+        .padding(.top, Spacing.medium)
         .padding(.bottom, Spacing.medium)
     }
 

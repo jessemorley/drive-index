@@ -110,7 +110,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Create the floating panel with ContentView
     private func createPanel() {
         // Create panel with fixed dimensions (matches current ContentView size)
-        let panelRect = NSRect(x: 0, y: 0, width: 450, height: 474)
+        let panelRect = NSRect(x: 0, y: 0, width: 550, height: 474)
         let panel = FloatingPanel(contentRect: panelRect)
 
         // Set delegate for window events
