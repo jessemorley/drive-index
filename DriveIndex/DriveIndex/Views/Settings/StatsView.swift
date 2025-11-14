@@ -245,21 +245,32 @@ struct StatsView: View {
     }
 
     private func deleteDatabase() {
-        let path = NSString(string: databasePath).expandingTildeInPath
-        let dbFile = (path as NSString).appendingPathComponent("index.db")
-        let dbWalFile = "\(dbFile)-wal"
-        let dbShmFile = "\(dbFile)-shm"
-
-        let fileManager = FileManager.default
-
-        // Delete database files
-        try? fileManager.removeItem(atPath: dbFile)
-        try? fileManager.removeItem(atPath: dbWalFile)
-        try? fileManager.removeItem(atPath: dbShmFile)
-
-        // Refresh drives list
         Task {
-            await driveMonitor.loadDrives()
+            do {
+                // Recover database (which closes and reopens the connection)
+                // This ensures clean shutdown before deletion
+                try await DatabaseManager.shared.recoverDatabase()
+
+                let path = NSString(string: databasePath).expandingTildeInPath
+                let dbFile = (path as NSString).appendingPathComponent("index.db")
+                let dbWalFile = "\(dbFile)-wal"
+                let dbShmFile = "\(dbFile)-shm"
+
+                let fileManager = FileManager.default
+
+                // Delete database files
+                try? fileManager.removeItem(atPath: dbFile)
+                try? fileManager.removeItem(atPath: dbWalFile)
+                try? fileManager.removeItem(atPath: dbShmFile)
+
+                // Recreate database
+                try await DatabaseManager.shared.recoverDatabase()
+
+                // Refresh drives list
+                await driveMonitor.loadDrives()
+            } catch {
+                print("Error deleting database: \(error)")
+            }
         }
     }
 }

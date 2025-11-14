@@ -77,6 +77,31 @@ class IndexManager: ObservableObject {
                             }
                         }
                     }
+                } catch let error as DatabaseError {
+                    print("Error indexing drive: \(error)")
+
+                    // Attempt recovery for recoverable database errors
+                    if error.isRecoverable {
+                        Task { @MainActor in
+                            self.showRecoveryNotification(driveName: driveName)
+                        }
+
+                        do {
+                            try await DatabaseManager.shared.recoverDatabase()
+                            // Retry indexing once after recovery
+                            print("🔄 Retrying index after recovery...")
+                            await self.indexDrive(url: url, uuid: uuid)
+                            return
+                        } catch {
+                            print("❌ Recovery failed: \(error)")
+                        }
+                    }
+
+                    Task { @MainActor in
+                        self.isIndexing = false
+                        self.currentProgress = nil
+                        self.showErrorNotification(driveName: driveName, error: error)
+                    }
                 } catch {
                     print("Error indexing drive: \(error)")
                     Task { @MainActor in
@@ -136,6 +161,21 @@ class IndexManager: ObservableObject {
         content.title = "Indexing Failed"
         content.body = "Failed to index \(driveName): \(error.localizedDescription)"
         content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func showRecoveryNotification(driveName: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Database Recovery"
+        content.body = "Recovering database for \(driveName)..."
+        content.sound = nil
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

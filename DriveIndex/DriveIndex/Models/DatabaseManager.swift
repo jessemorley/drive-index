@@ -61,8 +61,55 @@ actor DatabaseManager {
 
     deinit {
         if db != nil {
-            sqlite3_close(db)
+            sqlite3_close_v2(db)
         }
+    }
+
+    // MARK: - Database Recovery
+
+    /// Recover from database corruption or I/O errors
+    func recoverDatabase() async throws {
+        print("🔄 Attempting database recovery...")
+
+        // Close existing connection if any
+        if db != nil {
+            sqlite3_close_v2(db)
+            db = nil
+        }
+
+        // Check if database file exists
+        if !FileManager.default.fileExists(atPath: dbPath) {
+            print("📁 Database file missing, will recreate on next open")
+        }
+
+        // Reopen and recreate schema
+        try openDatabase()
+        try createSchema()
+
+        print("✅ Database recovered successfully")
+    }
+
+    /// Check if database is healthy
+    private func ensureDatabaseHealth() throws -> Bool {
+        guard db != nil else { return false }
+
+        // Simple health check query
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let healthCheck = "SELECT 1"
+        let result = sqlite3_prepare_v2(db, healthCheck, -1, &stmt, nil)
+
+        // Check for I/O or corruption errors
+        if result == SQLITE_IOERR || result == SQLITE_CORRUPT || result == SQLITE_NOTADB {
+            return false
+        }
+
+        return result == SQLITE_OK
     }
 
     // MARK: - Database Setup
@@ -274,6 +321,151 @@ actor DatabaseManager {
         }
 
         return Int(sqlite3_column_int(stmt, 0))
+    }
+
+    /// Get existing files for a drive to support delta indexing
+    /// Returns a dictionary mapping relative_path to (id, modified_at)
+    func getExistingFiles(driveUUID: String) throws -> [String: (id: Int64, modifiedAt: Date?)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT id, relative_path, modified_at FROM files WHERE drive_uuid = ?"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        var results: [String: (id: Int64, modifiedAt: Date?)] = [:]
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+
+            var modifiedAt: Date?
+            if sqlite3_column_type(stmt, 2) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+            }
+
+            results[relativePath] = (id: id, modifiedAt: modifiedAt)
+        }
+
+        return results
+    }
+
+    /// Update a batch of files (for delta indexing when files have changed)
+    func updateFilesBatch(_ entries: [FileEntry]) throws {
+        guard !entries.isEmpty else { return }
+
+        try execute("BEGIN TRANSACTION")
+
+        do {
+            let updateSQL = """
+                UPDATE files
+                SET name = ?, size = ?, created_at = ?, modified_at = ?, is_directory = ?
+                WHERE id = ?
+            """
+
+            var stmt: OpaquePointer?
+            defer {
+                if stmt != nil {
+                    sqlite3_finalize(stmt)
+                }
+            }
+
+            guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+                try? execute("ROLLBACK")
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            for entry in entries {
+                guard let id = entry.id else {
+                    print("⚠️ Warning: Skipping update for entry without ID: \(entry.relativePath)")
+                    continue
+                }
+
+                sqlite3_bind_text(stmt, 1, (entry.name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int64(stmt, 2, entry.size)
+
+                if let createdAt = entry.createdAt {
+                    sqlite3_bind_int64(stmt, 3, Int64(createdAt.timeIntervalSince1970))
+                } else {
+                    sqlite3_bind_null(stmt, 3)
+                }
+
+                if let modifiedAt = entry.modifiedAt {
+                    sqlite3_bind_int64(stmt, 4, Int64(modifiedAt.timeIntervalSince1970))
+                } else {
+                    sqlite3_bind_null(stmt, 4)
+                }
+
+                sqlite3_bind_int(stmt, 5, entry.isDirectory ? 1 : 0)
+                sqlite3_bind_int64(stmt, 6, id)
+
+                let result = sqlite3_step(stmt)
+                guard result == SQLITE_DONE else {
+                    let errorMsg = String(cString: sqlite3_errmsg(db))
+                    print("❌ SQLite error during update: \(errorMsg)")
+                    try? execute("ROLLBACK")
+                    throw DatabaseError.executeFailed(errorMsg)
+                }
+
+                sqlite3_reset(stmt)
+            }
+
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    /// Delete files by relative paths (for delta indexing when files are removed)
+    func deleteFiles(driveUUID: String, relativePaths: [String]) throws {
+        guard !relativePaths.isEmpty else { return }
+
+        try execute("BEGIN TRANSACTION")
+
+        do {
+            let deleteSQL = "DELETE FROM files WHERE drive_uuid = ? AND relative_path = ?"
+
+            var stmt: OpaquePointer?
+            defer {
+                if stmt != nil {
+                    sqlite3_finalize(stmt)
+                }
+            }
+
+            guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
+                try? execute("ROLLBACK")
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            for relativePath in relativePaths {
+                sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 2, (relativePath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+                let result = sqlite3_step(stmt)
+                guard result == SQLITE_DONE else {
+                    let errorMsg = String(cString: sqlite3_errmsg(db))
+                    print("❌ SQLite error during delete: \(errorMsg)")
+                    try? execute("ROLLBACK")
+                    throw DatabaseError.executeFailed(errorMsg)
+                }
+
+                sqlite3_reset(stmt)
+            }
+
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
     }
 
     // MARK: - Drive Metadata Operations
@@ -531,7 +723,22 @@ actor DatabaseManager {
             }
         }
 
-        guard sqlite3_exec(db, sql, nil, nil, &error) == SQLITE_OK else {
+        let result = sqlite3_exec(db, sql, nil, nil, &error)
+
+        // Check for I/O errors specifically
+        if result == SQLITE_IOERR {
+            let extendedCode = sqlite3_extended_errcode(db)
+            let message = error != nil ? String(cString: error!) : "Disk I/O error"
+            throw DatabaseError.ioError(extendedCode, message)
+        }
+
+        // Check for corruption
+        if result == SQLITE_CORRUPT || result == SQLITE_NOTADB {
+            let message = error != nil ? String(cString: error!) : "Database is corrupt or not a database"
+            throw DatabaseError.corruptDatabase(message)
+        }
+
+        guard result == SQLITE_OK else {
             let message = error != nil ? String(cString: error!) : "Unknown error"
             throw DatabaseError.executeFailed(message)
         }
@@ -564,6 +771,8 @@ enum DatabaseError: Error, LocalizedError {
     case cannotOpen(String)
     case prepareFailed(String)
     case executeFailed(String)
+    case ioError(Int32, String)
+    case corruptDatabase(String)
 
     var errorDescription: String? {
         switch self {
@@ -573,6 +782,19 @@ enum DatabaseError: Error, LocalizedError {
             return "Failed to prepare statement: \(message)"
         case .executeFailed(let message):
             return "Failed to execute statement: \(message)"
+        case .ioError(let code, let message):
+            return "Database I/O error (code \(code)): \(message)"
+        case .corruptDatabase(let message):
+            return "Database is corrupt: \(message)"
+        }
+    }
+
+    var isRecoverable: Bool {
+        switch self {
+        case .ioError, .corruptDatabase:
+            return true
+        default:
+            return false
         }
     }
 }
