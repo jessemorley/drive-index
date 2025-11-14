@@ -16,18 +16,95 @@ actor FSEventsMonitor {
     private var eventStreams: [String: FSEventStreamRef] = [:]  // UUID → stream
     private var streamContexts: [String: UnsafeMutablePointer<String>] = [:]  // UUID → context
 
-    // Event buffering (10-second fixed buffer)
+    // Event buffering
     private var eventBuffers: [String: Set<String>] = [:]  // UUID → set of paths
     private var bufferTasks: [String: Task<Void, Never>] = [:]  // UUID → debounce task
 
-    // Configuration
-    private let eventBufferDelay: TimeInterval = 10.0
+    // Configuration (stored in database)
+    private var isMonitoringEnabled: Bool = true
+    private var eventBufferDelay: TimeInterval = 10.0
     private let eventLatency: CFTimeInterval = 1.0  // 1 second FSEvents latency
+
+    // Settings keys
+    private let fsEventsEnabledKey = "fsevents_enabled"
+    private let fsEventsBufferDelayKey = "fsevents_buffer_delay"
+
+    // MARK: - Initialization
+
+    init() {
+        // Load settings from database
+        Task {
+            await loadSettings()
+        }
+    }
+
+    private func loadSettings() async {
+        do {
+            // Load enabled state (default: true)
+            if let enabledStr = try await database.getSetting(fsEventsEnabledKey) {
+                isMonitoringEnabled = enabledStr == "true"
+            }
+
+            // Load buffer delay (default: 10.0)
+            if let delayStr = try await database.getSetting(fsEventsBufferDelayKey),
+               let delay = Double(delayStr) {
+                eventBufferDelay = delay
+            }
+        } catch {
+            print("⚠️ Error loading FSEvents settings: \(error)")
+            // Use defaults
+        }
+    }
+
+    // MARK: - Settings Access
+
+    func isEnabled() -> Bool {
+        return isMonitoringEnabled
+    }
+
+    func getBufferDelay() -> Double {
+        return eventBufferDelay
+    }
+
+    func setEnabled(_ enabled: Bool) async {
+        isMonitoringEnabled = enabled
+
+        do {
+            try await database.setSetting(fsEventsEnabledKey, value: enabled ? "true" : "false")
+            print("✅ FSEvents enabled: \(enabled)")
+
+            // Stop all monitoring if disabled
+            if !enabled {
+                let driveUUIDs = Array(eventStreams.keys)
+                for uuid in driveUUIDs {
+                    stopMonitoringSync(driveUUID: uuid)
+                }
+            }
+        } catch {
+            print("❌ Error saving FSEvents enabled setting: \(error)")
+        }
+    }
+
+    func setBufferDelay(_ delay: Double) async {
+        eventBufferDelay = delay
+
+        do {
+            try await database.setSetting(fsEventsBufferDelayKey, value: String(delay))
+            print("✅ FSEvents buffer delay: \(delay)s")
+        } catch {
+            print("❌ Error saving FSEvents buffer delay: \(error)")
+        }
+    }
 
     // MARK: - Lifecycle
 
     /// Start monitoring file system changes for a drive
     func startMonitoring(driveURL: URL, driveUUID: String) async throws {
+        // Skip if monitoring is disabled
+        guard isMonitoringEnabled else {
+            print("⏭️ FSEvents monitoring disabled globally")
+            return
+        }
         print("🔍 Starting FSEvents monitoring for: \(driveURL.path) (UUID: \(driveUUID))")
 
         // Stop existing monitoring if any

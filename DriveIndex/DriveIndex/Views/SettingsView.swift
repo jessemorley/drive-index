@@ -16,6 +16,8 @@ struct SettingsView: View {
     @State private var excludedDirectories: [String] = []
     @State private var excludedExtensions: [String] = []
     @State private var keyboardShortcut: KeyboardShortcut?
+    @State private var fsEventsEnabled: Bool = true
+    @State private var fsEventsBufferDelay: Double = 10.0
     @State private var isLoading: Bool = true
     @State private var saveStatus: SaveStatus = .none
 
@@ -79,6 +81,8 @@ struct SettingsView: View {
                 excludedDirectories: $excludedDirectories,
                 excludedExtensions: $excludedExtensions,
                 keyboardShortcut: $keyboardShortcut,
+                fsEventsEnabled: $fsEventsEnabled,
+                fsEventsBufferDelay: $fsEventsBufferDelay,
                 onRestoreDirectoriesDefaults: {
                     excludedDirectories = defaultExcludedDirectories
                 },
@@ -160,11 +164,15 @@ struct SettingsView: View {
         Task {
             let dirs = await indexManager.getExcludedDirectories()
             let exts = await indexManager.getExcludedExtensions()
+            let fsEnabled = await FSEventsMonitor.shared.isEnabled()
+            let fsDelay = await FSEventsMonitor.shared.getBufferDelay()
 
             await MainActor.run {
                 excludedDirectories = dirs
                 excludedExtensions = exts
                 keyboardShortcut = HotkeyManager.shared.currentShortcut
+                fsEventsEnabled = fsEnabled
+                fsEventsBufferDelay = fsDelay
                 isLoading = false
             }
         }
@@ -181,6 +189,10 @@ struct SettingsView: View {
 
                 try await indexManager.updateExcludedDirectories(dirs)
                 try await indexManager.updateExcludedExtensions(exts)
+
+                // Update FSEvents settings
+                await FSEventsMonitor.shared.setEnabled(fsEventsEnabled)
+                await FSEventsMonitor.shared.setBufferDelay(fsEventsBufferDelay)
 
                 // Update keyboard shortcut
                 await MainActor.run {

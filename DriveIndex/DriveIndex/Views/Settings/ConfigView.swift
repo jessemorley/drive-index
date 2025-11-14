@@ -11,6 +11,8 @@ struct ConfigView: View {
     @Binding var excludedDirectories: [String]
     @Binding var excludedExtensions: [String]
     @Binding var keyboardShortcut: KeyboardShortcut?
+    @Binding var fsEventsEnabled: Bool
+    @Binding var fsEventsBufferDelay: Double
     @EnvironmentObject var driveMonitor: DriveMonitor
 
     @State private var excludedDrives: [DriveMetadata] = []
@@ -21,6 +23,46 @@ struct ConfigView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxLarge) {
+                // Automatic Indexing (FSEvents)
+                SettingsSection(
+                    title: "Automatic Indexing",
+                    description: "Monitor drives for file changes and automatically update the index",
+                    symbol: "arrow.triangle.2.circlepath"
+                ) {
+                    VStack(alignment: .leading, spacing: Spacing.medium) {
+                        Toggle(isOn: $fsEventsEnabled) {
+                            Text("Enable automatic indexing")
+                                .font(.callout)
+                        }
+                        .toggleStyle(.switch)
+
+                        if fsEventsEnabled {
+                            VStack(alignment: .leading, spacing: Spacing.small) {
+                                HStack {
+                                    Text("Event buffer delay:")
+                                        .font(.callout)
+                                        .foregroundColor(.secondary)
+
+                                    Spacer()
+
+                                    Text("\(Int(fsEventsBufferDelay))s")
+                                        .font(.system(.callout, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                        .frame(width: 40, alignment: .trailing)
+                                }
+
+                                Slider(value: $fsEventsBufferDelay, in: 5...60, step: 5)
+                                    .frame(maxWidth: .infinity)
+
+                                Text("How long to wait after file changes before triggering a scan")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.top, Spacing.small)
+                        }
+                    }
+                }
+
                 // Keyboard Shortcut
                 SettingsSection(
                     title: "Global Shortcut",
@@ -166,6 +208,8 @@ struct ConfigView: View {
         excludedDirectories: .constant([".git", "node_modules", "Library"]),
         excludedExtensions: .constant([".tmp", ".cache", ".DS_Store"]),
         keyboardShortcut: .constant(.default),
+        fsEventsEnabled: .constant(true),
+        fsEventsBufferDelay: .constant(10.0),
         onRestoreDirectoriesDefaults: {},
         onRestoreExtensionsDefaults: {}
     )
