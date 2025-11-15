@@ -464,6 +464,44 @@ actor DatabaseManager {
         return results
     }
 
+    /// Get existing directories for a drive to support directory caching optimization
+    /// Returns a dictionary mapping relative_path to modified_at timestamp
+    func getExistingDirectories(driveUUID: String) throws -> [String: Date?] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT relative_path, modified_at
+            FROM files
+            WHERE drive_uuid = ? AND is_directory = 1
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        var results: [String: Date?] = [:]
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let relativePath = String(cString: sqlite3_column_text(stmt, 0))
+
+            var modifiedAt: Date?
+            if sqlite3_column_type(stmt, 1) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 1)))
+            }
+
+            results[relativePath] = modifiedAt
+        }
+
+        return results
+    }
+
     /// Update a batch of files (for delta indexing when files have changed)
     func updateFilesBatch(_ entries: [FileEntry]) throws {
         guard !entries.isEmpty else { return }

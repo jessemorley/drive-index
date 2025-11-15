@@ -10,8 +10,12 @@ Fast, offline searching of external drives for macOS using SQLite FTS5.
 
 A macOS app with a Spotlight-like floating search window that automatically indexes external drives when connected, storing file metadata in a shared SQLite database, providing sub-100ms full-text search across all indexed files, even when drives are offline.
 
-**Architecture:** Swift floating panel app → SQLite FTS5 database
+## Features
 
-## License
-
-MIT License - See [LICENSE](LICENSE) for details
+- Auto drive index on file change (FSEvents) with customisable buffer interval
+- File search in <100ms across drives, even when offline
+- Global search shortcut
+- Option to exclude specific extensions and directories
+- Option to exclude or track drives
+- Connected drive info at a glance
+- Drive wear optimisation: only update 

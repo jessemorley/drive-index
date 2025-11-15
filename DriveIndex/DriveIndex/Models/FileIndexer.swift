@@ -283,6 +283,10 @@ actor FileIndexer {
         let existingFiles = try await database.getExistingFiles(driveUUID: driveUUID)
         print("📊 Delta scan: \(existingFiles.count) existing files in database")
 
+        // Fetch existing directories for caching optimization (Phase 3)
+        let existingDirectories = try await database.getExistingDirectories(driveUUID: driveUUID)
+        print("📁 Directory cache: \(existingDirectories.count) directories")
+
         var filesProcessed = 0
         var insertBatch: [FileEntry] = []
         var updateBatch: [FileEntry] = []
@@ -292,12 +296,23 @@ actor FileIndexer {
         var newCount = 0
         var modifiedCount = 0
         var unchangedCount = 0
+        var skippedDirectories = 0
 
         // Get base path for relative paths
         let basePath = driveURL.path
 
-        // Walk directory tree
-        let fileStream = walkDirectory(at: driveURL, basePath: basePath, driveUUID: driveUUID)
+        // Walk directory tree (with directory caching)
+        let fileStream = walkDirectory(
+            at: driveURL,
+            basePath: basePath,
+            driveUUID: driveUUID,
+            cachedDirectories: existingDirectories,
+            existingFiles: existingFiles,
+            onDirectorySkipped: { skippedDirectories += 1 },
+            onFilesMarkedVisited: { paths in
+                visitedPaths.formUnion(paths)
+            }
+        )
 
         for await fileEntry in fileStream {
             filesProcessed += 1
@@ -399,7 +414,7 @@ actor FileIndexer {
             isComplete: true
         ))
 
-        print("✅ Delta index complete: \(newCount) new, \(modifiedCount) modified, \(unchangedCount) unchanged, \(deletedCount) deleted")
+        print("✅ Delta index complete: \(newCount) new, \(modifiedCount) modified, \(unchangedCount) unchanged, \(deletedCount) deleted, \(skippedDirectories) directories skipped")
     }
 
     /// Compare file modification times with 1-second tolerance for filesystem quirks
@@ -418,12 +433,20 @@ actor FileIndexer {
         return abs(currentDate.timeIntervalSince(existingDate)) > 1.0
     }
 
-    private func walkDirectory(at url: URL, basePath: String, driveUUID: String) -> AsyncStream<FileEntry> {
+    private func walkDirectory(
+        at url: URL,
+        basePath: String,
+        driveUUID: String,
+        cachedDirectories: [String: Date?]? = nil,
+        existingFiles: [String: (id: Int64, modifiedAt: Date?)]? = nil,
+        onDirectorySkipped: (() -> Void)? = nil,
+        onFilesMarkedVisited: (([String]) -> Void)? = nil
+    ) -> AsyncStream<FileEntry> {
         AsyncStream { continuation in
             // Capture needed state for the synchronous enumeration
             let excludedDirs = excludedDirectories
             let excludedExts = excludedExtensions
-            
+
             // Perform file enumeration on a background thread
             DispatchQueue.global(qos: .userInitiated).async {
                 Self.enumerateFiles(
@@ -432,6 +455,10 @@ actor FileIndexer {
                     driveUUID: driveUUID,
                     excludedDirs: excludedDirs,
                     excludedExts: excludedExts,
+                    cachedDirectories: cachedDirectories,
+                    existingFiles: existingFiles,
+                    onDirectorySkipped: onDirectorySkipped,
+                    onFilesMarkedVisited: onFilesMarkedVisited,
                     continuation: continuation
                 )
             }
@@ -444,6 +471,10 @@ actor FileIndexer {
         driveUUID: String,
         excludedDirs: Set<String>,
         excludedExts: Set<String>,
+        cachedDirectories: [String: Date?]?,
+        existingFiles: [String: (id: Int64, modifiedAt: Date?)]?,
+        onDirectorySkipped: (() -> Void)?,
+        onFilesMarkedVisited: (([String]) -> Void)?,
         continuation: AsyncStream<FileEntry>.Continuation
     ) {
         let fileManager = FileManager.default
@@ -481,6 +512,92 @@ actor FileIndexer {
             return
         }
 
+        // Phase 3: Build set of directories that need scanning
+        // This includes directories with changed mod times AND their ancestors
+        var dirsToScan: Set<String>?
+        if let cachedDirs = cachedDirectories {
+            var changedDirs = Set<String>()
+
+            // Quick scan: Check which directories have changed mod times
+            if let quickEnumerator = fileManager.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) {
+                for case let itemURL as URL in quickEnumerator {
+                    // Skip if excluded
+                    if shouldSkip(itemURL, excludedDirs: excludedDirs, excludedExts: excludedExts) {
+                        if isDirectory(itemURL) {
+                            quickEnumerator.skipDescendants()
+                        }
+                        continue
+                    }
+
+                    // Only check directories
+                    guard isDirectory(itemURL) else { continue }
+
+                    // Calculate relative path
+                    let fullPath = itemURL.path
+                    let relativePath: String
+                    if fullPath.hasPrefix(basePath) {
+                        relativePath = String(fullPath.dropFirst(basePath.count + 1))
+                    } else {
+                        relativePath = fullPath
+                    }
+
+                    // Check if this directory's mod time changed
+                    if let cachedModTime = cachedDirs[relativePath] {
+                        if let values = try? itemURL.resourceValues(forKeys: [.contentModificationDateKey]),
+                           let currentModTime = values.contentModificationDate {
+                            // Compare timestamps with 1-second tolerance
+                            let isUnchanged: Bool
+                            if let cached = cachedModTime {
+                                isUnchanged = abs(currentModTime.timeIntervalSince(cached)) <= 1.0
+                            } else {
+                                // Cached has no mod time, current does - changed
+                                isUnchanged = false
+                            }
+
+                            if !isUnchanged {
+                                changedDirs.insert(relativePath)
+                            }
+                        }
+                    } else {
+                        // Directory not in cache - it's new, mark as changed
+                        changedDirs.insert(relativePath)
+                    }
+                }
+            }
+
+            // Build full set of directories to scan (changed dirs + their ancestors)
+            var toScan = Set<String>()
+            for changedPath in changedDirs {
+                toScan.insert(changedPath)
+
+                // Add all ancestor paths
+                var pathComponents = changedPath.split(separator: "/")
+                while !pathComponents.isEmpty {
+                    pathComponents.removeLast()
+                    if !pathComponents.isEmpty {
+                        let ancestorPath = pathComponents.joined(separator: "/")
+                        toScan.insert(ancestorPath)
+                    }
+                }
+            }
+
+            // Only use optimization if we actually have changes detected
+            // If changedDirs is empty but we have cached dirs, it means nothing changed - scan normally
+            // to catch deletions that happened at the root level or in files (not directory structure)
+            if changedDirs.isEmpty {
+                // No directory structure changes - scan everything to catch file-level changes
+                dirsToScan = nil
+                print("🎯 Phase 3: No directory changes detected, scanning all files")
+            } else {
+                dirsToScan = toScan
+                print("🎯 Phase 3: \(changedDirs.count) changed directories, \(toScan.count) total to scan")
+            }
+        }
+
         // Process files synchronously
         for case let fileURL as URL in enumerator {
             // Check if should skip this file/directory
@@ -489,6 +606,40 @@ actor FileIndexer {
                     enumerator.skipDescendants()
                 }
                 continue
+            }
+
+            // Phase 3: Skip directories that don't need scanning
+            if let dirsToScan = dirsToScan, isDirectory(fileURL) {
+                // Calculate relative path
+                let fullPath = fileURL.path
+                let relativePath: String
+                if fullPath.hasPrefix(basePath) {
+                    relativePath = String(fullPath.dropFirst(basePath.count + 1))
+                } else {
+                    relativePath = fullPath
+                }
+
+                if !dirsToScan.contains(relativePath) {
+                    // This directory and all its ancestors are unchanged - skip it
+                    enumerator.skipDescendants()
+                    onDirectorySkipped?()
+
+                    // Mark all files in this directory as visited
+                    if let existing = existingFiles {
+                        var pathsToMark: [String] = []
+                        let dirPrefix = relativePath + "/"
+                        for (filePath, _) in existing {
+                            if filePath == relativePath || filePath.hasPrefix(dirPrefix) {
+                                pathsToMark.append(filePath)
+                            }
+                        }
+                        if !pathsToMark.isEmpty {
+                            onFilesMarkedVisited?(pathsToMark)
+                        }
+                    }
+
+                    continue
+                }
             }
 
             do {

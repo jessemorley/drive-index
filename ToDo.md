@@ -5,21 +5,15 @@
 ### High
 
 - [ ] Scan button always says "Rescan"
-- [x] **FSEvents monitoring for indexing after file changes** ✅
-- [x] Drive exclusion with track/exclude dialog on drive connect
-- [ ] Phase 3: Directory Modification Caching (Advanced Optimization)
-- [x] Excluded and un-indexed drives show under Indexed Drives
-    - Change "Indexed Drives" to Drives
-    - Change drive section colours:
-        - Green with green 1px outline for connected and indexed
-        - Grey with green outline for connected and unindexed
-        - Grey for not connected and indexed
+- [x] Phase 3: Directory Modification Caching (Advanced Optimization) - Fixed with two-pass approach: quick scan to identify changed directories + ancestors, then smart enumeration.
 - [ ] Drive visual tweaks
     - Drive symbol before capacity symbol (like in the floating window)
     - 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
 - [ ] Consider enabling PRAGMA optimize and occasionally running VACUUM for database size reduction
-
+- [ ] Duplicate file detection/summary
+- [ ] Option to hide the dock icon
+- [ ] Move About info to DriveIndex > About
 
 ### Medium
 
@@ -47,7 +41,7 @@
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to
 - [x] Exclusions alphabetised on save (also error logged)
-- [ ] Rejoin separate actions area for connected drives
+- [x] Rejoin separate actions area for connected drives
 - [ ] Slow bulk removal of drive entries [bulk deletion performance analysis](/References/bulk-deletion-performance.md)
 - [ ] Pressing delete doesn't remove chips from exlusion fields
 - [ ] Cursor alignment off in exclusion fields

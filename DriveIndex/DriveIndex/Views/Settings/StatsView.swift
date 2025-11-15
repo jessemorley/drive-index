@@ -35,7 +35,7 @@ struct StatsView: View {
                             .padding(Spacing.medium)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .background(Color.secondary.opacity(0.05))
-                            .cornerRadius(8)
+                            .cornerRadius(12)
                     } else {
                         VStack(spacing: Spacing.small) {
                             ForEach(driveMonitor.drives) { drive in
@@ -396,9 +396,9 @@ struct DriveStatsRow: View {
         }
         .padding(Spacing.medium)
         .background(drive.backgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(drive.borderColor ?? Color.clear, lineWidth: 1)
         )
     }
