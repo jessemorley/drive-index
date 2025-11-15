@@ -255,31 +255,42 @@ struct IndexingProgressView: View {
                             .controlSize(.small)
                             .frame(width: 16, height: 16)
 
-                        VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                            Text("Files Processed")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                        // Show status message only when not processing files
+                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
+                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                Text(progress.currentFile)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            // Show file count when actually processing
+                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                Text("Files Processed")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
 
-                            Text("\(progress.filesProcessed)")
-                                .font(AppTypography.technicalData)
-                                .fontWeight(.semibold)
-                        }
-                    }
+                                Text("\(progress.filesProcessed)")
+                                    .font(AppTypography.technicalData)
+                                    .fontWeight(.semibold)
+                            }
 
-                    if !progress.currentFile.isEmpty {
-                        Divider()
-                            .frame(height: 24)
+                            if !progress.currentFile.isEmpty {
+                                Divider()
+                                    .frame(height: 24)
 
-                        VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                            Text("Current File")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                    Text("Current File")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
 
-                            Text(progress.currentFile)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .foregroundColor(.secondary)
+                                    Text(progress.currentFile)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
                     }
 

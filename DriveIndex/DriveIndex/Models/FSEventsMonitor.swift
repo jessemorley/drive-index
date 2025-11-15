@@ -262,7 +262,7 @@ actor FSEventsMonitor {
             return
         }
 
-        // Post notification to trigger delta indexing
+        // Post notification to trigger delta indexing with specific changed paths
         await MainActor.run {
             NotificationCenter.default.post(
                 name: .shouldIndexDrive,
@@ -270,7 +270,8 @@ actor FSEventsMonitor {
                 userInfo: [
                     "driveURL": driveURL,
                     "driveUUID": driveUUID,
-                    "source": "fsevents"
+                    "source": "fsevents",
+                    "changedPaths": Array(bufferedPaths)  // Pass the specific paths
                 ]
             )
         }

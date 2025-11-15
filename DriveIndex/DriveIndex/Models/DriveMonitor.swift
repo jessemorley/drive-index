@@ -88,9 +88,10 @@ class DriveMonitor: ObservableObject {
 
     init() {
         setupNotifications()
-        // Load drives immediately on initialization
+        // Load drives and start FSEvents monitoring on initialization
         Task {
             await loadDrives()
+            await startFSEventsForConnectedDrives()
         }
     }
 
@@ -372,6 +373,45 @@ class DriveMonitor: ObservableObject {
 
         } catch {
             print("Error loading drives: \(error)")
+        }
+    }
+
+    /// Start FSEvents monitoring for all connected non-excluded drives
+    /// Should only be called once on app initialization
+    private func startFSEventsForConnectedDrives() async {
+        let fileManager = FileManager.default
+        guard let mountedURLs = fileManager.mountedVolumeURLs(
+            includingResourceValuesForKeys: [.volumeUUIDStringKey, .volumeIsInternalKey],
+            options: .skipHiddenVolumes
+        ) else {
+            return
+        }
+
+        for url in mountedURLs {
+            do {
+                let values = try url.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsInternalKey])
+
+                // Only external drives
+                guard values.volumeIsInternal == false,
+                      let uuid = values.volumeUUIDString else {
+                    continue
+                }
+
+                // Check if excluded
+                let isExcluded = try await database.isDriveExcluded(uuid: uuid)
+                guard !isExcluded else {
+                    continue
+                }
+
+                // Start monitoring
+                do {
+                    try await fsEventsMonitor.startMonitoring(driveURL: url, driveUUID: uuid)
+                } catch {
+                    print("⚠️ Failed to start FSEvents on init for \(uuid): \(error)")
+                }
+            } catch {
+                continue
+            }
         }
     }
 

@@ -186,6 +186,7 @@ actor FileIndexer {
     func indexDrive(
         driveURL: URL,
         driveUUID: String,
+        changedPaths: [String]? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
         // Determine scan type based on whether this drive has been indexed before
@@ -194,7 +195,12 @@ actor FileIndexer {
 
         if shouldUseDelta {
             print("Starting delta index of drive: \(driveURL.path)")
-            try await indexDriveDelta(driveURL: driveURL, driveUUID: driveUUID, onProgress: onProgress)
+            try await indexDriveDelta(
+                driveURL: driveURL,
+                driveUUID: driveUUID,
+                changedPaths: changedPaths,
+                onProgress: onProgress
+            )
         } else {
             print("Starting full index of drive: \(driveURL.path) (first time)")
             try await indexDriveFull(driveURL: driveURL, driveUUID: driveUUID, onProgress: onProgress)
@@ -277,15 +283,59 @@ actor FileIndexer {
     private func indexDriveDelta(
         driveURL: URL,
         driveUUID: String,
+        changedPaths: [String]? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
         // Fetch existing files from database
         let existingFiles = try await database.getExistingFiles(driveUUID: driveUUID)
         print("📊 Delta scan: \(existingFiles.count) existing files in database")
 
-        // Fetch existing directories for caching optimization (Phase 3)
+        // Fetch existing directories for incremental scan optimization
         let existingDirectories = try await database.getExistingDirectories(driveUUID: driveUUID)
         print("📁 Directory cache: \(existingDirectories.count) directories")
+
+        // Build directories to scan from FSEvents paths if available
+        let directoriesFromFSEvents: Set<String>?
+        if let paths = changedPaths {
+            let basePath = driveURL.path
+            var dirs = Set<String>()
+
+            for path in paths {
+                // Convert absolute path to relative path
+                guard path.hasPrefix(basePath) else { continue }
+
+                let relativePath = String(path.dropFirst(basePath.count + 1))
+
+                // Extract parent directory path
+                if let lastSlash = relativePath.lastIndex(of: "/") {
+                    let parentPath = String(relativePath[..<lastSlash])
+                    dirs.insert(parentPath)
+
+                    // Add all ancestor paths
+                    var components = parentPath.split(separator: "/")
+                    while !components.isEmpty {
+                        components.removeLast()
+                        if !components.isEmpty {
+                            dirs.insert(components.joined(separator: "/"))
+                        }
+                    }
+                } else {
+                    // File in root directory - need to scan root
+                    dirs.insert("")  // Empty string = root directory
+                }
+            }
+
+            directoriesFromFSEvents = dirs
+            print("🎯 FSEvents: \(paths.count) changed files → scanning \(dirs.count) directories")
+        } else {
+            directoriesFromFSEvents = nil
+            // Show initial progress message during directory change detection
+            onProgress(IndexProgress(
+                filesProcessed: 0,
+                currentFile: "Scanning drive for file changes...",
+                isComplete: false
+            ))
+        }
 
         var filesProcessed = 0
         var insertBatch: [FileEntry] = []
@@ -301,13 +351,14 @@ actor FileIndexer {
         // Get base path for relative paths
         let basePath = driveURL.path
 
-        // Walk directory tree (with directory caching)
+        // Walk directory tree (with directory caching or FSEvents optimization)
         let fileStream = walkDirectory(
             at: driveURL,
             basePath: basePath,
             driveUUID: driveUUID,
             cachedDirectories: existingDirectories,
             existingFiles: existingFiles,
+            directoriesFromFSEvents: directoriesFromFSEvents,
             onDirectorySkipped: { skippedDirectories += 1 },
             onFilesMarkedVisited: { paths in
                 visitedPaths.formUnion(paths)
@@ -390,22 +441,24 @@ actor FileIndexer {
             }
         }
 
-        // Update drive metadata
-        let fileCount = try await database.getFileCount(for: driveUUID)
-        try await database.updateLastScanDate(for: driveUUID, date: Date())
+        // Update drive metadata only if changes occurred
+        if newCount > 0 || modifiedCount > 0 || deletedCount > 0 {
+            let fileCount = try await database.getFileCount(for: driveUUID)
+            try await database.updateLastScanDate(for: driveUUID, date: Date())
 
-        if let metadata = try await database.getDriveMetadata(driveUUID) {
-            let updatedMetadata = DriveMetadata(
-                uuid: metadata.uuid,
-                name: metadata.name,
-                lastSeen: metadata.lastSeen,
-                totalCapacity: metadata.totalCapacity,
-                usedCapacity: metadata.usedCapacity,
-                lastScanDate: Date(),
-                fileCount: fileCount,
-                isExcluded: metadata.isExcluded
-            )
-            try await database.upsertDriveMetadata(updatedMetadata)
+            if let metadata = try await database.getDriveMetadata(driveUUID) {
+                let updatedMetadata = DriveMetadata(
+                    uuid: metadata.uuid,
+                    name: metadata.name,
+                    lastSeen: metadata.lastSeen,
+                    totalCapacity: metadata.totalCapacity,
+                    usedCapacity: metadata.usedCapacity,
+                    lastScanDate: Date(),
+                    fileCount: fileCount,
+                    isExcluded: metadata.isExcluded
+                )
+                try await database.upsertDriveMetadata(updatedMetadata)
+            }
         }
 
         onProgress(IndexProgress(
@@ -439,6 +492,7 @@ actor FileIndexer {
         driveUUID: String,
         cachedDirectories: [String: Date?]? = nil,
         existingFiles: [String: (id: Int64, modifiedAt: Date?)]? = nil,
+        directoriesFromFSEvents: Set<String>? = nil,
         onDirectorySkipped: (() -> Void)? = nil,
         onFilesMarkedVisited: (([String]) -> Void)? = nil
     ) -> AsyncStream<FileEntry> {
@@ -457,6 +511,7 @@ actor FileIndexer {
                     excludedExts: excludedExts,
                     cachedDirectories: cachedDirectories,
                     existingFiles: existingFiles,
+                    directoriesFromFSEvents: directoriesFromFSEvents,
                     onDirectorySkipped: onDirectorySkipped,
                     onFilesMarkedVisited: onFilesMarkedVisited,
                     continuation: continuation
@@ -473,6 +528,7 @@ actor FileIndexer {
         excludedExts: Set<String>,
         cachedDirectories: [String: Date?]?,
         existingFiles: [String: (id: Int64, modifiedAt: Date?)]?,
+        directoriesFromFSEvents: Set<String>?,
         onDirectorySkipped: (() -> Void)?,
         onFilesMarkedVisited: (([String]) -> Void)?,
         continuation: AsyncStream<FileEntry>.Continuation
@@ -512,10 +568,13 @@ actor FileIndexer {
             return
         }
 
-        // Phase 3: Build set of directories that need scanning
-        // This includes directories with changed mod times AND their ancestors
+        // Incremental scan optimization: Build set of directories that need scanning
+        // Use FSEvents paths if available, otherwise detect changed directories
         var dirsToScan: Set<String>?
-        if let cachedDirs = cachedDirectories {
+        if let fsEventsDirs = directoriesFromFSEvents {
+            // FSEvents provided specific directories - use them directly
+            dirsToScan = fsEventsDirs
+        } else if let cachedDirs = cachedDirectories {
             var changedDirs = Set<String>()
 
             // Quick scan: Check which directories have changed mod times
@@ -586,15 +645,21 @@ actor FileIndexer {
             }
 
             // Only use optimization if we actually have changes detected
-            // If changedDirs is empty but we have cached dirs, it means nothing changed - scan normally
-            // to catch deletions that happened at the root level or in files (not directory structure)
             if changedDirs.isEmpty {
-                // No directory structure changes - scan everything to catch file-level changes
-                dirsToScan = nil
-                print("🎯 Phase 3: No directory changes detected, scanning all files")
+                // No directory changes - skip enumeration entirely and mark all as visited
+                print("🎯 No directory changes detected, skipping enumeration")
+
+                // Mark all existing files as visited (nothing changed, nothing to delete)
+                if let existing = existingFiles {
+                    onFilesMarkedVisited?(Array(existing.keys))
+                }
+
+                // Skip enumeration entirely
+                continuation.finish()
+                return
             } else {
                 dirsToScan = toScan
-                print("🎯 Phase 3: \(changedDirs.count) changed directories, \(toScan.count) total to scan")
+                print("🎯 Directory changes detected: \(changedDirs.count) changed, \(toScan.count) total to scan")
             }
         }
 
@@ -608,7 +673,7 @@ actor FileIndexer {
                 continue
             }
 
-            // Phase 3: Skip directories that don't need scanning
+            // Incremental scan: Skip directories that don't need scanning
             if let dirsToScan = dirsToScan, isDirectory(fileURL) {
                 // Calculate relative path
                 let fullPath = fileURL.path

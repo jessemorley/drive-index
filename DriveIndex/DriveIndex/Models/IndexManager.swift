@@ -35,13 +35,16 @@ class IndexManager: ObservableObject {
                 return
             }
 
+            // Extract changed paths from FSEvents if available
+            let changedPaths = userInfo["changedPaths"] as? [String]
+
             Task {
-                await self.indexDrive(url: driveURL, uuid: driveUUID)
+                await self.indexDrive(url: driveURL, uuid: driveUUID, changedPaths: changedPaths)
             }
         }
     }
 
-    func indexDrive(url: URL, uuid: String) async {
+    func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil) async {
         // Cancel existing indexing if any
         indexingTask?.cancel()
 
@@ -59,7 +62,8 @@ class IndexManager: ObservableObject {
                 do {
                     try await fileIndexer.indexDrive(
                         driveURL: url,
-                        driveUUID: uuid
+                        driveUUID: uuid,
+                        changedPaths: changedPaths
                     ) { [weak self] progress in
                         Task { @MainActor in
                             self?.currentProgress = progress
