@@ -72,7 +72,7 @@ struct DriveInfo: Identifiable {
 
     var borderColor: Color? {
         if isConnected {
-            return Color.green
+            return Color.green.opacity(0.2)
         }
         return nil
     }

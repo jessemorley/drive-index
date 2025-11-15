@@ -184,10 +184,8 @@ struct ConfigView: View {
             .padding(Spacing.Container.horizontalPadding)
             .padding(.vertical, Spacing.large)
         }
-        .onAppear {
-            Task {
-                await loadExcludedDrives()
-            }
+        .task {
+            await loadExcludedDrives()
         }
     }
 
@@ -195,7 +193,9 @@ struct ConfigView: View {
         do {
             let drives = try await DatabaseManager.shared.getExcludedDrives()
             await MainActor.run {
-                excludedDrives = drives
+                withAnimation {
+                    excludedDrives = drives
+                }
             }
         } catch {
             print("Error loading excluded drives: \(error)")

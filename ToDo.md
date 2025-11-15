@@ -48,6 +48,9 @@
 - [x] Popup occassionally doesn't appear where last moved to
 - [x] Exclusions alphabetised on save (also error logged)
 - [ ] Rejoin separate actions area for connected drives
+- [ ] Slow bulk removal of drive entries [bulk deletion performance analysis](/References/bulk-deletion-performance.md)
+- [ ] Pressing delete doesn't remove chips from exlusion fields
+- [ ] Cursor alignment off in exclusion fields
 
 
 

@@ -317,23 +317,92 @@ actor DatabaseManager {
     }
 
     func clearDrive(_ driveUUID: String) throws {
-        var stmt: OpaquePointer?
-        defer {
-            if stmt != nil {
-                sqlite3_finalize(stmt)
+        // Optimized bulk deletion: disable triggers and manually clean FTS5
+        // This is much faster than letting triggers fire for each row
+
+        print("🗑️ Clearing drive files (optimized bulk delete)...")
+
+        // Begin transaction
+        try execute("BEGIN IMMEDIATE")
+
+        do {
+            // Step 1: Delete from FTS5 index first (bulk operation)
+            var stmt1: OpaquePointer?
+            defer {
+                if stmt1 != nil {
+                    sqlite3_finalize(stmt1)
+                }
             }
-        }
 
-        let deleteSQL = "DELETE FROM files WHERE drive_uuid = ?"
+            let deleteFTSSQL = """
+                DELETE FROM files_fts WHERE rowid IN (
+                    SELECT id FROM files WHERE drive_uuid = ?
+                )
+            """
 
-        guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
-            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
-        }
+            guard sqlite3_prepare_v2(db, deleteFTSSQL, -1, &stmt1, nil) == SQLITE_OK else {
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            }
 
-        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt1, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-        guard sqlite3_step(stmt) == SQLITE_DONE else {
-            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+            guard sqlite3_step(stmt1) == SQLITE_DONE else {
+                throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            print("✅ FTS5 entries deleted")
+
+            // Step 2: Disable the delete trigger temporarily
+            try execute("DROP TRIGGER IF EXISTS files_ad")
+
+            // Step 3: Delete from files table (no trigger overhead)
+            var stmt2: OpaquePointer?
+            defer {
+                if stmt2 != nil {
+                    sqlite3_finalize(stmt2)
+                }
+            }
+
+            let deleteFilesSQL = "DELETE FROM files WHERE drive_uuid = ?"
+
+            guard sqlite3_prepare_v2(db, deleteFilesSQL, -1, &stmt2, nil) == SQLITE_OK else {
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            sqlite3_bind_text(stmt2, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+            guard sqlite3_step(stmt2) == SQLITE_DONE else {
+                throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            print("✅ File records deleted")
+
+            // Step 4: Recreate the delete trigger
+            try execute("""
+                CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
+                    INSERT INTO files_fts(files_fts, rowid, name, relative_path)
+                    VALUES('delete', old.id, old.name, old.relative_path);
+                END
+            """)
+
+            // Commit transaction
+            try execute("COMMIT")
+
+            print("✅ Bulk delete completed successfully")
+
+        } catch {
+            // Rollback on error
+            try? execute("ROLLBACK")
+
+            // Recreate trigger even on error to ensure consistency
+            try? execute("""
+                CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
+                    INSERT INTO files_fts(files_fts, rowid, name, relative_path)
+                    VALUES('delete', old.id, old.name, old.relative_path);
+                END
+            """)
+
+            throw error
         }
     }
 
