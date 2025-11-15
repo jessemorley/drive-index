@@ -69,8 +69,18 @@ class IndexManager: ObservableObject {
                             self?.currentProgress = progress
 
                             if progress.isComplete {
-                                self?.isIndexing = false
-                                self?.currentProgress = nil
+                                // Show summary for 2 seconds before clearing
+                                if progress.summary != nil {
+                                    Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                        self?.isIndexing = false
+                                        self?.currentProgress = nil
+                                    }
+                                } else {
+                                    self?.isIndexing = false
+                                    self?.currentProgress = nil
+                                }
+
                                 self?.showCompletionNotification(driveName: driveName, filesProcessed: progress.filesProcessed)
 
                                 // Notify drive monitor to reload

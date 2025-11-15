@@ -11,6 +11,14 @@ struct IndexProgress {
     let filesProcessed: Int
     let currentFile: String
     let isComplete: Bool
+    let summary: String?  // Brief summary shown after completion
+
+    init(filesProcessed: Int, currentFile: String, isComplete: Bool, summary: String? = nil) {
+        self.filesProcessed = filesProcessed
+        self.currentFile = currentFile
+        self.isComplete = isComplete
+        self.summary = summary
+    }
 }
 
 actor FileIndexer {
@@ -270,10 +278,13 @@ actor FileIndexer {
             try await database.upsertDriveMetadata(updatedMetadata)
         }
 
+        let summary = "Index complete. \(filesProcessed) files indexed."
+
         onProgress(IndexProgress(
             filesProcessed: filesProcessed,
             currentFile: "",
-            isComplete: true
+            isComplete: true,
+            summary: summary
         ))
 
         print("Full index complete: \(filesProcessed) files processed")
@@ -461,10 +472,24 @@ actor FileIndexer {
             }
         }
 
+        // Build completion summary
+        let totalChanges = newCount + modifiedCount + deletedCount
+        let summary: String
+        if totalChanges == 0 {
+            summary = "Scan complete. No changes detected."
+        } else {
+            var parts: [String] = []
+            if newCount > 0 { parts.append("\(newCount) new") }
+            if modifiedCount > 0 { parts.append("\(modifiedCount) modified") }
+            if deletedCount > 0 { parts.append("\(deletedCount) deleted") }
+            summary = "Scan complete. " + parts.joined(separator: ", ") + "."
+        }
+
         onProgress(IndexProgress(
             filesProcessed: filesProcessed,
             currentFile: "",
-            isComplete: true
+            isComplete: true,
+            summary: summary
         ))
 
         print("✅ Delta index complete: \(newCount) new, \(modifiedCount) modified, \(unchangedCount) unchanged, \(deletedCount) deleted, \(skippedDirectories) directories skipped")

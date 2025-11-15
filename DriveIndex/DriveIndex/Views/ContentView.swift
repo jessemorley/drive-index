@@ -255,8 +255,15 @@ struct IndexingProgressView: View {
                             .controlSize(.small)
                             .frame(width: 16, height: 16)
 
-                        // Show status message only when not processing files
-                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
+                        // Show summary message if available, otherwise status/progress
+                        if let summary = progress.summary {
+                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
+                                Text(summary)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
                             VStack(alignment: .leading, spacing: Spacing.xxSmall) {
                                 Text(progress.currentFile)
                                     .font(.caption)
