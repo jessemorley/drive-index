@@ -15,6 +15,9 @@
 		1A00000B /* DriveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000A /* DriveMonitor.swift */; };
 		1A00000D /* FileIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000C /* FileIndexer.swift */; };
 		1A00000F /* IndexManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000E /* IndexManager.swift */; };
+		8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631682E2EC96F43007B6201 /* StorageAnalysis.swift */; };
+		863168312EC96F54007B6201 /* StorageVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168302EC96F54007B6201 /* StorageVisualizationView.swift */; };
+		863168332EC96F65007B6201 /* StorageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168322EC96F65007B6201 /* StorageCache.swift */; };
 		865C72002EC1FDFA0084A309 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865C71FF2EC1FDFA0084A309 /* TagInputView.swift */; };
 		866227B92EC693D300B42819 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866227B82EC693D300B42819 /* AppDelegate.swift */; };
 		86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */; };
@@ -46,6 +49,9 @@
 		1A000010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		1A000011 /* DriveIndex.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DriveIndex.entitlements; sourceTree = "<group>"; };
 		1AXXXXXX /* DriveIndex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriveIndex.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8631682E2EC96F43007B6201 /* StorageAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageAnalysis.swift; sourceTree = "<group>"; };
+		863168302EC96F54007B6201 /* StorageVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageVisualizationView.swift; sourceTree = "<group>"; };
+		863168322EC96F65007B6201 /* StorageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCache.swift; sourceTree = "<group>"; };
 		865C71FF2EC1FDFA0084A309 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
 		866227B82EC693D300B42819 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
@@ -123,6 +129,8 @@
 		1A100004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				8631682E2EC96F43007B6201 /* StorageAnalysis.swift */,
+				863168322EC96F65007B6201 /* StorageCache.swift */,
 				86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */,
 				867891B02EC0B34E00E2CDAD /* HotkeyManager.swift */,
 				867891B12EC0B34E00E2CDAD /* KeyboardShortcut.swift */,
@@ -166,6 +174,7 @@
 		86B531A92EC04858007DC54C /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				863168302EC96F54007B6201 /* StorageVisualizationView.swift */,
 				867891B42EC0B35F00E2CDAD /* ShortcutRecorder.swift */,
 				867891AC2EC0A53F00E2CDAD /* SearchBar.swift */,
 				86B531A72EC04858007DC54C /* DriveStatusBadge.swift */,
@@ -244,9 +253,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				863168312EC96F54007B6201 /* StorageVisualizationView.swift in Sources */,
 				867891B22EC0B34E00E2CDAD /* HotkeyManager.swift in Sources */,
 				867891B32EC0B34E00E2CDAD /* KeyboardShortcut.swift in Sources */,
 				86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */,
+				8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */,
+				863168332EC96F65007B6201 /* StorageCache.swift in Sources */,
 				86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */,
 				867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */,
 				86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */,

@@ -83,6 +83,11 @@ class IndexManager: ObservableObject {
 
                                 self?.showCompletionNotification(driveName: driveName, filesProcessed: progress.filesProcessed)
 
+                                // Invalidate storage cache for this drive
+                                Task {
+                                    await StorageCache.shared.invalidate(driveUUID: uuid)
+                                }
+
                                 // Notify drive monitor to reload
                                 NotificationCenter.default.post(
                                     name: .driveIndexingComplete,

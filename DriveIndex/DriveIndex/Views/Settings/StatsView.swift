@@ -380,6 +380,11 @@ struct DriveStatsRow: View {
                     .foregroundColor(.secondary)
             }
 
+            // Storage visualization
+            if drive.fileCount > 0 && drive.isConnected {
+                StorageVisualizationView(drive: drive)
+            }
+
             // Action buttons: Scan and Reveal on left, Eject on right
             if drive.isConnected {
                 HStack(spacing: Spacing.small) {
