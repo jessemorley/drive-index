@@ -10,7 +10,6 @@
 		1A000001 /* DriveIndexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000000 /* DriveIndexApp.swift */; };
 		1A000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000002 /* ContentView.swift */; };
 		1A000005 /* DriveListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000004 /* DriveListView.swift */; };
-		1A000007 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000006 /* SettingsView.swift */; };
 		1A000009 /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A000008 /* DatabaseManager.swift */; };
 		1A00000B /* DriveMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000A /* DriveMonitor.swift */; };
 		1A00000D /* FileIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A00000C /* FileIndexer.swift */; };
@@ -18,9 +17,20 @@
 		8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631682E2EC96F43007B6201 /* StorageAnalysis.swift */; };
 		863168312EC96F54007B6201 /* StorageVisualizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168302EC96F54007B6201 /* StorageVisualizationView.swift */; };
 		863168332EC96F65007B6201 /* StorageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168322EC96F65007B6201 /* StorageCache.swift */; };
-		865C72002EC1FDFA0084A309 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865C71FF2EC1FDFA0084A309 /* TagInputView.swift */; };
+		863168332EC999A6007B6201 /* NavigationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168322EC999A6007B6201 /* NavigationSidebar.swift */; };
+		863168352EC999C3007B6201 /* NavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168342EC999C3007B6201 /* NavigationItem.swift */; };
+		863168372EC999D3007B6201 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168362EC999D3007B6201 /* DesignSystem.swift */; };
+		863168402EC999E8007B6201 /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683B2EC999E8007B6201 /* FilesView.swift */; };
+		863168412EC999E8007B6201 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683D2EC999E8007B6201 /* MainWindowView.swift */; };
+		863168422EC999E8007B6201 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168392EC999E8007B6201 /* AppearanceView.swift */; };
+		863168432EC999E8007B6201 /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168382EC999E8007B6201 /* AdvancedView.swift */; };
+		863168442EC999E8007B6201 /* DrivesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683A2EC999E8007B6201 /* DrivesView.swift */; };
+		863168452EC999E8007B6201 /* IndexingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683C2EC999E8007B6201 /* IndexingView.swift */; };
+		863168462EC999E8007B6201 /* RaycastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683E2EC999E8007B6201 /* RaycastView.swift */; };
+		863168472EC999E8007B6201 /* ShortcutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683F2EC999E8007B6201 /* ShortcutView.swift */; };
 		866227B92EC693D300B42819 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866227B82EC693D300B42819 /* AppDelegate.swift */; };
 		86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */; };
+		86758BD32ECA78F200270DC6 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86758BD22ECA78F100270DC6 /* TagInputView.swift */; };
 		867891A82EC0655800E2CDAD /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A52EC0655800E2CDAD /* Spacing.swift */; };
 		867891A92EC0655800E2CDAD /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A62EC0655800E2CDAD /* Typography.swift */; };
 		867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AA2EC0A52600E2CDAD /* SearchManager.swift */; };
@@ -29,9 +39,6 @@
 		867891B22EC0B34E00E2CDAD /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891B02EC0B34E00E2CDAD /* HotkeyManager.swift */; };
 		867891B32EC0B34E00E2CDAD /* KeyboardShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891B12EC0B34E00E2CDAD /* KeyboardShortcut.swift */; };
 		867891B52EC0B35F00E2CDAD /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891B42EC0B35F00E2CDAD /* ShortcutRecorder.swift */; };
-		86B531A42EC04845007DC54C /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A02EC04845007DC54C /* AboutView.swift */; };
-		86B531A52EC04845007DC54C /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A12EC04845007DC54C /* StatsView.swift */; };
-		86B531A62EC04845007DC54C /* ConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A22EC04845007DC54C /* ConfigView.swift */; };
 		86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A82EC04858007DC54C /* SettingsSection.swift */; };
 		86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A72EC04858007DC54C /* DriveStatusBadge.swift */; };
 		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
@@ -41,7 +48,6 @@
 		1A000000 /* DriveIndexApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveIndexApp.swift; sourceTree = "<group>"; };
 		1A000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A000004 /* DriveListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveListView.swift; sourceTree = "<group>"; };
-		1A000006 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A000008 /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		1A00000A /* DriveMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveMonitor.swift; sourceTree = "<group>"; };
 		1A00000C /* FileIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileIndexer.swift; sourceTree = "<group>"; };
@@ -52,9 +58,20 @@
 		8631682E2EC96F43007B6201 /* StorageAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageAnalysis.swift; sourceTree = "<group>"; };
 		863168302EC96F54007B6201 /* StorageVisualizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageVisualizationView.swift; sourceTree = "<group>"; };
 		863168322EC96F65007B6201 /* StorageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCache.swift; sourceTree = "<group>"; };
-		865C71FF2EC1FDFA0084A309 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
+		863168322EC999A6007B6201 /* NavigationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationSidebar.swift; sourceTree = "<group>"; };
+		863168342EC999C3007B6201 /* NavigationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationItem.swift; sourceTree = "<group>"; };
+		863168362EC999D3007B6201 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
+		863168382EC999E8007B6201 /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
+		863168392EC999E8007B6201 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
+		8631683A2EC999E8007B6201 /* DrivesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivesView.swift; sourceTree = "<group>"; };
+		8631683B2EC999E8007B6201 /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesView.swift; sourceTree = "<group>"; };
+		8631683C2EC999E8007B6201 /* IndexingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexingView.swift; sourceTree = "<group>"; };
+		8631683D2EC999E8007B6201 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
+		8631683E2EC999E8007B6201 /* RaycastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastView.swift; sourceTree = "<group>"; };
+		8631683F2EC999E8007B6201 /* ShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutView.swift; sourceTree = "<group>"; };
 		866227B82EC693D300B42819 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
+		86758BD22ECA78F100270DC6 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
 		867891A52EC0655800E2CDAD /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		867891A62EC0655800E2CDAD /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
 		867891AA2EC0A52600E2CDAD /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
@@ -63,9 +80,6 @@
 		867891B02EC0B34E00E2CDAD /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		867891B12EC0B34E00E2CDAD /* KeyboardShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcut.swift; sourceTree = "<group>"; };
 		867891B42EC0B35F00E2CDAD /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
-		86B531A02EC04845007DC54C /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
-		86B531A12EC04845007DC54C /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
-		86B531A22EC04845007DC54C /* ConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigView.swift; sourceTree = "<group>"; };
 		86B531A72EC04858007DC54C /* DriveStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveStatusBadge.swift; sourceTree = "<group>"; };
 		86B531A82EC04858007DC54C /* SettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSection.swift; sourceTree = "<group>"; };
 		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
@@ -116,12 +130,19 @@
 		1A100003 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				86758BD22ECA78F100270DC6 /* TagInputView.swift */,
+				863168382EC999E8007B6201 /* AdvancedView.swift */,
+				863168392EC999E8007B6201 /* AppearanceView.swift */,
+				8631683A2EC999E8007B6201 /* DrivesView.swift */,
+				8631683B2EC999E8007B6201 /* FilesView.swift */,
+				8631683C2EC999E8007B6201 /* IndexingView.swift */,
+				8631683D2EC999E8007B6201 /* MainWindowView.swift */,
+				8631683E2EC999E8007B6201 /* RaycastView.swift */,
+				8631683F2EC999E8007B6201 /* ShortcutView.swift */,
 				867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */,
 				86B531A92EC04858007DC54C /* Components */,
-				86B531A32EC04845007DC54C /* Settings */,
 				1A000002 /* ContentView.swift */,
 				1A000004 /* DriveListView.swift */,
-				1A000006 /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -129,6 +150,7 @@
 		1A100004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				863168342EC999C3007B6201 /* NavigationItem.swift */,
 				8631682E2EC96F43007B6201 /* StorageAnalysis.swift */,
 				863168322EC96F65007B6201 /* StorageCache.swift */,
 				86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */,
@@ -154,26 +176,17 @@
 		867891A72EC0655800E2CDAD /* Styles */ = {
 			isa = PBXGroup;
 			children = (
+				863168362EC999D3007B6201 /* DesignSystem.swift */,
 				867891A52EC0655800E2CDAD /* Spacing.swift */,
 				867891A62EC0655800E2CDAD /* Typography.swift */,
 			);
 			path = Styles;
 			sourceTree = "<group>";
 		};
-		86B531A32EC04845007DC54C /* Settings */ = {
-			isa = PBXGroup;
-			children = (
-				865C71FF2EC1FDFA0084A309 /* TagInputView.swift */,
-				86B531A02EC04845007DC54C /* AboutView.swift */,
-				86B531A12EC04845007DC54C /* StatsView.swift */,
-				86B531A22EC04845007DC54C /* ConfigView.swift */,
-			);
-			path = Settings;
-			sourceTree = "<group>";
-		};
 		86B531A92EC04858007DC54C /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				863168322EC999A6007B6201 /* NavigationSidebar.swift */,
 				863168302EC96F54007B6201 /* StorageVisualizationView.swift */,
 				867891B42EC0B35F00E2CDAD /* ShortcutRecorder.swift */,
 				867891AC2EC0A53F00E2CDAD /* SearchBar.swift */,
@@ -259,26 +272,33 @@
 				86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */,
 				8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */,
 				863168332EC96F65007B6201 /* StorageCache.swift in Sources */,
+				863168352EC999C3007B6201 /* NavigationItem.swift in Sources */,
 				86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */,
 				867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */,
 				86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */,
+				863168402EC999E8007B6201 /* FilesView.swift in Sources */,
+				863168412EC999E8007B6201 /* MainWindowView.swift in Sources */,
+				863168422EC999E8007B6201 /* AppearanceView.swift in Sources */,
+				863168432EC999E8007B6201 /* AdvancedView.swift in Sources */,
+				863168442EC999E8007B6201 /* DrivesView.swift in Sources */,
+				863168452EC999E8007B6201 /* IndexingView.swift in Sources */,
+				863168462EC999E8007B6201 /* RaycastView.swift in Sources */,
+				863168472EC999E8007B6201 /* ShortcutView.swift in Sources */,
 				1A000001 /* DriveIndexApp.swift in Sources */,
 				1A000003 /* ContentView.swift in Sources */,
 				1A000005 /* DriveListView.swift in Sources */,
 				86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */,
 				867891A82EC0655800E2CDAD /* Spacing.swift in Sources */,
 				867891A92EC0655800E2CDAD /* Typography.swift in Sources */,
-				1A000007 /* SettingsView.swift in Sources */,
 				1A000009 /* DatabaseManager.swift in Sources */,
 				1A00000B /* DriveMonitor.swift in Sources */,
 				1A00000D /* FileIndexer.swift in Sources */,
 				1A00000F /* IndexManager.swift in Sources */,
-				86B531A42EC04845007DC54C /* AboutView.swift in Sources */,
-				86B531A52EC04845007DC54C /* StatsView.swift in Sources */,
-				86B531A62EC04845007DC54C /* ConfigView.swift in Sources */,
 				867891AD2EC0A53F00E2CDAD /* SearchBar.swift in Sources */,
+				863168332EC999A6007B6201 /* NavigationSidebar.swift in Sources */,
 				867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */,
-				865C72002EC1FDFA0084A309 /* TagInputView.swift in Sources */,
+				86758BD32ECA78F200270DC6 /* TagInputView.swift in Sources */,
+				863168372EC999D3007B6201 /* DesignSystem.swift in Sources */,
 				867891B52EC0B35F00E2CDAD /* ShortcutRecorder.swift in Sources */,
 				866227B92EC693D300B42819 /* AppDelegate.swift in Sources */,
 			);
