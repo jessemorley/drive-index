@@ -9,7 +9,6 @@ import SwiftUI
 
 struct NavigationSidebar: View {
     @Binding var selection: NavigationItem?
-    @State private var expandedSections: Set<NavigationSection> = [.index] // Index expanded by default
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,16 +28,7 @@ struct NavigationSidebar: View {
             // Navigation list
             List(selection: $selection) {
                 ForEach(NavigationSection.allCases) { section in
-                    Section(isExpanded: Binding(
-                        get: { expandedSections.contains(section) },
-                        set: { isExpanded in
-                            if isExpanded {
-                                expandedSections.insert(section)
-                            } else {
-                                expandedSections.remove(section)
-                            }
-                        }
-                    )) {
+                    Section {
                         ForEach(section.items) { item in
                             NavigationSidebarRow(item: item)
                                 .tag(item)
@@ -66,9 +56,9 @@ struct NavigationSidebarRow: View {
         Label {
             Text(item.title)
                 .font(DesignSystem.Typography.body)
-                .fontWeight(.medium)
         } icon: {
             Image(systemName: item.icon)
+                .font(.system(size: DesignSystem.Sidebar.iconSize, weight: .medium))
                 .symbolRenderingMode(.hierarchical)
         }
     }
