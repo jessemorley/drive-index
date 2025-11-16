@@ -12,32 +12,47 @@ struct NavigationSidebar: View {
     @State private var expandedSections: Set<NavigationSection> = [.index] // Index expanded by default
 
     var body: some View {
-        List(selection: $selection) {
-            ForEach(NavigationSection.allCases) { section in
-                Section(isExpanded: Binding(
-                    get: { expandedSections.contains(section) },
-                    set: { isExpanded in
-                        if isExpanded {
-                            expandedSections.insert(section)
-                        } else {
-                            expandedSections.remove(section)
+        VStack(spacing: 0) {
+            // DriveIndex header
+            HStack(spacing: 8) {
+                Image(systemName: "externaldrive")
+                    .font(.system(size: 20))
+                    .foregroundStyle(DesignSystem.Colors.primaryText)
+                Text("DriveIndex")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(DesignSystem.Colors.primaryText)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+
+            // Navigation list
+            List(selection: $selection) {
+                ForEach(NavigationSection.allCases) { section in
+                    Section(isExpanded: Binding(
+                        get: { expandedSections.contains(section) },
+                        set: { isExpanded in
+                            if isExpanded {
+                                expandedSections.insert(section)
+                            } else {
+                                expandedSections.remove(section)
+                            }
                         }
+                    )) {
+                        ForEach(section.items) { item in
+                            NavigationSidebarRow(item: item)
+                                .tag(item)
+                        }
+                    } header: {
+                        Text(section.rawValue)
+                            .font(.system(size: 11))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
-                )) {
-                    ForEach(section.items) { item in
-                        NavigationSidebarRow(item: item, isSelected: selection == item)
-                            .tag(item)
-                    }
-                } header: {
-                    Text(section.rawValue)
-                        .font(DesignSystem.Typography.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(DesignSystem.Colors.secondaryText)
-                        .textCase(.uppercase)
                 }
             }
+            .listStyle(.sidebar)
         }
-        .listStyle(.sidebar)
         .navigationTitle("DriveIndex")
     }
 }
@@ -46,17 +61,16 @@ struct NavigationSidebar: View {
 
 struct NavigationSidebarRow: View {
     let item: NavigationItem
-    let isSelected: Bool
 
     var body: some View {
         Label {
             Text(item.title)
                 .font(DesignSystem.Typography.body)
+                .fontWeight(.medium)
         } icon: {
-            DesignSystem.icon(item.icon, size: DesignSystem.Sidebar.iconSize)
-                .foregroundStyle(isSelected ? .white : DesignSystem.Colors.primaryText)
+            Image(systemName: item.icon)
+                .symbolRenderingMode(.hierarchical)
         }
-        .padding(.vertical, DesignSystem.Spacing.xSmall)
     }
 }
 

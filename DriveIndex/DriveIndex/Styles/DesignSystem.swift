@@ -267,7 +267,7 @@ extension DesignSystem {
     /// Icon with consistent sizing
     static func icon(_ systemName: String, size: CGFloat = 16) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: size))
+            .font(.system(size: size, weight: .medium))
             .symbolRenderingMode(.hierarchical)
     }
 }

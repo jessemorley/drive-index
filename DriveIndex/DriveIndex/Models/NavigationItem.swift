@@ -39,12 +39,12 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
     var icon: String {
         switch self {
-        case .drives: return "externaldrive.fill"
-        case .files: return "clock.fill"
-        case .appearance: return "paintbrush.fill"
+        case .drives: return "externaldrive"
+        case .files: return "clock"
+        case .appearance: return "paintbrush"
         case .shortcut: return "command"
-        case .indexing: return "doc.text.fill"
-        case .advanced: return "gearshape.fill"
+        case .indexing: return "doc.text"
+        case .advanced: return "gearshape"
         case .raycast: return "sparkles"
         }
     }
