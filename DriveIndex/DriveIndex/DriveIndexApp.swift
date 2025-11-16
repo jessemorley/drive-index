@@ -18,5 +18,26 @@ struct DriveIndexApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            // Replace default About menu with custom About panel
+            CommandGroup(replacing: .appInfo) {
+                Button("About DriveIndex") {
+                    NSApplication.shared.orderFrontStandardAboutPanel(
+                        options: [
+                            NSApplication.AboutPanelOptionKey.credits: NSAttributedString(
+                                string: "Fast indexing for external drives\n\nDatabase: SQLite with FTS5\nPlatform: macOS 13+\nArchitecture: Swift + SwiftUI",
+                                attributes: [
+                                    NSAttributedString.Key.font: NSFont.systemFont(ofSize: 11),
+                                    NSAttributedString.Key.foregroundColor: NSColor.secondaryLabelColor
+                                ]
+                            ),
+                            NSApplication.AboutPanelOptionKey.applicationName: "DriveIndex",
+                            NSApplication.AboutPanelOptionKey.applicationVersion: "1.0.1",
+                            NSApplication.AboutPanelOptionKey.version: "Build 1"
+                        ]
+                    )
+                }
+            }
+        }
     }
 }

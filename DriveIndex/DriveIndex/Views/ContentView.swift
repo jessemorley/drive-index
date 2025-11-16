@@ -11,7 +11,6 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
-    @State private var settingsWindow: NSWindow?
     @State private var searchText = ""
     @State private var searchResults: [SearchResult] = []
     @State private var previousSearchResults: [SearchResult] = []
@@ -138,36 +137,8 @@ struct ContentView: View {
     }
 
     private func openSettingsWindow() {
-        // If window already exists, bring it to front
-        if let window = settingsWindow, window.isVisible {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        // Create new window with Liquid Glass styling
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 600),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-
-        window.title = "Settings"
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.titlebarAppearsTransparent = false
-        window.toolbarStyle = .unified
-
-        let settingsView = SettingsView()
-            .environmentObject(indexManager)
-            .environmentObject(driveMonitor)
-
-        window.contentView = NSHostingView(rootView: settingsView)
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        settingsWindow = window
+        // Post notification to AppDelegate to open the main window
+        NotificationCenter.default.post(name: .openMainWindow, object: nil)
     }
 }
 

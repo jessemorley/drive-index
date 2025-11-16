@@ -17,8 +17,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Status bar item (menu bar icon)
     private var statusItem: NSStatusItem?
 
-    /// The floating panel window
+    /// The floating panel for quick search (Spotlight-like)
     private var floatingPanel: FloatingPanel?
+
+    /// The main application window for browsing drives and settings
+    private var mainWindow: NSWindow?
 
     /// Managers - create our own instances since DriveIndexApp's @StateObject can't be easily shared
     private let driveMonitor = DriveMonitor()
@@ -35,6 +38,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Set up global hotkey
         setupHotkey()
+
+        // Listen for main window open requests from ContentView
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOpenMainWindow),
+            name: .openMainWindow,
+            object: nil
+        )
+    }
+
+    @objc private func handleOpenMainWindow() {
+        showMainWindow()
     }
 
     // MARK: - Status Item Setup
@@ -57,7 +72,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Hotkey Setup
 
     private func setupHotkey() {
-        // Wire up hotkey manager to toggle panel
+        // Wire up hotkey manager to toggle floating panel (quick search)
         HotkeyManager.shared.onHotkeyPressed = { [weak self] in
             Task { @MainActor in
                 self?.togglePanel()
@@ -65,9 +80,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Panel Management
+    // MARK: - Floating Panel Management
 
-    /// Status item clicked - toggle panel visibility
+    /// Status item clicked - toggle floating panel visibility
     @objc private func statusItemClicked() {
         togglePanel()
     }
@@ -128,11 +143,63 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         floatingPanel = panel
     }
 
+    // MARK: - Main Window Management
+
+    /// Open the main settings window (called from ContentView settings button)
+    func showMainWindow() {
+        // Create window if it doesn't exist
+        if mainWindow == nil {
+            createMainWindow()
+        }
+
+        guard let window = mainWindow else {
+            print("Failed to create main window")
+            return
+        }
+
+        // Show and activate the window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Create the main window with MainWindowView
+    private func createMainWindow() {
+        // Create window with appropriate size for settings-style layout
+        let windowRect = NSRect(x: 0, y: 0, width: 900, height: 600)
+        let window = NSWindow(
+            contentRect: windowRect,
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+
+        // Configure window
+        window.title = "DriveIndex"
+        window.titlebarAppearsTransparent = false
+        window.toolbarStyle = .unified
+        window.center()
+        window.setFrameAutosaveName("MainWindow")
+        window.delegate = self
+
+        // Set minimum window size
+        window.minSize = NSSize(width: 800, height: 500)
+
+        // Create MainWindowView with managers
+        let mainWindowView = MainWindowView()
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
+
+        // Host SwiftUI view in the window
+        window.contentView = NSHostingView(rootView: mainWindowView)
+
+        mainWindow = window
+    }
+
     // MARK: - NSWindowDelegate
 
     /// Called when the window loses key focus (click outside)
     func windowDidResignKey(_ notification: Notification) {
-        // Close panel when user clicks outside
+        // Close floating panel when user clicks outside
         if notification.object as? FloatingPanel === floatingPanel {
             closePanel()
         }
@@ -142,8 +209,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         // Clean up if needed
         if notification.object as? FloatingPanel === floatingPanel {
-            // Panel is closing, no additional cleanup needed
+            // Floating panel is closing, no additional cleanup needed
+        } else if notification.object as? NSWindow === mainWindow {
+            // Main window is closing, keep reference for later
         }
+    }
+
+    /// Prevent main window from closing, just hide it
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === mainWindow {
+            mainWindow?.orderOut(nil)
+            return false // Don't actually close the window
+        }
+        return true
     }
 }
 
@@ -161,4 +239,7 @@ extension AppDelegate: @MainActor FloatingPanelDelegate {
 extension Notification.Name {
     /// Posted when the search window appears (for ContentView to reset state)
     static let searchWindowDidShow = Notification.Name("searchWindowDidShow")
+
+    /// Posted when ContentView wants to open the main window
+    static let openMainWindow = Notification.Name("openMainWindow")
 }
