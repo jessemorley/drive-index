@@ -278,7 +278,8 @@ actor FileIndexer {
             try await database.upsertDriveMetadata(updatedMetadata)
         }
 
-        let summary = "Index complete. \(filesProcessed) files indexed."
+        let fileWord = filesProcessed == 1 ? "file" : "files"
+        let summary = "Index complete. \(filesProcessed) \(fileWord) indexed."
 
         onProgress(IndexProgress(
             filesProcessed: filesProcessed,
@@ -479,9 +480,18 @@ actor FileIndexer {
             summary = "Scan complete. No changes detected."
         } else {
             var parts: [String] = []
-            if newCount > 0 { parts.append("\(newCount) new") }
-            if modifiedCount > 0 { parts.append("\(modifiedCount) modified") }
-            if deletedCount > 0 { parts.append("\(deletedCount) deleted") }
+            if newCount > 0 {
+                let fileWord = newCount == 1 ? "file" : "files"
+                parts.append("\(newCount) new \(fileWord) added")
+            }
+            if modifiedCount > 0 {
+                let fileWord = modifiedCount == 1 ? "file" : "files"
+                parts.append("\(modifiedCount) \(fileWord) modified")
+            }
+            if deletedCount > 0 {
+                let fileWord = deletedCount == 1 ? "file" : "files"
+                parts.append("\(deletedCount) \(fileWord) deleted")
+            }
             summary = "Scan complete. " + parts.joined(separator: ", ") + "."
         }
 

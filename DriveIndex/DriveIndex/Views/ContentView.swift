@@ -32,12 +32,25 @@ struct ContentView: View {
 
             Divider()
 
-            // Indexing progress indicator (shows pending changes or active indexing)
-            if indexManager.isIndexing || indexManager.pendingChanges != nil {
-                IndexingProgressView()
-                    .padding(.horizontal, Spacing.Container.horizontalPadding)
-                    .padding(.vertical, Spacing.Container.verticalPadding)
-                Divider()
+            // Indexing progress indicator (shows pending changes, active indexing, or completion)
+            Group {
+                if let pending = indexManager.pendingChanges {
+                    PendingChangesView(driveName: pending.driveName, changeCount: pending.changeCount)
+                        .padding(.horizontal, Spacing.Container.horizontalPadding)
+                        .padding(.vertical, Spacing.Container.verticalPadding)
+                    Divider()
+                } else if let progress = indexManager.currentProgress, let summary = progress.summary {
+                    CompletionView(summary: summary)
+                        .padding(.horizontal, Spacing.Container.horizontalPadding)
+                        .padding(.vertical, Spacing.Container.verticalPadding)
+                    Divider()
+                } else if indexManager.isIndexing {
+                    ActiveIndexingView()
+                        .environmentObject(indexManager)
+                        .padding(.horizontal, Spacing.Container.horizontalPadding)
+                        .padding(.vertical, Spacing.Container.verticalPadding)
+                    Divider()
+                }
             }
 
             // Conditional content: search results or drive list
@@ -186,20 +199,6 @@ struct EmptyStateView: View {
     }
 }
 
-struct IndexingProgressView: View {
-    @EnvironmentObject var indexManager: IndexManager
-
-    var body: some View {
-        // Show pending changes notification if available
-        if let pending = indexManager.pendingChanges {
-            PendingChangesView(driveName: pending.driveName, changeCount: pending.changeCount)
-        } else {
-            // Show full indexing progress view
-            FullIndexingProgressView()
-        }
-    }
-}
-
 struct PendingChangesView: View {
     let driveName: String
     let changeCount: Int
@@ -232,7 +231,38 @@ struct PendingChangesView: View {
     }
 }
 
-struct FullIndexingProgressView: View {
+struct CompletionView: View {
+    let summary: String
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+
+                Text("SCAN COMPLETE")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.green)
+            }
+
+            Text(summary)
+                .font(.subheadline)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(Spacing.medium)
+        .background(Color.green.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct ActiveIndexingView: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
@@ -272,15 +302,8 @@ struct FullIndexingProgressView: View {
                             .controlSize(.small)
                             .frame(width: 16, height: 16)
 
-                        // Show summary message if available, otherwise status/progress
-                        if let summary = progress.summary {
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text(summary)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
+                        // Show status/progress
+                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
                             VStack(alignment: .leading, spacing: Spacing.xxSmall) {
                                 Text(progress.currentFile)
                                     .font(.caption)

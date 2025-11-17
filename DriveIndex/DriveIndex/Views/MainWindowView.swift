@@ -36,17 +36,24 @@ struct MainWindowView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Indexing progress overlay at bottom of detail area (shows pending changes or active indexing)
-                if indexManager.isIndexing || indexManager.pendingChanges != nil {
-                    IndexingProgressOverlay()
-                        .environmentObject(indexManager)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .zIndex(100)  // Ensure overlay appears above content
+                // Indexing progress overlay at bottom of detail area (shows pending changes, active indexing, or completion)
+                if indexManager.pendingChanges != nil || indexManager.isIndexing {
+                    Group {
+                        if let pending = indexManager.pendingChanges {
+                            PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount)
+                        } else if let progress = indexManager.currentProgress, let summary = progress.summary {
+                            CompletionOverlay(summary: summary)
+                        } else if indexManager.isIndexing {
+                            ActiveIndexingOverlay()
+                                .environmentObject(indexManager)
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(100)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)  // Constrain ZStack to detail area bounds
             .clipped()  // Prevent content from extending outside bounds
-            .animation(DesignSystem.Animation.standard, value: indexManager.isIndexing || indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -78,23 +85,6 @@ struct MainWindowView: View {
 }
 
 // MARK: - Indexing Progress Overlay
-
-struct IndexingProgressOverlay: View {
-    @EnvironmentObject var indexManager: IndexManager
-
-    var body: some View {
-        // Show pending changes notification if available
-        if let pending = indexManager.pendingChanges {
-            print("🎨 UI: Rendering PendingChangesOverlay for \(pending.driveName)")
-            return AnyView(PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount))
-        } else {
-            print("🎨 UI: Rendering FullIndexingProgressOverlay")
-            // Show full indexing progress overlay
-            return AnyView(FullIndexingProgressOverlay()
-                .environmentObject(indexManager))
-        }
-    }
-}
 
 struct PendingChangesOverlay: View {
     let driveName: String
@@ -131,7 +121,41 @@ struct PendingChangesOverlay: View {
     }
 }
 
-struct FullIndexingProgressOverlay: View {
+struct CompletionOverlay: View {
+    let summary: String
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+
+                Text("SCAN COMPLETE")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.green)
+            }
+
+            Text(summary)
+                .font(.subheadline)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(Spacing.medium)
+        .background(Color.green.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.green.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, Spacing.Container.horizontalPadding)
+        .padding(.bottom, Spacing.medium)
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+    }
+}
+
+struct ActiveIndexingOverlay: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
@@ -171,15 +195,8 @@ struct FullIndexingProgressOverlay: View {
                             .scaleEffect(0.8)
                             .frame(width: 16, height: 16)
 
-                        // Show summary message if available, otherwise status/progress
-                        if let summary = progress.summary {
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text(summary)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
+                        // Show status/progress
+                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
                             VStack(alignment: .leading, spacing: Spacing.xxSmall) {
                                 Text(progress.currentFile)
                                     .font(.caption)
