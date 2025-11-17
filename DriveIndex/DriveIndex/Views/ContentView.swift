@@ -255,7 +255,7 @@ struct CompletionView: View {
             }
 
             Text(summary)
-                .font(.subheadline)
+                .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
 
             Spacer()
@@ -288,7 +288,7 @@ struct ActiveIndexingView: View {
                 }
 
                 Text("Looking for changes on \(indexManager.indexingDriveName)")
-                    .font(.subheadline)
+                    .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
 
                 Spacer()
