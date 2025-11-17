@@ -10,17 +10,23 @@
     - 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
 - [ ] Consider enabling PRAGMA optimize and occasionally running VACUUM for database size reduction
-- [ ] **Feature:** uplicate file detection/summary
-- [ ] Option to hide the dock icon
-- [ ] Move About info to DriveIndex > About
+- [ ] **Feature:** Duplicate file detection/summary
+- [x] Option to hide the dock icon (button in place—not implemented)
+- [x] Move About info to DriveIndex > About
 - [ ] Notification settings
+- [ ] Menubar icon states
+    - File changes detected (grey dot)
+    - Syncing (orange dot)
+    - Syncing complete? (green dot)
 
 ### Medium
 
 - [ ] Keyboard navigation. (Pressing down from search highlights first result. Can move through and press enter to open in finder. Maybe an indication of what the action is going to be?)
 - [ ] Settings window appear on top
-- [ ] MacOS-style storage use summary
+- [x] MacOS-style storage use summary
 ![image desc](/References/Screenshot%202025-11-13%20at%2010.48.41 am.png)
+
+- [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
 
   
 ### Low
@@ -33,7 +39,7 @@
 - [ ] **Feature:** Browse drives/file tree interface
 - [ ] **Feature:** Sparkle updates
 - [ ] **Feature:** Cloud sync with CloudKit
-- [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
+
 
 ## Bugs
 

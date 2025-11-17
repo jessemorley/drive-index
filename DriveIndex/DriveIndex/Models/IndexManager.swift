@@ -9,11 +9,17 @@ import Foundation
 import AppKit
 import UserNotifications
 
+struct PendingChanges {
+    let driveName: String
+    let changeCount: Int
+}
+
 @MainActor
 class IndexManager: ObservableObject {
     @Published var currentProgress: IndexProgress?
     @Published var isIndexing: Bool = false
     @Published var indexingDriveName: String = ""
+    @Published var pendingChanges: PendingChanges?
 
     private let fileIndexer = FileIndexer()
     private var indexingTask: Task<Void, Never>?
@@ -23,6 +29,36 @@ class IndexManager: ObservableObject {
     }
 
     private func setupNotifications() {
+        // Handle changes detected notification (shows pending state)
+        NotificationCenter.default.addObserver(
+            forName: .changesDetected,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self = self,
+                  let userInfo = notification.userInfo,
+                  let driveURL = userInfo["driveURL"] as? URL,
+                  let changeCount = userInfo["changeCount"] as? Int else {
+                print("⚠️ IndexManager: changesDetected notification received but missing required data")
+                return
+            }
+
+            // We're already on main queue, so we can directly access main actor properties
+            do {
+                let values = try driveURL.resourceValues(forKeys: [.volumeNameKey])
+                let driveName = values.volumeName ?? "Unknown"
+                print("✅ IndexManager: Setting pendingChanges for \(driveName) (\(changeCount) changes)")
+
+                // Use MainActor.assumeIsolated since we're on main queue
+                MainActor.assumeIsolated {
+                    self.pendingChanges = PendingChanges(driveName: driveName, changeCount: changeCount)
+                }
+            } catch {
+                print("Error getting drive name for pending changes: \(error)")
+            }
+        }
+
+        // Handle should index drive notification (starts actual indexing)
         NotificationCenter.default.addObserver(
             forName: .shouldIndexDrive,
             object: nil,
@@ -52,6 +88,8 @@ class IndexManager: ObservableObject {
             let values = try url.resourceValues(forKeys: [.volumeNameKey])
             let driveName = values.volumeName ?? "Unknown"
 
+            // Clear pending changes and start indexing
+            pendingChanges = nil
             isIndexing = true
             indexingDriveName = driveName
             currentProgress = nil
@@ -210,4 +248,5 @@ class IndexManager: ObservableObject {
 
 extension Notification.Name {
     static let driveIndexingComplete = Notification.Name("driveIndexingComplete")
+    static let changesDetected = Notification.Name("changesDetected")
 }

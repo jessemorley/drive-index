@@ -36,8 +36,8 @@ struct MainWindowView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Indexing progress overlay at bottom of detail area
-                if indexManager.isIndexing {
+                // Indexing progress overlay at bottom of detail area (shows pending changes or active indexing)
+                if indexManager.isIndexing || indexManager.pendingChanges != nil {
                     IndexingProgressOverlay()
                         .environmentObject(indexManager)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -46,7 +46,7 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)  // Constrain ZStack to detail area bounds
             .clipped()  // Prevent content from extending outside bounds
-            .animation(DesignSystem.Animation.standard, value: indexManager.isIndexing)
+            .animation(DesignSystem.Animation.standard, value: indexManager.isIndexing || indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -80,6 +80,58 @@ struct MainWindowView: View {
 // MARK: - Indexing Progress Overlay
 
 struct IndexingProgressOverlay: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
+        // Show pending changes notification if available
+        if let pending = indexManager.pendingChanges {
+            print("🎨 UI: Rendering PendingChangesOverlay for \(pending.driveName)")
+            return AnyView(PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount))
+        } else {
+            print("🎨 UI: Rendering FullIndexingProgressOverlay")
+            // Show full indexing progress overlay
+            return AnyView(FullIndexingProgressOverlay()
+                .environmentObject(indexManager))
+        }
+    }
+}
+
+struct PendingChangesOverlay: View {
+    let driveName: String
+    let changeCount: Int
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 6, height: 6)
+
+                Text("CHANGES DETECTED")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.blue)
+            }
+
+            Text("\(changeCount) file change\(changeCount == 1 ? "" : "s") on \(driveName)")
+                .font(.subheadline)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(Spacing.medium)
+        .background(Color.blue.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, Spacing.Container.horizontalPadding)
+        .padding(.bottom, Spacing.medium)
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+    }
+}
+
+struct FullIndexingProgressOverlay: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {

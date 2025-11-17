@@ -221,6 +221,9 @@ actor FSEventsMonitor {
 
         print("📝 Buffering \(filteredPaths.count) FSEvents for drive: \(driveUUID)")
 
+        // Check if this is the first event in buffer
+        let isFirstEvent = eventBuffers[driveUUID] == nil || eventBuffers[driveUUID]?.isEmpty == true
+
         // Cancel existing timer
         bufferTasks[driveUUID]?.cancel()
 
@@ -229,6 +232,11 @@ actor FSEventsMonitor {
             eventBuffers[driveUUID] = Set()
         }
         eventBuffers[driveUUID]?.formUnion(filteredPaths)
+
+        // Post changes detected notification immediately (or update if already posted)
+        Task {
+            await postChangesDetected(for: driveUUID)
+        }
 
         // Start new debounce timer
         bufferTasks[driveUUID] = Task {
@@ -244,6 +252,30 @@ actor FSEventsMonitor {
         }
     }
 
+    /// Post or update changes detected notification
+    private func postChangesDetected(for driveUUID: String) async {
+        guard let bufferedPaths = eventBuffers[driveUUID], !bufferedPaths.isEmpty else {
+            return
+        }
+
+        guard let driveURL = await getDriveURL(for: driveUUID) else {
+            return
+        }
+
+        print("📢 Posting changesDetected notification for \(bufferedPaths.count) changes")
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .changesDetected,
+                object: nil,
+                userInfo: [
+                    "driveURL": driveURL,
+                    "driveUUID": driveUUID,
+                    "changeCount": bufferedPaths.count
+                ]
+            )
+        }
+    }
+
     /// Flush buffered events and trigger delta indexing
     private func flushBuffer(for driveUUID: String) async {
         guard let bufferedPaths = eventBuffers[driveUUID], !bufferedPaths.isEmpty else {
@@ -252,17 +284,18 @@ actor FSEventsMonitor {
 
         print("🔄 Flushing \(bufferedPaths.count) buffered events for drive: \(driveUUID)")
 
-        // Clear buffer
-        eventBuffers[driveUUID] = nil
-        bufferTasks[driveUUID] = nil
-
         // Get drive URL from mounted drives
         guard let driveURL = await getDriveURL(for: driveUUID) else {
             print("⚠️ Drive not found or unmounted: \(driveUUID)")
             return
         }
 
+        // Clear buffer
+        eventBuffers[driveUUID] = nil
+        bufferTasks[driveUUID] = nil
+
         // Post notification to trigger delta indexing with specific changed paths
+        print("📢 Posting shouldIndexDrive notification")
         await MainActor.run {
             NotificationCenter.default.post(
                 name: .shouldIndexDrive,

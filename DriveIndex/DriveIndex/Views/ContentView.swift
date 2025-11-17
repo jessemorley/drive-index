@@ -32,8 +32,8 @@ struct ContentView: View {
 
             Divider()
 
-            // Indexing progress indicator
-            if indexManager.isIndexing {
+            // Indexing progress indicator (shows pending changes or active indexing)
+            if indexManager.isIndexing || indexManager.pendingChanges != nil {
                 IndexingProgressView()
                     .padding(.horizontal, Spacing.Container.horizontalPadding)
                     .padding(.vertical, Spacing.Container.verticalPadding)
@@ -187,6 +187,52 @@ struct EmptyStateView: View {
 }
 
 struct IndexingProgressView: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
+        // Show pending changes notification if available
+        if let pending = indexManager.pendingChanges {
+            PendingChangesView(driveName: pending.driveName, changeCount: pending.changeCount)
+        } else {
+            // Show full indexing progress view
+            FullIndexingProgressView()
+        }
+    }
+}
+
+struct PendingChangesView: View {
+    let driveName: String
+    let changeCount: Int
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 6, height: 6)
+
+                Text("CHANGES DETECTED")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.blue)
+            }
+
+            Text("\(changeCount) file change\(changeCount == 1 ? "" : "s") on \(driveName)")
+                .font(.subheadline)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(Spacing.medium)
+        .background(Color.blue.opacity(0.05))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct FullIndexingProgressView: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
