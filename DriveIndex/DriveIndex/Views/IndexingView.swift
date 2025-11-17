@@ -60,7 +60,7 @@ struct IndexingView: View {
                         }
                         .toggleStyle(.switch)
                         .onChange(of: fsEventsEnabled) { _, _ in
-                            hasUnsavedChanges = true
+                            markAsChanged()
                         }
 
                         if fsEventsEnabled {
@@ -80,7 +80,7 @@ struct IndexingView: View {
 
                                 Slider(value: $fsEventsBufferDelay, in: 5...60, step: 5)
                                     .onChange(of: fsEventsBufferDelay) { _, _ in
-                                        hasUnsavedChanges = true
+                                        markAsChanged()
                                     }
 
                                 Text("How long to wait after file changes before triggering a scan")
@@ -104,12 +104,12 @@ struct IndexingView: View {
                             placeholder: "Type directory name and press comma or return..."
                         )
                         .onChange(of: excludedDirectories) { _, _ in
-                            hasUnsavedChanges = true
+                            markAsChanged()
                         }
 
                         Button(action: {
                             excludedDirectories = defaultExcludedDirectories
-                            hasUnsavedChanges = true
+                            markAsChanged()
                         }) {
                             Label("Restore Defaults", systemImage: "arrow.counterclockwise")
                                 .font(DesignSystem.Typography.caption)
@@ -131,12 +131,12 @@ struct IndexingView: View {
                             placeholder: "Type extension and press comma or return..."
                         )
                         .onChange(of: excludedExtensions) { _, _ in
-                            hasUnsavedChanges = true
+                            markAsChanged()
                         }
 
                         Button(action: {
                             excludedExtensions = defaultExcludedExtensions
-                            hasUnsavedChanges = true
+                            markAsChanged()
                         }) {
                             Label("Restore Defaults", systemImage: "arrow.counterclockwise")
                                 .font(DesignSystem.Typography.caption)
@@ -250,9 +250,7 @@ struct IndexingView: View {
         do {
             let drives = try await DatabaseManager.shared.getExcludedDrives()
             await MainActor.run {
-                withAnimation(DesignSystem.Animation.standard) {
-                    excludedDrives = drives
-                }
+                excludedDrives = drives
             }
         } catch {
             print("Error loading excluded drives: \(error)")
@@ -280,6 +278,10 @@ struct IndexingView: View {
                 print("Error saving settings: \(error)")
             }
         }
+    }
+    
+    private func markAsChanged() {
+        hasUnsavedChanges = true
     }
 }
 

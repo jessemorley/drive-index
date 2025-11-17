@@ -16,89 +16,97 @@ struct ContentView: View {
     @State private var previousSearchResults: [SearchResult] = []
     @State private var isSearching = false
     @FocusState private var isSearchFocused: Bool
+    @State private var driveListHeight: CGFloat = 300  // Cached height
 
     private let searchManager = SearchManager()
     private let searchResultsHeight: CGFloat = 474  // Fixed height for search results
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Search bar at top of window
-            SearchBar(
-                searchText: $searchText,
-                driveCount: driveMonitor.drives.count,
-                isSearchFocused: _isSearchFocused,
-                onSettingsClick: openSettingsWindow
-            )
-
-            Divider()
-
-            // Indexing progress indicator (shows pending changes, active indexing, or completion)
-            Group {
-                if let pending = indexManager.pendingChanges {
-                    PendingChangesView(driveName: pending.driveName, changeCount: pending.changeCount)
-                        .padding(.horizontal, Spacing.Container.horizontalPadding)
-                        .padding(.vertical, Spacing.Container.verticalPadding)
-                    Divider()
-                } else if let progress = indexManager.currentProgress, let summary = progress.summary {
-                    CompletionView(summary: summary)
-                        .padding(.horizontal, Spacing.Container.horizontalPadding)
-                        .padding(.vertical, Spacing.Container.verticalPadding)
-                    Divider()
-                } else if indexManager.isIndexing {
-                    ActiveIndexingView()
-                        .environmentObject(indexManager)
-                        .padding(.horizontal, Spacing.Container.horizontalPadding)
-                        .padding(.vertical, Spacing.Container.verticalPadding)
-                    Divider()
+        mainContent
+            .frame(width: 550)
+            .background(.thinMaterial)
+            .onAppear(perform: handleOnAppear)
+            .onReceive(NotificationCenter.default.publisher(for: .driveIndexingComplete)) { _ in
+                Task {
+                    await driveMonitor.loadDrives()
                 }
             }
-
-            // Conditional content: search results or drive list
-            if !searchText.isEmpty {
-                SearchResultsView(
-                    results: searchResults,
-                    previousResults: previousSearchResults,
-                    isLoading: isSearching,
-                    contentHeight: searchResultsHeight
-                )
-                .frame(height: searchResultsHeight)
-            } else if connectedDrives.isEmpty {
-                EmptyStateView()
-                    .frame(height: 300)
-            } else {
-                DriveListView()
-                    .frame(height: calculateContentHeight())
+            .onReceive(NotificationCenter.default.publisher(for: .searchWindowDidShow)) { _ in
+                handleSearchWindowShow()
             }
+            .onChange(of: searchText) { oldValue, newValue in
+                Task {
+                    await performSearch(newValue)
+                }
+            }
+            .onChange(of: connectedDrives.count) { oldValue, newValue in
+                driveListHeight = calculateContentHeight()
+            }
+            .onChange(of: driveMonitor.drives) { oldValue, newValue in
+                driveListHeight = calculateContentHeight()
+            }
+    }
+    
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            searchBarSection
+            Divider()
+            statusBarSection
+            contentSection
         }
-        .frame(width: 550)
-        .background(.thinMaterial)
-        .onAppear {
-            // Auto-focus search field when window appears
-            isSearchFocused = true
-
-            Task {
-                await driveMonitor.loadDrives()
-            }
+    }
+    
+    private var searchBarSection: some View {
+        SearchBar(
+            searchText: $searchText,
+            driveCount: driveMonitor.drives.count,
+            isSearchFocused: _isSearchFocused,
+            onSettingsClick: openSettingsWindow
+        )
+    }
+    
+    private var statusBarSection: some View {
+        StatusBarContainer(
+            pendingChanges: indexManager.pendingChanges,
+            isIndexing: indexManager.isIndexing,
+            currentProgress: indexManager.currentProgress,
+            indexingDriveName: indexManager.indexingDriveName,
+            indexManager: indexManager
+        )
+    }
+    
+    @ViewBuilder
+    private var contentSection: some View {
+        if !searchText.isEmpty {
+            SearchResultsView(
+                results: searchResults,
+                previousResults: previousSearchResults,
+                isLoading: isSearching,
+                contentHeight: searchResultsHeight
+            )
+            .frame(height: searchResultsHeight)
+        } else if connectedDrives.isEmpty {
+            EmptyStateView()
+                .frame(height: 300)
+        } else {
+            DriveListView()
+                .frame(height: driveListHeight)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .driveIndexingComplete)) { _ in
-            Task {
-                await driveMonitor.loadDrives()
-            }
+    }
+    
+    private func handleOnAppear() {
+        isSearchFocused = true
+        driveListHeight = calculateContentHeight()
+        Task {
+            await driveMonitor.loadDrives()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .searchWindowDidShow)) { _ in
-            // Clear search text to show drive list
-            searchText = ""
-
-            // Refresh drives and focus search when window is shown via hotkey
-            isSearchFocused = true
-            Task {
-                await driveMonitor.loadDrives()
-            }
-        }
-        .onChange(of: searchText) { oldValue, newValue in
-            Task {
-                await performSearch(newValue)
-            }
+    }
+    
+    private func handleSearchWindowShow() {
+        searchText = ""
+        isSearchFocused = true
+        Task {
+            await driveMonitor.loadDrives()
         }
     }
 
@@ -266,8 +274,34 @@ struct ActiveIndexingView: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.medium) {
-            // Header with status
+        // Show single-line "Scanning" view when filesProcessed is 0 or no progress yet
+        if indexManager.currentProgress == nil || indexManager.currentProgress?.filesProcessed == 0 {
+            HStack(spacing: Spacing.medium) {
+                HStack(spacing: Spacing.xSmall) {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 6, height: 6)
+
+                    Text("SCANNING")
+                        .font(AppTypography.statusText)
+                        .foregroundColor(.orange)
+                }
+
+                Text("Looking for changes on \(indexManager.indexingDriveName)")
+                    .font(.subheadline)
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .padding(Spacing.medium)
+            .background(Color.orange.opacity(0.05))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+            )
+        } else {
+            // Show single-line indexing progress view
             HStack(spacing: Spacing.medium) {
                 HStack(spacing: Spacing.xSmall) {
                     Circle()
@@ -279,83 +313,141 @@ struct ActiveIndexingView: View {
                         .foregroundColor(.orange)
                 }
 
-                Text(indexManager.indexingDriveName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
+                if let progress = indexManager.currentProgress {
+                    Text("\(formatFileCount(progress.filesProcessed)) files indexed")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .frame(minWidth: 120, alignment: .leading)
+
+                    if !progress.currentFile.isEmpty {
+                        Text(progress.currentFile)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                } else {
+                    Text(indexManager.indexingDriveName)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                }
 
                 Spacer()
-
-                Button("Cancel") {
-                    indexManager.cancelIndexing()
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.red)
-                .font(.caption)
             }
-
-            // Progress info
-            if let progress = indexManager.currentProgress {
-                HStack(spacing: Spacing.large) {
-                    HStack(spacing: Spacing.small) {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 16, height: 16)
-
-                        // Show status/progress
-                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text(progress.currentFile)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
-                            // Show file count when actually processing
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text("Files Processed")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-
-                                Text("\(progress.filesProcessed)")
-                                    .font(AppTypography.technicalData)
-                                    .fontWeight(.semibold)
-                            }
-
-                            if !progress.currentFile.isEmpty {
-                                Divider()
-                                    .frame(height: 24)
-
-                                VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                    Text("Current File")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-
-                                    Text(progress.currentFile)
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 16, height: 16)
-            }
+            .padding(Spacing.medium)
+            .background(Color.orange.opacity(0.05))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+            )
         }
-        .padding(Spacing.medium)
-        .background(Color.orange.opacity(0.05))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-        )
+    }
+}
+
+// MARK: - Status Bar Container with Animation Control
+
+private func formatFileCount(_ count: Int) -> String {
+    let absCount = abs(count)
+    if absCount >= 1_000_000 {
+        let millions = Double(absCount) / 1_000_000.0
+        return String(format: "%.1fM", millions)
+    } else if absCount >= 1_000 {
+        let thousands = Double(absCount) / 1_000.0
+        return String(format: "%.1fk", thousands)
+    } else {
+        return "\(count)"
+    }
+}
+
+struct StatusBarContainer: View {
+    let pendingChanges: PendingChanges?
+    let isIndexing: Bool
+    let currentProgress: IndexProgress?
+    let indexingDriveName: String
+    let indexManager: IndexManager
+    
+    @State private var lastTransitionWasFromPending = false
+    
+    enum StatusState: Equatable {
+        case none
+        case pending
+        case indexing
+        case complete
+    }
+    
+    private var currentState: StatusState {
+        if pendingChanges != nil {
+            return .pending
+        } else if let progress = currentProgress, progress.summary != nil {
+            return .complete
+        } else if isIndexing {
+            return .indexing
+        } else {
+            return .none
+        }
+    }
+    
+    private var transitionEffect: AnyTransition {
+        if lastTransitionWasFromPending {
+            return .identity
+        } else {
+            return .move(edge: .top).combined(with: .opacity)
+        }
+    }
+    
+    @ViewBuilder
+    private var statusContent: some View {
+        if let pending = pendingChanges {
+            pendingChangesContent(pending)
+        } else if let progress = currentProgress, let summary = progress.summary {
+            completionContent(summary)
+        } else if isIndexing {
+            indexingContent()
+        }
+    }
+    
+    private func pendingChangesContent(_ pending: PendingChanges) -> some View {
+        VStack(spacing: 0) {
+            PendingChangesView(driveName: pending.driveName, changeCount: pending.changeCount)
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.vertical, Spacing.Container.verticalPadding)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            Divider()
+        }
+    }
+    
+    private func completionContent(_ summary: String) -> some View {
+        VStack(spacing: 0) {
+            CompletionView(summary: summary)
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.vertical, Spacing.Container.verticalPadding)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            Divider()
+        }
+    }
+    
+    private func indexingContent() -> some View {
+        VStack(spacing: 0) {
+            ActiveIndexingView()
+                .environmentObject(indexManager)
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.vertical, Spacing.Container.verticalPadding)
+                .transition(transitionEffect)
+            Divider()
+        }
+    }
+    
+    var body: some View {
+        statusContent
+            .animation(
+                lastTransitionWasFromPending ? nil : .easeInOut(duration: 0.3),
+                value: currentState
+            )
+            .onChange(of: currentState) { oldState, newState in
+                // Track if we're transitioning from pending to indexing
+                lastTransitionWasFromPending = (oldState == .pending && newState == .indexing)
+            }
     }
 }
 

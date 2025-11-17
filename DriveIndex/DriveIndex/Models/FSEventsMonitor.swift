@@ -222,7 +222,7 @@ actor FSEventsMonitor {
         print("📝 Buffering \(filteredPaths.count) FSEvents for drive: \(driveUUID)")
 
         // Check if this is the first event in buffer
-        let isFirstEvent = eventBuffers[driveUUID] == nil || eventBuffers[driveUUID]?.isEmpty == true
+        _ = eventBuffers[driveUUID] == nil || eventBuffers[driveUUID]?.isEmpty == true
 
         // Cancel existing timer
         bufferTasks[driveUUID]?.cancel()

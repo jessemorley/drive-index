@@ -52,6 +52,8 @@ struct MainWindowView: View {
                     .zIndex(100)
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: indexManager.isIndexing)
+            .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)  // Constrain ZStack to detail area bounds
             .clipped()  // Prevent content from extending outside bounds
         }
@@ -85,6 +87,19 @@ struct MainWindowView: View {
 }
 
 // MARK: - Indexing Progress Overlay
+
+private func formatFileCount(_ count: Int) -> String {
+    let absCount = abs(count)
+    if absCount >= 1_000_000 {
+        let millions = Double(absCount) / 1_000_000.0
+        return String(format: "%.1fM", millions)
+    } else if absCount >= 1_000 {
+        let thousands = Double(absCount) / 1_000.0
+        return String(format: "%.1fk", thousands)
+    } else {
+        return "\(count)"
+    }
+}
 
 struct PendingChangesOverlay: View {
     let driveName: String
@@ -159,103 +174,83 @@ struct ActiveIndexingOverlay: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.medium) {
-            // Header with status
-            HStack(spacing: Spacing.medium) {
-                HStack(spacing: Spacing.xSmall) {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 6, height: 6)
+        Group {
+            // Show single-line "Scanning" view when filesProcessed is 0 or no progress yet
+            if indexManager.currentProgress == nil || indexManager.currentProgress?.filesProcessed == 0 {
+                HStack(spacing: Spacing.medium) {
+                    HStack(spacing: Spacing.xSmall) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
 
-                    Text("INDEXING")
-                        .font(AppTypography.statusText)
-                        .foregroundColor(.orange)
+                        Text("SCANNING")
+                            .font(AppTypography.statusText)
+                            .foregroundColor(.orange)
+                    }
+
+                    Text("Looking for changes on \(indexManager.indexingDriveName)")
+                        .font(.system(.caption, design: .monospaced))
+                        .lineLimit(1)
+
+                    Spacer()
                 }
+                .padding(Spacing.medium)
+                .background(Color.orange.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.bottom, Spacing.medium)
+                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+            } else {
+                // Show single-line indexing progress view
+                HStack(spacing: Spacing.medium) {
+                    HStack(spacing: Spacing.xSmall) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
 
-                Text(indexManager.indexingDriveName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
+                        Text("INDEXING")
+                            .font(AppTypography.statusText)
+                            .foregroundColor(.orange)
+                    }
 
-                Spacer()
+                    if let progress = indexManager.currentProgress {
+                        Text("\(formatFileCount(progress.filesProcessed)) files indexed")
+                            .font(.system(.caption, design: .monospaced))
+                            .lineLimit(1)
+                            .frame(minWidth: 120, alignment: .leading)
 
-                Button("Cancel") {
-                    indexManager.cancelIndexing()
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.red)
-                .font(.caption)
-            }
-
-            // Progress info
-            if let progress = indexManager.currentProgress {
-                HStack(spacing: Spacing.large) {
-                    HStack(spacing: Spacing.small) {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .frame(width: 16, height: 16)
-
-                        // Show status/progress
-                        if progress.filesProcessed == 0 && !progress.currentFile.isEmpty {
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text(progress.currentFile)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
-                            // Show file count when actually processing
-                            VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                Text("Files Processed")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-
-                                Text("\(progress.filesProcessed)")
-                                    .font(AppTypography.technicalData)
-                                    .fontWeight(.semibold)
-                            }
-
-                            if !progress.currentFile.isEmpty {
-                                Divider()
-                                    .frame(height: 24)
-
-                                VStack(alignment: .leading, spacing: Spacing.xxSmall) {
-                                    Text("Current File")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-
-                                    Text(progress.currentFile)
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
+                        if !progress.currentFile.isEmpty {
+                            Text(progress.currentFile)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
+                    } else {
+                        Text(indexManager.indexingDriveName)
+                            .font(.subheadline)
+                            .lineLimit(1)
                     }
 
                     Spacer()
                 }
-                .frame(minHeight: 44)
-            } else {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Spacer()
-                }
-                .frame(minHeight: 44)
+                .padding(Spacing.medium)
+                .background(Color.orange.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+                .padding(.horizontal, Spacing.Container.horizontalPadding)
+                .padding(.bottom, Spacing.medium)
+                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
             }
         }
-        .padding(Spacing.medium)
-        .background(Color.orange.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, Spacing.Container.horizontalPadding)
-        .padding(.bottom, Spacing.medium)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+        .animation(nil, value: indexManager.currentProgress?.filesProcessed)
     }
 }
 
