@@ -272,6 +272,7 @@ struct CompletionView: View {
 
 struct ActiveIndexingView: View {
     @EnvironmentObject var indexManager: IndexManager
+    @State private var isAnimating = false
 
     var body: some View {
         // Show single-line "Scanning" view when filesProcessed is 0 or no progress yet
@@ -281,6 +282,9 @@ struct ActiveIndexingView: View {
                     Circle()
                         .fill(Color.orange)
                         .frame(width: 6, height: 6)
+                        .opacity(isAnimating ? 1.0 : 0.5)
+                        .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
+                        .onAppear { isAnimating = true }
 
                     Text("SCANNING")
                         .font(AppTypography.statusText)
@@ -315,13 +319,13 @@ struct ActiveIndexingView: View {
 
                 if let progress = indexManager.currentProgress {
                     Text("\(formatFileCount(progress.filesProcessed)) files indexed")
-                        .font(.subheadline)
+                        .font(.system(.subheadline, design: .monospaced))
                         .lineLimit(1)
                         .frame(minWidth: 120, alignment: .leading)
 
                     if !progress.currentFile.isEmpty {
                         Text(progress.currentFile)
-                            .font(.subheadline)
+                            .font(.system(.subheadline, design: .monospaced))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)

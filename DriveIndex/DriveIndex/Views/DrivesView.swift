@@ -34,53 +34,64 @@ struct DrivesView: View {
     @State private var searchText: String = ""
 
     var body: some View {
-        ScrollView {
-            if viewMode == .list {
-                LazyVStack(spacing: DesignSystem.Spacing.small) {
-                    ForEach(filteredAndSortedDrives) { drive in
-                        DriveDetailCard(drive: drive)
-                    }
-                }
-                .padding(DesignSystem.Spacing.sectionPadding)
-            } else {
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing),
-                    GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing)
-                ], spacing: DesignSystem.Card.gridSpacing) {
-                    ForEach(filteredAndSortedDrives) { drive in
-                        DriveCard(drive: drive)
-                    }
-                }
-                .padding(DesignSystem.Spacing.sectionPadding)
-            }
-        }
-        .navigationTitle("Drives")
-        .navigationSubtitle("\(filteredAndSortedDrives.count) drive\(filteredAndSortedDrives.count == 1 ? "" : "s")")
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search drives")
-        .toolbar(id: "drives-toolbar") {
-            ToolbarItem(id: "view-mode", placement: .automatic) {
-                Picker("View", selection: $viewMode) {
-                    ForEach(DriveViewMode.allCases, id: \.self) { mode in
-                        Label(mode.rawValue.capitalized, systemImage: mode.icon)
-                            .tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .help("Change view mode")
-            }
-
-            ToolbarItem(id: "sort", placement: .automatic) {
-                Menu {
-                    Picker("Sort By", selection: $sortOption) {
-                        ForEach(DriveSortOption.allCases, id: \.self) { option in
-                            Text(option.rawValue)
-                                .tag(option)
+        NavigationStack {
+            ScrollView {
+                if viewMode == .list {
+                    LazyVStack(spacing: DesignSystem.Spacing.small) {
+                        ForEach(filteredAndSortedDrives) { drive in
+                            NavigationLink(value: drive) {
+                                DriveDetailCard(drive: drive)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                    .padding(DesignSystem.Spacing.sectionPadding)
+                } else {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing),
+                        GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing)
+                    ], spacing: DesignSystem.Card.gridSpacing) {
+                        ForEach(filteredAndSortedDrives) { drive in
+                            NavigationLink(value: drive) {
+                                DriveCard(drive: drive)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(DesignSystem.Spacing.sectionPadding)
                 }
-                .help("Sort drives")
+            }
+            .navigationTitle("Drives")
+            .navigationSubtitle("\(filteredAndSortedDrives.count) drive\(filteredAndSortedDrives.count == 1 ? "" : "s")")
+            .searchable(text: $searchText, placement: .toolbar, prompt: "Search drives")
+            .toolbar(id: "drives-toolbar") {
+                ToolbarItem(id: "view-mode", placement: .automatic) {
+                    Picker("View", selection: $viewMode) {
+                        ForEach(DriveViewMode.allCases, id: \.self) { mode in
+                            Label(mode.rawValue.capitalized, systemImage: mode.icon)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Change view mode")
+                }
+
+                ToolbarItem(id: "sort", placement: .automatic) {
+                    Menu {
+                        Picker("Sort By", selection: $sortOption) {
+                            ForEach(DriveSortOption.allCases, id: \.self) { option in
+                                Text(option.rawValue)
+                                    .tag(option)
+                            }
+                        }
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                    .help("Sort drives")
+                }
+            }
+            .navigationDestination(for: DriveInfo.self) { drive in
+                DriveDetailView(drive: drive)
             }
         }
         .frame(minWidth: 600, minHeight: 400)
@@ -287,11 +298,6 @@ struct DriveDetailCard: View {
                 Text("Last scanned: \(drive.formattedLastScan)")
                     .font(.caption2)
                     .foregroundColor(.secondary)
-            }
-
-            // Storage visualization
-            if drive.fileCount > 0 && drive.isConnected {
-                StorageVisualizationView(drive: drive)
             }
 
             // Action buttons: Rescan and Reveal on left, Eject on right

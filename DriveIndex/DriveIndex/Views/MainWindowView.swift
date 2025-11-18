@@ -152,7 +152,7 @@ struct CompletionOverlay: View {
             }
 
             Text(summary)
-                .font(.subheadline)
+                .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
 
             Spacer()
@@ -172,6 +172,7 @@ struct CompletionOverlay: View {
 
 struct ActiveIndexingOverlay: View {
     @EnvironmentObject var indexManager: IndexManager
+    @State private var isAnimating = false
 
     var body: some View {
         Group {
@@ -182,6 +183,9 @@ struct ActiveIndexingOverlay: View {
                         Circle()
                             .fill(Color.orange)
                             .frame(width: 6, height: 6)
+                            .opacity(isAnimating ? 1.0 : 0.5)
+                            .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
+                            .onAppear { isAnimating = true }
 
                         Text("SCANNING")
                             .font(AppTypography.statusText)

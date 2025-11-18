@@ -28,6 +28,7 @@
 		863168452EC999E8007B6201 /* IndexingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683C2EC999E8007B6201 /* IndexingView.swift */; };
 		863168462EC999E8007B6201 /* RaycastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683E2EC999E8007B6201 /* RaycastView.swift */; };
 		863168472EC999E8007B6201 /* ShortcutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683F2EC999E8007B6201 /* ShortcutView.swift */; };
+		863AC5252ECBF6F400F215E7 /* DriveDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */; };
 		866227B92EC693D300B42819 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866227B82EC693D300B42819 /* AppDelegate.swift */; };
 		86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */; };
 		86758BD32ECA78F200270DC6 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86758BD22ECA78F100270DC6 /* TagInputView.swift */; };
@@ -69,6 +70,7 @@
 		8631683D2EC999E8007B6201 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		8631683E2EC999E8007B6201 /* RaycastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastView.swift; sourceTree = "<group>"; };
 		8631683F2EC999E8007B6201 /* ShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutView.swift; sourceTree = "<group>"; };
+		863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveDetailView.swift; sourceTree = "<group>"; };
 		866227B82EC693D300B42819 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
 		86758BD22ECA78F100270DC6 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 		1A100003 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */,
 				86758BD22ECA78F100270DC6 /* TagInputView.swift */,
 				863168382EC999E8007B6201 /* AdvancedView.swift */,
 				863168392EC999E8007B6201 /* AppearanceView.swift */,
@@ -294,6 +297,7 @@
 				1A00000B /* DriveMonitor.swift in Sources */,
 				1A00000D /* FileIndexer.swift in Sources */,
 				1A00000F /* IndexManager.swift in Sources */,
+				863AC5252ECBF6F400F215E7 /* DriveDetailView.swift in Sources */,
 				867891AD2EC0A53F00E2CDAD /* SearchBar.swift in Sources */,
 				863168332EC999A6007B6201 /* NavigationSidebar.swift in Sources */,
 				867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */,

@@ -9,7 +9,7 @@ import Foundation
 import AppKit
 import SwiftUI
 
-struct DriveInfo: Identifiable, Equatable {
+struct DriveInfo: Identifiable, Equatable, Hashable {
     let id: String  // UUID
     let name: String
     let path: String
