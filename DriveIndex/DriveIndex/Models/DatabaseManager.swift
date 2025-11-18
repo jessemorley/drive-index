@@ -1016,6 +1016,19 @@ actor DatabaseManager {
 
         return try process(statement)
     }
+
+    // MARK: - Database Optimization
+
+    /// Run PRAGMA optimize to update query statistics and merge FTS5 segments
+    func optimize() async throws {
+        print("🔧 Running PRAGMA optimize...")
+        let startTime = Date()
+
+        try execute("PRAGMA optimize")
+
+        let duration = Date().timeIntervalSince(startTime)
+        print("✅ PRAGMA optimize completed in \(String(format: "%.2f", duration * 1000))ms")
+    }
 }
 
 // MARK: - Error Types

@@ -48,6 +48,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        Task {
+            try? await DatabaseManager.shared.optimize()
+        }
+    }
+
     @objc private func handleOpenMainWindow() {
         showMainWindow()
     }

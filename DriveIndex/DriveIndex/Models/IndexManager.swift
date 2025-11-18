@@ -24,6 +24,10 @@ class IndexManager: ObservableObject {
     private let fileIndexer = FileIndexer()
     private var indexingTask: Task<Void, Never>?
 
+    // Cumulative changes since last PRAGMA optimize
+    private var changesSinceLastOptimize: Int = 0
+    private let optimizeThreshold = 50
+
     init() {
         setupNotifications()
     }
@@ -120,6 +124,30 @@ class IndexManager: ObservableObject {
                                 }
 
                                 self?.showCompletionNotification(driveName: driveName, filesProcessed: progress.filesProcessed)
+
+                                // Determine if database optimization is needed
+                                let shouldOptimize: Bool
+                                if let changeCount = progress.changesCount {
+                                    // Delta scan - accumulate changes
+                                    self?.changesSinceLastOptimize += changeCount
+                                    shouldOptimize = (self?.changesSinceLastOptimize ?? 0) >= (self?.optimizeThreshold ?? 50)
+                                } else {
+                                    // Full scan - always optimize
+                                    shouldOptimize = true
+                                }
+
+                                if shouldOptimize {
+                                    Task {
+                                        do {
+                                            try await DatabaseManager.shared.optimize()
+                                            await MainActor.run {
+                                                self?.changesSinceLastOptimize = 0
+                                            }
+                                        } catch {
+                                            print("⚠️ PRAGMA optimize failed: \(error)")
+                                        }
+                                    }
+                                }
 
                                 // Invalidate storage cache for this drive
                                 Task {

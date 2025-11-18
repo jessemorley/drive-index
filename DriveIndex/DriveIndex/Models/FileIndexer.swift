@@ -12,12 +12,14 @@ struct IndexProgress {
     let currentFile: String
     let isComplete: Bool
     let summary: String?  // Brief summary shown after completion
+    let changesCount: Int?  // nil = full scan, Int = delta scan change count
 
-    init(filesProcessed: Int, currentFile: String, isComplete: Bool, summary: String? = nil) {
+    init(filesProcessed: Int, currentFile: String, isComplete: Bool, summary: String? = nil, changesCount: Int? = nil) {
         self.filesProcessed = filesProcessed
         self.currentFile = currentFile
         self.isComplete = isComplete
         self.summary = summary
+        self.changesCount = changesCount
     }
 }
 
@@ -285,7 +287,8 @@ actor FileIndexer {
             filesProcessed: filesProcessed,
             currentFile: "",
             isComplete: true,
-            summary: summary
+            summary: summary,
+            changesCount: nil  // Full scan - always optimize
         ))
 
         print("Full index complete: \(filesProcessed) files processed")
@@ -499,7 +502,8 @@ actor FileIndexer {
             filesProcessed: filesProcessed,
             currentFile: "",
             isComplete: true,
-            summary: summary
+            summary: summary,
+            changesCount: newCount + modifiedCount + deletedCount
         ))
 
         print("✅ Delta index complete: \(newCount) new, \(modifiedCount) modified, \(unchangedCount) unchanged, \(deletedCount) deleted, \(skippedDirectories) directories skipped")
