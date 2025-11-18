@@ -35,6 +35,7 @@ struct DuplicatesView: View {
             }
             .navigationTitle("Duplicates")
             .navigationSubtitle("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s")")
+            .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "duplicates-toolbar") {
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Menu {
@@ -42,7 +43,11 @@ struct DuplicatesView: View {
                             Button {
                                 sortOption = option
                             } label: {
-                                Label(option.rawValue, systemImage: option == sortOption ? "checkmark" : "")
+                                if option == sortOption {
+                                    Label(option.rawValue, systemImage: "checkmark")
+                                } else {
+                                    Text(option.rawValue)
+                                }
                             }
                         }
                     } label: {

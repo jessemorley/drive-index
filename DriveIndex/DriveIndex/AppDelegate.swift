@@ -27,10 +27,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let driveMonitor = DriveMonitor()
     private let indexManager = IndexManager()
 
+    /// Track if this is the first launch
+    private var hasLaunchedBefore: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasLaunchedBefore") }
+        set { UserDefaults.standard.set(newValue, forKey: "hasLaunchedBefore") }
+    }
+
+    /// Track if main window has been closed at least once
+    private var mainWindowHasBeenClosed = false
+
     // MARK: - Application Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Use regular activation policy to show dock icon and menu bar
+        // Start with regular activation policy for initial launch
         NSApp.setActivationPolicy(.regular)
 
         // Set up status bar item
@@ -46,6 +55,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             name: .openMainWindow,
             object: nil
         )
+
+        // Show main window on first launch only
+        if !hasLaunchedBefore {
+            hasLaunchedBefore = true
+            // Delay slightly to avoid layout recursion
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.showMainWindow()
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -88,13 +106,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Floating Panel Management
 
-    /// Status item clicked - toggle floating panel visibility
+    /// Status item clicked - show menu with options
     @objc private func statusItemClicked() {
-        togglePanel()
+        guard let button = statusItem?.button else { return }
+        
+        let menu = NSMenu()
+        
+        menu.addItem(NSMenuItem(title: "Quick Search", action: #selector(togglePanel), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        
+        statusItem?.menu = menu
+        button.performClick(nil)
+        statusItem?.menu = nil
     }
 
     /// Toggle the floating panel visibility
-    func togglePanel() {
+    @objc func togglePanel() {
         if let panel = floatingPanel, panel.isVisible {
             // Panel is visible, hide it
             closePanel()

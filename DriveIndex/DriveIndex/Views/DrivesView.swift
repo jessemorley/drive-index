@@ -82,7 +82,11 @@ struct DrivesView: View {
                             Button {
                                 sortOption = option
                             } label: {
-                                Label(option.rawValue, systemImage: option == sortOption ? "checkmark" : "")
+                                if option == sortOption {
+                                    Label(option.rawValue, systemImage: "checkmark")
+                                } else {
+                                    Text(option.rawValue)
+                                }
                             }
                         }
                     } label: {
