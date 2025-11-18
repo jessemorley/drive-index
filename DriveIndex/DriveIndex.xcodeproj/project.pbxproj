@@ -43,6 +43,7 @@
 		86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A82EC04858007DC54C /* SettingsSection.swift */; };
 		86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B531A72EC04858007DC54C /* DriveStatusBadge.swift */; };
 		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
+		86F76A982ECC2A2000039E10 /* DuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76A972ECC2A2000039E10 /* DuplicatesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +86,7 @@
 		86B531A72EC04858007DC54C /* DriveStatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveStatusBadge.swift; sourceTree = "<group>"; };
 		86B531A82EC04858007DC54C /* SettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSection.swift; sourceTree = "<group>"; };
 		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
+		86F76A972ECC2A2000039E10 /* DuplicatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 			children = (
 				1A100001 /* DriveIndex */,
 				1A100002 /* Products */,
+				86F76A962ECC299D00039E10 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -132,6 +135,7 @@
 		1A100003 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				86F76A972ECC2A2000039E10 /* DuplicatesView.swift */,
 				863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */,
 				86758BD22ECA78F100270DC6 /* TagInputView.swift */,
 				863168382EC999E8007B6201 /* AdvancedView.swift */,
@@ -197,6 +201,13 @@
 				86B531A82EC04858007DC54C /* SettingsSection.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		86F76A962ECC299D00039E10 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -277,6 +288,7 @@
 				863168332EC96F65007B6201 /* StorageCache.swift in Sources */,
 				863168352EC999C3007B6201 /* NavigationItem.swift in Sources */,
 				86B531AA2EC04858007DC54C /* SettingsSection.swift in Sources */,
+				86F76A982ECC2A2000039E10 /* DuplicatesView.swift in Sources */,
 				867891AF2EC0A55A00E2CDAD /* SearchResultsView.swift in Sources */,
 				86B531AB2EC04858007DC54C /* DriveStatusBadge.swift in Sources */,
 				863168402EC999E8007B6201 /* FilesView.swift in Sources */,
@@ -439,6 +451,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SlopDriveIndex;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DriveIndex/DriveIndex.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -460,6 +474,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.driveindex.DriveIndex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -471,6 +486,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = SlopDriveIndex;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = DriveIndex/DriveIndex.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -492,6 +509,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.driveindex.DriveIndex;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};

@@ -69,6 +69,8 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .files:
             FilesView()
+        case .duplicates:
+            DuplicatesView()
         case .appearance:
             AppearanceView()
         case .shortcut:

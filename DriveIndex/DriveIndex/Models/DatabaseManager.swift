@@ -30,6 +30,25 @@ struct DriveMetadata {
     let isExcluded: Bool
 }
 
+struct DuplicateGroup: Identifiable {
+    let name: String
+    let size: Int64
+    let count: Int
+    let files: [DuplicateFile]
+
+    var id: String {
+        "\(name)-\(size)"
+    }
+}
+
+struct DuplicateFile {
+    let id: Int64
+    let driveUUID: String
+    let driveName: String
+    let relativePath: String
+    let modifiedAt: Date?
+}
+
 actor DatabaseManager {
     static let shared = DatabaseManager()
 
@@ -1015,6 +1034,129 @@ actor DatabaseManager {
         }
 
         return try process(statement)
+    }
+
+    // MARK: - Duplicate Detection
+
+    /// Get the count of duplicates for a specific file (by name and size)
+    func getDuplicateCount(name: String, size: Int64) throws -> Int {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let countSQL = """
+            SELECT COUNT(*) FROM files
+            WHERE name = ? AND size = ? AND is_directory = 0
+        """
+
+        guard sqlite3_prepare_v2(db, countSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 2, size)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return 0
+        }
+
+        return Int(sqlite3_column_int(stmt, 0))
+    }
+
+    /// Get all duplicate file groups (files with same name and size appearing multiple times)
+    func getDuplicateGroups() throws -> [DuplicateGroup] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        // First, get all duplicate groups (name, size combinations that appear more than once)
+        let groupSQL = """
+            SELECT name, size, COUNT(*) as count
+            FROM files
+            WHERE is_directory = 0
+            GROUP BY name, size
+            HAVING COUNT(*) > 1
+            ORDER BY count DESC, size DESC
+        """
+
+        guard sqlite3_prepare_v2(db, groupSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var groups: [DuplicateGroup] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let name = String(cString: sqlite3_column_text(stmt, 0))
+            let size = sqlite3_column_int64(stmt, 1)
+            let count = Int(sqlite3_column_int(stmt, 2))
+
+            // Get all files for this duplicate group
+            let files = try getDuplicateFiles(name: name, size: size)
+
+            groups.append(DuplicateGroup(
+                name: name,
+                size: size,
+                count: count,
+                files: files
+            ))
+        }
+
+        return groups
+    }
+
+    /// Get all files matching a specific name and size
+    private func getDuplicateFiles(name: String, size: Int64) throws -> [DuplicateFile] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let filesSQL = """
+            SELECT f.id, f.drive_uuid, d.name as drive_name, f.relative_path, f.modified_at
+            FROM files f
+            JOIN drives d ON d.uuid = f.drive_uuid
+            WHERE f.name = ? AND f.size = ? AND f.is_directory = 0
+            ORDER BY d.name, f.relative_path
+        """
+
+        guard sqlite3_prepare_v2(db, filesSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 2, size)
+
+        var files: [DuplicateFile] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 1))
+            let driveName = String(cString: sqlite3_column_text(stmt, 2))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 3))
+
+            var modifiedAt: Date?
+            if sqlite3_column_type(stmt, 4) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 4)))
+            }
+
+            files.append(DuplicateFile(
+                id: id,
+                driveUUID: driveUUID,
+                driveName: driveName,
+                relativePath: relativePath,
+                modifiedAt: modifiedAt
+            ))
+        }
+
+        return files
     }
 
     // MARK: - Database Optimization

@@ -13,6 +13,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     // Index section
     case drives
     case files
+    case duplicates
 
     // Settings section
     case appearance
@@ -29,6 +30,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .drives: return "Drives"
         case .files: return "Files"
+        case .duplicates: return "Duplicates"
         case .appearance: return "Appearance"
         case .shortcut: return "Shortcut"
         case .indexing: return "Indexing"
@@ -41,6 +43,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .drives: return "externaldrive"
         case .files: return "clock"
+        case .duplicates: return "doc.on.doc"
         case .appearance: return "paintbrush"
         case .shortcut: return "command"
         case .indexing: return "doc.text"
@@ -51,7 +54,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
     var section: NavigationSection {
         switch self {
-        case .drives, .files:
+        case .drives, .files, .duplicates:
             return .index
         case .appearance, .shortcut, .indexing, .advanced:
             return .settings

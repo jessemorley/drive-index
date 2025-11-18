@@ -111,6 +111,20 @@ struct SearchResultRow: View {
 
             Spacer()
 
+            // Duplicate badge (if duplicates exist)
+            if let dupCount = result.duplicateCount {
+                HStack(spacing: Spacing.xSmall) {
+                    Text("\(dupCount)×")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.orange)
+                }
+                .padding(.horizontal, Spacing.small)
+                .padding(.vertical, Spacing.xSmall)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(4)
+            }
+
             // Drive badge showing connection status
             HStack(spacing: Spacing.xSmall) {
                 Text(result.driveName)
@@ -141,17 +155,21 @@ struct SearchResultRow: View {
                 id: 1,
                 name: "Document.pdf",
                 relativePath: "Documents/Work/Document.pdf",
+                size: 1024000,
                 driveUUID: "123",
                 driveName: "My Drive",
-                isConnected: true
+                isConnected: true,
+                duplicateCount: 3
             ),
             SearchResult(
                 id: 2,
                 name: "Photo.jpg",
                 relativePath: "Photos/2024/Photo.jpg",
+                size: 2048000,
                 driveUUID: "456",
                 driveName: "Backup",
-                isConnected: false
+                isConnected: false,
+                duplicateCount: nil
             ),
         ],
         previousResults: [],

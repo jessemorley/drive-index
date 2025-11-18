@@ -12,9 +12,11 @@ struct SearchResult: Identifiable, Hashable {
     let id: Int64
     let name: String
     let relativePath: String
+    let size: Int64
     let driveUUID: String
     let driveName: String
     var isConnected: Bool
+    let duplicateCount: Int?
 }
 
 actor SearchManager {
@@ -49,14 +51,17 @@ actor SearchManager {
         // Step 4: Add wildcard for prefix matching
         let fts5Term = cleaned + "*"
 
-        // Step 5: Build FTS5 query matching Raycast logic
+        // Step 5: Build FTS5 query matching Raycast logic with duplicate counts
         let sql = """
         SELECT
             f.id,
             f.name,
             f.relative_path,
+            f.size,
             f.drive_uuid,
-            d.name as drive_name
+            d.name as drive_name,
+            (SELECT COUNT(*) FROM files f2
+             WHERE f2.name = f.name AND f2.size = f.size AND f2.is_directory = 0) as dup_count
         FROM files_fts
         JOIN files f ON f.id = files_fts.rowid
         JOIN drives d ON d.uuid = f.drive_uuid
@@ -72,8 +77,10 @@ actor SearchManager {
                 let id = sqlite3_column_int64(stmt, 0)
                 let name = String(cString: sqlite3_column_text(stmt, 1))
                 let relativePath = String(cString: sqlite3_column_text(stmt, 2))
-                let driveUUID = String(cString: sqlite3_column_text(stmt, 3))
-                let driveName = String(cString: sqlite3_column_text(stmt, 4))
+                let size = sqlite3_column_int64(stmt, 3)
+                let driveUUID = String(cString: sqlite3_column_text(stmt, 4))
+                let driveName = String(cString: sqlite3_column_text(stmt, 5))
+                let dupCount = Int(sqlite3_column_int(stmt, 6))
 
                 let isConnected = isDriveMounted(driveName)
 
@@ -81,9 +88,11 @@ actor SearchManager {
                     id: id,
                     name: name,
                     relativePath: relativePath,
+                    size: size,
                     driveUUID: driveUUID,
                     driveName: driveName,
-                    isConnected: isConnected
+                    isConnected: isConnected,
+                    duplicateCount: dupCount > 1 ? dupCount : nil
                 ))
             }
 
