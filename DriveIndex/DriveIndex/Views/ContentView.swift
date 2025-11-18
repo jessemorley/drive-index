@@ -272,7 +272,8 @@ struct CompletionView: View {
 
 struct ActiveIndexingView: View {
     @EnvironmentObject var indexManager: IndexManager
-    @State private var isAnimating = false
+    @State private var isScanningAnimating = false
+    @State private var isIndexingAnimating = false
 
     var body: some View {
         // Show single-line "Scanning" view when filesProcessed is 0 or no progress yet
@@ -282,9 +283,9 @@ struct ActiveIndexingView: View {
                     Circle()
                         .fill(Color.orange)
                         .frame(width: 6, height: 6)
-                        .opacity(isAnimating ? 1.0 : 0.5)
-                        .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
-                        .onAppear { isAnimating = true }
+                        .opacity(isScanningAnimating ? 1.0 : 0.5)
+                        .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isScanningAnimating)
+                        .onAppear { isScanningAnimating = true }
 
                     Text("SCANNING")
                         .font(AppTypography.statusText)
@@ -311,6 +312,9 @@ struct ActiveIndexingView: View {
                     Circle()
                         .fill(Color.orange)
                         .frame(width: 6, height: 6)
+                        .opacity(isIndexingAnimating ? 1.0 : 0.5)
+                        .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isIndexingAnimating)
+                        .onAppear { isIndexingAnimating = true }
 
                     Text("INDEXING")
                         .font(AppTypography.statusText)

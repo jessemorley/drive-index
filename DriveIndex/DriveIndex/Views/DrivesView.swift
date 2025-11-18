@@ -98,7 +98,7 @@ struct DrivesView: View {
     }
 
     private var filteredAndSortedDrives: [DriveInfo] {
-        var drives = driveMonitor.drives.filter { $0.isConnected }
+        var drives = driveMonitor.drives
 
         // Filter by search
         if !searchText.isEmpty {

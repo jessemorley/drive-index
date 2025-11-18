@@ -477,7 +477,7 @@ actor FileIndexer {
         let totalChanges = newCount + modifiedCount + deletedCount
         let summary: String
         if totalChanges == 0 {
-            summary = "Scan complete. No changes detected."
+            summary = "Scan complete: no changes detected"
         } else {
             var parts: [String] = []
             if newCount > 0 {
