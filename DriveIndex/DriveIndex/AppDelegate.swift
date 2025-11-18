@@ -182,6 +182,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Open the main settings window (called from ContentView settings button)
     func showMainWindow() {
+        // Switch back to regular activation policy to show dock icon
+        NSApp.setActivationPolicy(.regular)
+        
         // Create window if it doesn't exist
         if mainWindow == nil {
             createMainWindow()
@@ -215,6 +218,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.center()
         window.setFrameAutosaveName("MainWindow")
         window.delegate = self
+        
+        // Important: After first close, prevent the window from being released
+        window.isReleasedWhenClosed = false
 
         // Set minimum window size
         window.minSize = NSSize(width: 800, height: 500)
@@ -246,15 +252,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if notification.object as? FloatingPanel === floatingPanel {
             // Floating panel is closing, no additional cleanup needed
         } else if notification.object as? NSWindow === mainWindow {
-            // Main window is closing, keep reference for later
+            // Main window is closing for the first time
+            mainWindowHasBeenClosed = true
+            
+            // After main window closes, switch to accessory mode (menu bar only, no dock icon)
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 
     /// Prevent main window from closing, just hide it
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if sender === mainWindow {
-            mainWindow?.orderOut(nil)
-            return false // Don't actually close the window
+            // After first close, just hide the window instead of destroying it
+            if mainWindowHasBeenClosed {
+                mainWindow?.orderOut(nil)
+                return false
+            }
+            // First close - allow it to actually close so we can transition to accessory mode
+            return true
         }
         return true
     }
