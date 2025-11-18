@@ -127,13 +127,18 @@ class IndexManager: ObservableObject {
 
                                 // Determine if database optimization is needed
                                 let shouldOptimize: Bool
-                                if let changeCount = progress.changesCount {
+                                if let changeCount = progress.changesCount, let strongSelf = self {
                                     // Delta scan - accumulate changes
-                                    self?.changesSinceLastOptimize += changeCount
-                                    shouldOptimize = (self?.changesSinceLastOptimize ?? 0) >= (self?.optimizeThreshold ?? 50)
-                                } else {
+                                    strongSelf.changesSinceLastOptimize += changeCount
+                                    let total = strongSelf.changesSinceLastOptimize
+                                    print("📊 Delta scan: +\(changeCount) changes (total: \(total)/\(strongSelf.optimizeThreshold))")
+                                    shouldOptimize = total >= strongSelf.optimizeThreshold
+                                } else if progress.changesCount == nil {
                                     // Full scan - always optimize
+                                    print("📊 Full scan: will optimize")
                                     shouldOptimize = true
+                                } else {
+                                    shouldOptimize = false
                                 }
 
                                 if shouldOptimize {

@@ -262,7 +262,6 @@ actor FSEventsMonitor {
             return
         }
 
-        print("📢 Posting changesDetected notification for \(bufferedPaths.count) changes")
         await MainActor.run {
             NotificationCenter.default.post(
                 name: .changesDetected,
@@ -295,7 +294,6 @@ actor FSEventsMonitor {
         bufferTasks[driveUUID] = nil
 
         // Post notification to trigger delta indexing with specific changed paths
-        print("📢 Posting shouldIndexDrive notification")
         await MainActor.run {
             NotificationCenter.default.post(
                 name: .shouldIndexDrive,

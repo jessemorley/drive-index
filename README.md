@@ -13,9 +13,10 @@ A macOS app with a Spotlight-like floating search window that automatically inde
 ## Features
 
 - Auto drive index on file change (FSEvents) with customisable buffer interval
+- Only re-scan modified directories (drive wear optimisation)
 - File search in <100ms across drives, even when offline
 - Global search shortcut
 - Option to exclude specific extensions and directories
 - Option to exclude or track drives
 - Connected drive info at a glance
-- Drive wear optimisation: only update 
+- PRAGMA optimise after 50+ file changes
