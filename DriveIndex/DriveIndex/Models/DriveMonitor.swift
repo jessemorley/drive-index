@@ -443,6 +443,10 @@ class DriveMonitor: ObservableObject {
     func deleteDrive(_ driveUUID: String) async throws {
         print("🗑️ DriveMonitor: deleting drive with UUID: \(driveUUID)")
         try await database.deleteDrive(driveUUID)
+
+        // Optimize database after bulk deletion
+        try? await database.optimize()
+
         await loadDrives()
     }
 
