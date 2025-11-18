@@ -8,7 +8,7 @@
     - [x] Drive symbol before capacity symbol (like in the floating window)
     - 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
-- [ ] Enable PRAGMA optimise when file change counter reaches 50
+- [x] Enable PRAGMA optimise when file change counter reaches 50
 - [ ] **Feature:** Duplicate file detection/summary
 - [x] Option to hide the dock icon
 - [x] Move About info to DriveIndex > About
