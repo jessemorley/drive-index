@@ -10,7 +10,7 @@
 - [ ] Copy Drives styling to floating window
 - [ ] Consider enabling PRAGMA optimize and occasionally running VACUUM for database size reduction
 - [ ] **Feature:** Duplicate file detection/summary
-- [x] Option to hide the dock icon (button in place—not implemented)
+- [x] Option to hide the dock icon
 - [x] Move About info to DriveIndex > About
 - [ ] Notification settings
 - [ ] Menubar icon states
@@ -26,6 +26,7 @@
 ![image desc](/References/Screenshot%202025-11-13%20at%2010.48.41 am.png)
 
 - [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
+- [ ] Plan at 
 
   
 ### Low
