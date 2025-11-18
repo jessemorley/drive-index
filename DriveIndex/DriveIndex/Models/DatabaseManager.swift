@@ -1076,10 +1076,11 @@ actor DatabaseManager {
         }
 
         // First, get all duplicate groups (name, size combinations that appear more than once)
+        // Only include files >= 1 MB to filter out tiny config files
         let groupSQL = """
             SELECT name, size, COUNT(*) as count
             FROM files
-            WHERE is_directory = 0
+            WHERE is_directory = 0 AND size >= 1048576
             GROUP BY name, size
             HAVING COUNT(*) > 1
             ORDER BY count DESC, size DESC

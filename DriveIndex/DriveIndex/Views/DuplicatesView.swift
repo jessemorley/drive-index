@@ -7,38 +7,49 @@
 
 import SwiftUI
 
+enum DuplicateSortOption: String, CaseIterable {
+    case duplicates = "Most Duplicates"
+    case size = "Largest Files"
+    case name = "Name"
+}
+
 struct DuplicatesView: View {
     @State private var duplicateGroups: [DuplicateGroup] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var expandedGroups: Set<String> = []
+    @State private var sortOption: DuplicateSortOption = .duplicates
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            VStack(alignment: .leading, spacing: Spacing.small) {
-                Text("Duplicates")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-
-                Text("Files with the same name and size across multiple drives")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+        NavigationStack {
+            Group {
+                if isLoading {
+                    loadingView
+                } else if let error = errorMessage {
+                    errorView(error)
+                } else if duplicateGroups.isEmpty {
+                    emptyStateView
+                } else {
+                    duplicatesList
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.large)
-
-            Divider()
-
-            // Content
-            if isLoading {
-                loadingView
-            } else if let error = errorMessage {
-                errorView(error)
-            } else if duplicateGroups.isEmpty {
-                emptyStateView
-            } else {
-                duplicatesList
+            .navigationTitle("Duplicates")
+            .navigationSubtitle("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s")")
+            .toolbar(id: "duplicates-toolbar") {
+                ToolbarItem(id: "sort", placement: .automatic) {
+                    Menu {
+                        ForEach(DuplicateSortOption.allCases, id: \.self) { option in
+                            Button {
+                                sortOption = option
+                            } label: {
+                                Label(option.rawValue, systemImage: option == sortOption ? "checkmark" : "")
+                            }
+                        }
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                    .help("Sort duplicate groups")
+                }
             }
         }
         .task {
@@ -88,10 +99,23 @@ struct DuplicatesView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    private var sortedGroups: [DuplicateGroup] {
+        duplicateGroups.sorted { lhs, rhs in
+            switch sortOption {
+            case .duplicates:
+                return lhs.count > rhs.count
+            case .size:
+                return lhs.size > rhs.size
+            case .name:
+                return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+            }
+        }
+    }
+
     private var duplicatesList: some View {
         ScrollView {
             VStack(spacing: Spacing.medium) {
-                ForEach(duplicateGroups) { group in
+                ForEach(sortedGroups) { group in
                     DuplicateGroupRow(
                         group: group,
                         isExpanded: expandedGroups.contains(group.id)

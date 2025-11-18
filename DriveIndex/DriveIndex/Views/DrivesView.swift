@@ -78,10 +78,11 @@ struct DrivesView: View {
 
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Menu {
-                        Picker("Sort By", selection: $sortOption) {
-                            ForEach(DriveSortOption.allCases, id: \.self) { option in
-                                Text(option.rawValue)
-                                    .tag(option)
+                        ForEach(DriveSortOption.allCases, id: \.self) { option in
+                            Button {
+                                sortOption = option
+                            } label: {
+                                Label(option.rawValue, systemImage: option == sortOption ? "checkmark" : "")
                             }
                         }
                     } label: {
