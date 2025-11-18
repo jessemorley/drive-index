@@ -170,7 +170,7 @@ struct DriveCard: View {
                 Button(action: {
                     scanDrive(drive)
                 }) {
-                    Label("Scan", systemImage: "arrow.clockwise")
+                    Label(drive.lastScanDate == nil ? "Scan" : "Rescan", systemImage: "arrow.clockwise")
                         .font(DesignSystem.Typography.caption)
                         .frame(maxWidth: .infinity)
                 }
@@ -238,16 +238,20 @@ struct DriveDetailCard: View {
                         .lineLimit(1)
 
                     if drive.totalCapacity > 0 {
-                        Text(drive.formattedTotal)
-                            .font(AppTypography.capacityInfo)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
-                            )
-                            .fixedSize()
+                        HStack(spacing: 4) {
+                            Image(systemName: "externaldrive")
+                                .font(.caption2)
+                            Text(drive.formattedTotal)
+                                .font(AppTypography.capacityInfo)
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                        .fixedSize()
                     }
                 }
 
@@ -278,9 +282,13 @@ struct DriveDetailCard: View {
             // Info row: Capacity + file count + last scanned
             HStack(spacing: Spacing.medium) {
                 if drive.totalCapacity > 0 {
-                    Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
-                        .font(AppTypography.technicalData)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 3) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(.secondary)
                 }
 
                 if drive.fileCount > 0 {
@@ -306,7 +314,7 @@ struct DriveDetailCard: View {
                     Button(action: {
                         rescanDrive()
                     }) {
-                        Label("Rescan", systemImage: "arrow.clockwise")
+                        Label(drive.lastScanDate == nil ? "Scan" : "Rescan", systemImage: "arrow.clockwise")
                             .font(.caption)
                     }
                     .buttonStyle(.bordered)

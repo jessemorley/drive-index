@@ -202,7 +202,7 @@ struct DriveDetailView: View {
                 Button(action: {
                     rescanDrive()
                 }) {
-                    Label("Rescan Drive", systemImage: "arrow.clockwise")
+                    Label(drive.lastScanDate == nil ? "Scan Drive" : "Rescan Drive", systemImage: "arrow.clockwise")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
