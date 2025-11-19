@@ -25,6 +25,14 @@ actor HashWorker {
     private var isRunning = false
     private var shouldCancel = false
 
+    // Statistics
+    private var totalSuccesses = 0
+    private var totalFailures = 0
+    private var totalSkipped = 0
+
+    // Cache for drive paths to avoid repeated lookups
+    private var drivePathCache: [String: String] = [:]
+
     // Configuration
     static let CHUNK_SIZE = 32_768  // 32 KB chunks for partial hashing
     static let PARALLEL_TASKS = 8   // Process 8 files concurrently
@@ -42,6 +50,10 @@ actor HashWorker {
 
         isRunning = true
         shouldCancel = false
+        totalSuccesses = 0
+        totalFailures = 0
+        totalSkipped = 0
+        drivePathCache.removeAll()  // Clear cache for fresh session
         defer { isRunning = false }
 
         // Get total count for progress tracking
@@ -53,11 +65,16 @@ actor HashWorker {
         }
 
         print("🔨 Starting hash computation for \(totalFiles) files (min size: \(formatBytes(minSize)))")
+        let overallStartTime = Date()
 
         var filesHashed = 0
+        var batchNumber = 0
 
         // Process in batches until no more unhashed files
         while !shouldCancel {
+            batchNumber += 1
+            let batchStartTime = Date()
+
             // Get next batch of unhashed files (larger batch for parallel processing)
             let files = try await database.getUnhashedFiles(
                 minSize: minSize,
@@ -68,48 +85,74 @@ actor HashWorker {
                 break // No more files to hash
             }
 
-            // Process files in parallel groups
-            try await withThrowingTaskGroup(of: [(Int64, String)].self) { group in
-                var batchResults: [(Int64, String)] = []
+            print("📦 Batch \(batchNumber): Processing \(files.count) files...")
+
+            // Process files in parallel groups with error handling
+            var batchSuccesses = 0
+            var batchFailures = 0
+
+            let batchResults = await withTaskGroup(of: (Int64, String)?.self) { group in
+                var results: [(Int64, String)] = []
 
                 for file in files {
                     // Add task to group (will run up to PARALLEL_TASKS concurrently)
                     group.addTask {
-                        let hash = try await self.computePartialHash(
-                            driveUUID: file.driveUUID,
-                            relativePath: file.relativePath,
-                            fileSize: file.size
-                        )
-                        return [(file.id, hash)]
-                    }
-
-                    // Collect results in chunks to avoid memory buildup
-                    if group.isEmpty == false, batchResults.count >= Self.PARALLEL_TASKS {
-                        if let result = try await group.next() {
-                            batchResults.append(contentsOf: result)
+                        do {
+                            let hash = try await self.computePartialHash(
+                                driveUUID: file.driveUUID,
+                                relativePath: file.relativePath,
+                                fileSize: file.size
+                            )
+                            return (file.id, hash)
+                        } catch {
+                            // Log error but don't fail the whole batch
+                            await self.logHashError(error: error, relativePath: file.relativePath, driveUUID: file.driveUUID)
+                            return nil
                         }
                     }
                 }
 
-                // Collect remaining results
-                for try await result in group {
-                    batchResults.append(contentsOf: result)
+                // Collect all results
+                for await result in group {
+                    if let result = result {
+                        results.append(result)
+                    }
                 }
 
-                // Batch update database
-                if !batchResults.isEmpty {
-                    try await database.updateHashesBatch(batchResults)
-                    filesHashed += batchResults.count
+                return results
+            }
 
-                    // Report progress
-                    let lastFile = files.last?.relativePath ?? ""
-                    onProgress(HashProgress(
-                        filesHashed: filesHashed,
-                        totalFiles: totalFiles,
-                        isComplete: false,
-                        currentFile: lastFile
-                    ))
-                }
+            batchSuccesses = batchResults.count
+            batchFailures = files.count - batchSuccesses
+            totalSuccesses += batchSuccesses
+            totalFailures += batchFailures
+
+            // Batch update database
+            if !batchResults.isEmpty {
+                let dbStartTime = Date()
+                try await database.updateHashesBatch(batchResults)
+                let dbDuration = Date().timeIntervalSince(dbStartTime)
+
+                filesHashed += batchResults.count
+
+                // Report progress
+                let lastFile = files.last?.relativePath ?? ""
+                onProgress(HashProgress(
+                    filesHashed: filesHashed,
+                    totalFiles: totalFiles,
+                    isComplete: false,
+                    currentFile: lastFile
+                ))
+
+                let batchDuration = Date().timeIntervalSince(batchStartTime)
+                let hashDuration = batchDuration - dbDuration
+                let filesPerSec = batchDuration > 0 ? Double(batchSuccesses) / batchDuration : 0
+
+                print("   ✓ Batch \(batchNumber): \(batchSuccesses) hashed, \(batchFailures) failed")
+                print("   ⏱ Timing: Hash=\(String(format: "%.2f", hashDuration))s, DB=\(String(format: "%.2f", dbDuration * 1000))ms, Total=\(String(format: "%.2f", batchDuration))s (\(String(format: "%.1f", filesPerSec)) files/sec)")
+                print("   📊 Progress: \(filesHashed)/\(totalFiles) (\(String(format: "%.1f", Double(filesHashed) / Double(totalFiles) * 100))%)")
+            } else {
+                print("   ⚠️ Batch \(batchNumber): All \(files.count) files failed to hash")
             }
 
             // Check if we should continue
@@ -127,7 +170,34 @@ actor HashWorker {
             currentFile: nil
         ))
 
-        print("✅ Hash computation complete: \(filesHashed) files hashed")
+        let totalDuration = Date().timeIntervalSince(overallStartTime)
+        let avgFilesPerSec = totalDuration > 0 ? Double(totalSuccesses) / totalDuration : 0
+
+        print("✅ Hash computation complete!")
+        print("   📈 Total: \(totalSuccesses) hashed, \(totalFailures) failed")
+        print("   ⏱ Duration: \(String(format: "%.2f", totalDuration))s (\(String(format: "%.1f", avgFilesPerSec)) files/sec)")
+    }
+
+    private func logHashError(error: Error, relativePath: String, driveUUID: String) {
+        totalSkipped += 1
+
+        // Only log first 10 errors to avoid spam, then summarize
+        if totalSkipped <= 10 {
+            if let hashError = error as? HashError {
+                switch hashError {
+                case .driveNotFound:
+                    print("   ⚠️ Drive not found for: \(relativePath)")
+                case .fileNotFound:
+                    print("   ⚠️ File not found: \(relativePath)")
+                case .invalidFileHandle:
+                    print("   ⚠️ Invalid file handle: \(relativePath)")
+                }
+            } else {
+                print("   ⚠️ Hash error for \(relativePath): \(error.localizedDescription)")
+            }
+        } else if totalSkipped == 11 {
+            print("   ⚠️ Further errors will be summarized...")
+        }
     }
 
     /// Compute partial hash for a file (first 32KB + last 32KB + file size)
@@ -136,34 +206,53 @@ actor HashWorker {
         relativePath: String,
         fileSize: Int64
     ) async throws -> String {
-        // Construct full file path by finding the drive
-        let driveMetadata = try await database.getDriveMetadata(driveUUID)
-        guard let metadata = driveMetadata else {
-            throw HashError.driveNotFound
-        }
-
-        // Try to construct the file URL
-        // In macOS, external drives are typically mounted under /Volumes/
-        let driveName = metadata.name
-        let possiblePaths = [
-            "/Volumes/\(driveName)/\(relativePath)",
-            "\(driveName)/\(relativePath)"
-        ]
-
-        var fileURL: URL?
-        for path in possiblePaths {
-            let url = URL(fileURLWithPath: path)
-            if FileManager.default.fileExists(atPath: url.path) {
-                fileURL = url
-                break
+        // Get or cache drive base path
+        let basePath: String
+        if let cached = drivePathCache[driveUUID] {
+            basePath = cached
+        } else {
+            // Construct full file path by finding the drive
+            let driveMetadata = try await database.getDriveMetadata(driveUUID)
+            guard let metadata = driveMetadata else {
+                throw HashError.driveNotFound
             }
+
+            // Try to find the mounted drive
+            // In macOS, external drives are typically mounted under /Volumes/
+            let driveName = metadata.name
+            let possibleBasePaths = [
+                "/Volumes/\(driveName)",
+                driveName  // In case it's already an absolute path
+            ]
+
+            var foundPath: String?
+            for path in possibleBasePaths {
+                if FileManager.default.fileExists(atPath: path) {
+                    foundPath = path
+                    break
+                }
+            }
+
+            guard let path = foundPath else {
+                print("   ⚠️ Drive not mounted or path not found: \(driveName) (UUID: \(driveUUID))")
+                throw HashError.driveNotFound
+            }
+
+            // Cache the base path for future use
+            drivePathCache[driveUUID] = path
+            basePath = path
         }
 
-        guard let url = fileURL else {
+        // Construct full file path
+        let fullPath = (basePath as NSString).appendingPathComponent(relativePath)
+        let fileURL = URL(fileURLWithPath: fullPath)
+
+        // Verify file exists
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw HashError.fileNotFound
         }
 
-        return try await computeHash(for: url, fileSize: fileSize)
+        return try await computeHash(for: fileURL, fileSize: fileSize)
     }
 
     /// Compute hash for a file URL
