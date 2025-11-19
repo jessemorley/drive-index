@@ -166,56 +166,58 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Create the menubar icon with an optional status indicator dot
     private func createMenubarIcon(withStatusColor statusColor: NSColor?) -> NSImage? {
-        guard let baseImage = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex") else {
+        guard let baseSymbol = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex") else {
             return nil
         }
 
         // If no status color, return the base image as template
         guard let statusColor = statusColor else {
-            baseImage.isTemplate = true
-            return baseImage
+            baseSymbol.isTemplate = true
+            return baseSymbol
         }
 
-        // Create a new image with the status indicator dot
-        let iconSize = NSSize(width: 22, height: 22)
+        // Configuration for consistent sizing
+        let iconSize = NSSize(width: 18, height: 18)
         let dotRadius: CGFloat = 4.0
-        let dotInset: CGFloat = 1.5
 
-        let compositeImage = NSImage(size: iconSize)
-        compositeImage.lockFocus()
+        // Create composite image with icon and colored dot
+        let compositeImage = NSImage(size: iconSize, flipped: false) { rect in
+            // Draw the base SF Symbol as a filled shape
+            // This will render in the template color (adapts to menubar)
+            baseSymbol.draw(
+                in: rect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0
+            )
 
-        // Set up drawing context
-        guard let context = NSGraphicsContext.current?.cgContext else {
-            compositeImage.unlockFocus()
-            return baseImage
+            // Draw the status indicator dot (bottom-right corner, overlapping icon slightly)
+            let dotX = iconSize.width - dotRadius - 0.5
+            let dotY: CGFloat = 0.5
+            let dotRect = NSRect(
+                x: dotX,
+                y: dotY,
+                width: dotRadius,
+                height: dotRadius
+            )
+
+            // Draw a white outline for contrast against both light and dark menubars
+            let outlinePath = NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.75, dy: -0.75))
+            outlinePath.lineWidth = 1.5
+            NSColor.white.setStroke()
+            outlinePath.stroke()
+
+            // Draw the colored status dot
+            let dotPath = NSBezierPath(ovalIn: dotRect)
+            statusColor.setFill()
+            dotPath.fill()
+
+            return true
         }
 
-        // Draw the base icon in white (for menubar visibility)
-        context.saveGState()
-        NSColor.white.setFill()
-        let iconRect = NSRect(origin: .zero, size: iconSize)
-        baseImage.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-        context.restoreGState()
-
-        // Draw the status indicator dot (bottom-right corner)
-        let dotRect = NSRect(
-            x: iconSize.width - dotRadius * 2 - dotInset,
-            y: dotInset,
-            width: dotRadius * 2,
-            height: dotRadius * 2
-        )
-
-        // Draw a white border around the dot for contrast
-        let borderPath = NSBezierPath(ovalIn: dotRect.insetBy(dx: -1.0, dy: -1.0))
-        NSColor.white.setFill()
-        borderPath.fill()
-
-        // Draw the colored status dot
-        let dotPath = NSBezierPath(ovalIn: dotRect)
-        statusColor.setFill()
-        dotPath.fill()
-
-        compositeImage.unlockFocus()
+        // Use template mode so the base icon adapts to menubar theme
+        // The colored dot will still show through
+        compositeImage.isTemplate = false
 
         return compositeImage
     }
