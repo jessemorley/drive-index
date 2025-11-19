@@ -21,7 +21,6 @@
 - [x] MacOS-style storage visualisation
 - [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
 - [ ] Plan at 
-
   
 ### Low
 
