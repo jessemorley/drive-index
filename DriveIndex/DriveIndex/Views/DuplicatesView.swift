@@ -13,8 +13,19 @@ enum DuplicateSortOption: String, CaseIterable {
     case name = "Name"
 }
 
+struct DuplicateStats {
+    let totalDuplicates: Int
+    let wastedSpace: Int64
+    let groupCount: Int
+
+    var formattedWastedSpace: String {
+        ByteCountFormatter.string(fromByteCount: wastedSpace, countStyle: .file)
+    }
+}
+
 struct DuplicatesView: View {
     @State private var duplicateGroups: [DuplicateGroup] = []
+    @State private var stats: DuplicateStats?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var expandedGroups: Set<String> = []
@@ -22,20 +33,29 @@ struct DuplicatesView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    loadingView
-                } else if let error = errorMessage {
-                    errorView(error)
-                } else if duplicateGroups.isEmpty {
-                    emptyStateView
-                } else {
-                    duplicatesList
+            VStack(spacing: 0) {
+                if let stats = stats {
+                    summarySection(stats: stats)
+                }
+
+                Divider()
+
+                Group {
+                    if isLoading {
+                        loadingView
+                    } else if let error = errorMessage {
+                        errorView(error)
+                    } else if duplicateGroups.isEmpty {
+                        emptyStateView
+                    } else {
+                        duplicatesList
+                    }
                 }
             }
             .navigationTitle("Duplicates")
             .navigationSubtitle("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s")")
             .toolbarTitleDisplayMode(.inline)
+            .toolbarBackground(.visible, for: .windowToolbar)
             .toolbar(id: "duplicates-toolbar") {
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Menu {
@@ -62,18 +82,62 @@ struct DuplicatesView: View {
         }
     }
 
+    // MARK: - Summary Section
+
+    private func summarySection(stats: DuplicateStats) -> some View {
+        HStack(spacing: DesignSystem.Spacing.xxxLarge) {
+            summaryItem(
+                label: "Total Duplicates",
+                value: "\(stats.totalDuplicates)"
+            )
+
+            summaryItem(
+                label: "Wasted Space",
+                value: stats.formattedWastedSpace,
+                valueColor: .red
+            )
+
+            summaryItem(
+                label: "Duplicate Groups",
+                value: "\(stats.groupCount)"
+            )
+
+            Spacer()
+        }
+        .padding(DesignSystem.Spacing.cardPadding)
+        .background(DesignSystem.Colors.cardBackgroundDefault)
+        .cornerRadius(DesignSystem.CornerRadius.card)
+        .padding(DesignSystem.Spacing.sectionPadding)
+    }
+
+    private func summaryItem(label: String, value: String, valueColor: Color? = nil) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+            Text(label)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+
+            Text(value)
+                .font(DesignSystem.Typography.title2)
+                .foregroundColor(valueColor ?? DesignSystem.Colors.primaryText)
+        }
+    }
+
+    // MARK: - Content Views
+
     private var loadingView: some View {
-        VStack(spacing: Spacing.medium) {
+        VStack(spacing: DesignSystem.Spacing.large) {
             ProgressView()
-            Text("Loading duplicates...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .controlSize(.large)
+
+            Text("Analyzing files for duplicates...")
+                .font(DesignSystem.Typography.subheadline)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorView(_ message: String) -> some View {
-        VStack(spacing: Spacing.small) {
+        VStack(spacing: DesignSystem.Spacing.small) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 32))
                 .foregroundStyle(.orange)
@@ -86,22 +150,34 @@ struct DuplicatesView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(Spacing.large)
+        .padding(DesignSystem.Spacing.large)
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: Spacing.small) {
-            Image(systemName: "checkmark.circle")
-                .font(.system(size: 32))
-                .foregroundStyle(.green)
-            Text("No duplicates found")
-                .font(.callout)
-                .fontWeight(.medium)
-            Text("All your files are unique")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        VStack(spacing: DesignSystem.Spacing.large) {
+            VStack(spacing: DesignSystem.Spacing.medium) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 56))
+                    .foregroundColor(.green)
+                    .opacity(0.7)
+
+                VStack(spacing: DesignSystem.Spacing.small) {
+                    Text("No Duplicates Found")
+                        .font(DesignSystem.Typography.headline)
+
+                    Text("Your indexed drives have no duplicate files")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(DesignSystem.Spacing.xxxLarge)
+            .background(Color.green.opacity(0.05))
+            .cornerRadius(DesignSystem.CornerRadius.card)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(DesignSystem.Spacing.sectionPadding)
     }
 
     private var sortedGroups: [DuplicateGroup] {
@@ -119,7 +195,7 @@ struct DuplicatesView: View {
 
     private var duplicatesList: some View {
         ScrollView {
-            VStack(spacing: Spacing.medium) {
+            LazyVStack(spacing: DesignSystem.Spacing.large) {
                 ForEach(sortedGroups) { group in
                     DuplicateGroupRow(
                         group: group,
@@ -129,9 +205,11 @@ struct DuplicatesView: View {
                     }
                 }
             }
-            .padding(Spacing.large)
+            .padding(DesignSystem.Spacing.sectionPadding)
         }
     }
+
+    // MARK: - Actions
 
     private func toggleGroup(_ group: DuplicateGroup) {
         if expandedGroups.contains(group.id) {
@@ -148,6 +226,15 @@ struct DuplicatesView: View {
         do {
             let groups = try await DatabaseManager.shared.getDuplicateGroups()
             duplicateGroups = groups
+
+            // Calculate stats
+            let totalDuplicates = groups.reduce(0) { $0 + $1.count }
+            let wastedSpace = groups.reduce(0) { $0 + ($1.size * Int64($1.count - 1)) }
+            stats = DuplicateStats(
+                totalDuplicates: totalDuplicates,
+                wastedSpace: wastedSpace,
+                groupCount: groups.count
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -155,6 +242,8 @@ struct DuplicatesView: View {
         isLoading = false
     }
 }
+
+// MARK: - Duplicate Group Row
 
 struct DuplicateGroupRow: View {
     let group: DuplicateGroup
@@ -165,120 +254,125 @@ struct DuplicateGroupRow: View {
         VStack(alignment: .leading, spacing: 0) {
             // Group header (clickable)
             Button(action: onToggle) {
-                HStack(spacing: Spacing.medium) {
+                HStack(spacing: DesignSystem.Spacing.medium) {
                     // Expand/collapse icon
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
                         .frame(width: 12)
 
-                    // File icon
+                    // File icon (KEEP ORANGE)
                     Image(systemName: "doc.on.doc.fill")
                         .font(.title3)
                         .foregroundStyle(.orange)
                         .frame(width: 24)
 
                     // File info
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxSmall) {
                         Text(group.name)
-                            .font(.body)
-                            .fontWeight(.medium)
+                            .font(DesignSystem.Typography.headline)
                             .lineLimit(1)
 
-                        HStack(spacing: Spacing.small) {
+                        HStack(spacing: DesignSystem.Spacing.small) {
                             Text("\(group.count) copies")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
 
                             Text("•")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.tertiaryText)
 
                             Text(ByteCountFormatter.string(fromByteCount: group.size, countStyle: .file))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
 
                             Text("•")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.tertiaryText)
 
                             Text("Total: \(ByteCountFormatter.string(fromByteCount: group.size * Int64(group.count), countStyle: .file))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
                         }
                     }
 
                     Spacer()
 
-                    // Duplicate count badge
-                    HStack(spacing: Spacing.xSmall) {
+                    // Duplicate count badge (KEEP ORANGE)
+                    HStack(spacing: DesignSystem.Spacing.xSmall) {
                         Text("\(group.count)×")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(.orange)
                     }
-                    .padding(.horizontal, Spacing.small)
-                    .padding(.vertical, Spacing.xSmall)
+                    .padding(.horizontal, DesignSystem.Spacing.small)
+                    .padding(.vertical, DesignSystem.Spacing.xSmall)
                     .background(Color.orange.opacity(0.1))
                     .cornerRadius(4)
                 }
-                .padding(Spacing.medium)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(8)
+                .padding(DesignSystem.Spacing.cardPadding)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             // Expanded file list
             if isExpanded {
+                Divider()
+
                 VStack(spacing: 0) {
                     ForEach(group.files, id: \.id) { file in
                         DuplicateFileRow(file: file)
 
                         if file.id != group.files.last?.id {
                             Divider()
-                                .padding(.leading, 52)
+                                .padding(.leading, DesignSystem.Spacing.cardPadding)
                         }
                     }
                 }
-                .padding(.top, Spacing.small)
-                .padding(.leading, 40)
             }
         }
+        .background(DesignSystem.Colors.cardBackground)
+        .cornerRadius(DesignSystem.CornerRadius.card)
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
+                .stroke(DesignSystem.Colors.border, lineWidth: 1)
+        )
     }
 }
+
+// MARK: - Duplicate File Row
 
 struct DuplicateFileRow: View {
     let file: DuplicateFile
 
     var body: some View {
-        HStack(alignment: .top, spacing: Spacing.medium) {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
             // File location icon
             Image(systemName: "location")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundColor(DesignSystem.Colors.tertiaryText)
                 .frame(width: 12)
 
             // File info
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.relativePath)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
+                    .font(DesignSystem.Typography.technicalData)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
                     .lineLimit(1)
 
-                HStack(spacing: Spacing.small) {
+                HStack(spacing: DesignSystem.Spacing.small) {
                     Text(file.driveName)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
 
                     if let modifiedAt = file.modifiedAt {
                         Text("•")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundColor(DesignSystem.Colors.tertiaryText)
 
                         Text(formatDate(modifiedAt))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
                     }
                 }
             }
@@ -289,13 +383,13 @@ struct DuplicateFileRow: View {
             Button(action: { revealInFinder(file) }) {
                 Image(systemName: "arrow.right.circle")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.plain)
+            .help("Reveal in Finder")
         }
-        .padding(.vertical, Spacing.small)
-        .padding(.horizontal, Spacing.medium)
+        .padding(DesignSystem.Spacing.medium)
+        .background(Color.secondary.opacity(0.03))
     }
 
     private func formatDate(_ date: Date) -> String {
