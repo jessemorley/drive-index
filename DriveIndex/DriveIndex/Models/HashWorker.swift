@@ -85,25 +85,34 @@ actor HashWorker {
                 break // No more files to hash
             }
 
-            print("📦 Batch \(batchNumber): Processing \(files.count) files...")
+            // Calculate batch file size statistics
+            let fileSizes = files.map { $0.size }
+            let minSize = fileSizes.min() ?? 0
+            let maxSize = fileSizes.max() ?? 0
+            let avgSize = fileSizes.isEmpty ? 0 : fileSizes.reduce(0, +) / Int64(fileSizes.count)
+
+            print("📦 Batch \(batchNumber): Processing \(files.count) files (sizes: \(formatBytes(minSize)) - \(formatBytes(maxSize)), avg: \(formatBytes(avgSize)))...")
 
             // Process files in parallel groups with error handling
             var batchSuccesses = 0
             var batchFailures = 0
 
-            let batchResults = await withTaskGroup(of: (Int64, String)?.self) { group in
+            let batchResults = await withTaskGroup(of: (Int64, String, TimeInterval, Int64)?.self) { group in
                 var results: [(Int64, String)] = []
+                var slowFiles: [(String, TimeInterval, Int64)] = []
 
                 for file in files {
                     // Add task to group (will run up to PARALLEL_TASKS concurrently)
                     group.addTask {
+                        let fileStartTime = Date()
                         do {
                             let hash = try await self.computePartialHash(
                                 driveUUID: file.driveUUID,
                                 relativePath: file.relativePath,
                                 fileSize: file.size
                             )
-                            return (file.id, hash)
+                            let duration = Date().timeIntervalSince(fileStartTime)
+                            return (file.id, hash, duration, file.size)
                         } catch {
                             // Log error but don't fail the whole batch
                             await self.logHashError(error: error, relativePath: file.relativePath, driveUUID: file.driveUUID)
@@ -115,7 +124,23 @@ actor HashWorker {
                 // Collect all results
                 for await result in group {
                     if let result = result {
-                        results.append(result)
+                        results.append((result.0, result.1))
+
+                        // Track slow files (>1 second per file)
+                        if result.2 > 1.0 {
+                            slowFiles.append((formatBytes(result.3), result.2, result.3))
+                        }
+                    }
+                }
+
+                // Log slow files if any
+                if !slowFiles.isEmpty {
+                    print("   ⚠️ \(slowFiles.count) slow files detected (>1s each):")
+                    for (sizeStr, duration, size) in slowFiles.prefix(5) {
+                        print("      • \(sizeStr): \(String(format: "%.2f", duration))s")
+                    }
+                    if slowFiles.count > 5 {
+                        print("      ... and \(slowFiles.count - 5) more")
                     }
                 }
 
@@ -258,11 +283,12 @@ actor HashWorker {
     /// Compute hash for a file URL
     private func computeHash(for fileURL: URL, fileSize: Int64) async throws -> String {
         // Use different strategies based on file size
-        if fileSize <= 10_000_000 {
-            // Small files (<10MB): Use memory-mapped I/O
+        // Memory-mapped I/O is fast up to ~50MB on modern systems
+        if fileSize <= 50_000_000 {
+            // Small-medium files (<50MB): Use memory-mapped I/O (fastest)
             return try computeHashMemoryMapped(fileURL: fileURL)
         } else {
-            // Large files: Use positioned reads
+            // Large files (>50MB): Use positioned reads
             return try computeHashPositioned(fileURL: fileURL, fileSize: fileSize)
         }
     }
@@ -290,10 +316,18 @@ actor HashWorker {
         // Read first chunk
         let firstChunk = try handle.read(upToCount: Self.CHUNK_SIZE) ?? Data()
 
-        // Seek to last chunk
+        // For files where chunks would overlap, just use first chunk twice
         let lastChunkOffset = max(0, fileSize - Int64(Self.CHUNK_SIZE))
-        try handle.seek(toOffset: UInt64(lastChunkOffset))
-        let lastChunk = try handle.read(upToCount: Self.CHUNK_SIZE) ?? Data()
+        let lastChunk: Data
+
+        if lastChunkOffset <= Int64(firstChunk.count) {
+            // Chunks overlap - reuse first chunk data
+            lastChunk = firstChunk.suffix(Self.CHUNK_SIZE)
+        } else {
+            // Seek to last chunk position
+            try handle.seek(toOffset: UInt64(lastChunkOffset))
+            lastChunk = try handle.read(upToCount: Self.CHUNK_SIZE) ?? Data()
+        }
 
         // Compute hash: SHA256(first_chunk + file_size + last_chunk)
         var hasher = SHA256()
