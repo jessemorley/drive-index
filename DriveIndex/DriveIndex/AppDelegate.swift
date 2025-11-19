@@ -170,41 +170,52 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return nil
         }
 
-        // If no status color, return the base image
+        // If no status color, return the base image as template
         guard let statusColor = statusColor else {
+            baseImage.isTemplate = true
             return baseImage
         }
 
         // Create a new image with the status indicator dot
         let iconSize = NSSize(width: 22, height: 22)
-        let dotRadius: CGFloat = 4.5
-        let dotOffset: CGFloat = 2.0
+        let dotRadius: CGFloat = 4.0
+        let dotInset: CGFloat = 1.5
 
         let compositeImage = NSImage(size: iconSize)
         compositeImage.lockFocus()
 
-        // Draw the base icon
-        baseImage.draw(
-            in: NSRect(origin: .zero, size: iconSize),
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1.0
-        )
+        // Set up drawing context
+        guard let context = NSGraphicsContext.current?.cgContext else {
+            compositeImage.unlockFocus()
+            return baseImage
+        }
+
+        // Draw the base icon in white (for menubar visibility)
+        context.saveGState()
+        NSColor.white.setFill()
+        let iconRect = NSRect(origin: .zero, size: iconSize)
+        baseImage.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        context.restoreGState()
 
         // Draw the status indicator dot (bottom-right corner)
         let dotRect = NSRect(
-            x: iconSize.width - dotRadius * 2 - dotOffset,
-            y: dotOffset,
+            x: iconSize.width - dotRadius * 2 - dotInset,
+            y: dotInset,
             width: dotRadius * 2,
             height: dotRadius * 2
         )
 
+        // Draw a white border around the dot for contrast
+        let borderPath = NSBezierPath(ovalIn: dotRect.insetBy(dx: -1.0, dy: -1.0))
+        NSColor.white.setFill()
+        borderPath.fill()
+
+        // Draw the colored status dot
         let dotPath = NSBezierPath(ovalIn: dotRect)
         statusColor.setFill()
         dotPath.fill()
 
         compositeImage.unlockFocus()
-        compositeImage.isTemplate = true
 
         return compositeImage
     }
