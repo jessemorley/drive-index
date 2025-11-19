@@ -170,53 +170,79 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return nil
         }
 
+        baseSymbol.isTemplate = true
+
         // If no status color, return the base image as template
         guard let statusColor = statusColor else {
-            baseSymbol.isTemplate = true
             return baseSymbol
         }
 
-        // Configuration for consistent sizing
-        let iconSize = NSSize(width: 18, height: 18)
-        let dotRadius: CGFloat = 4.0
+        // Match the system status item size
+        let iconSize = NSSize(width: 22, height: 22)
+        let symbolSize = NSSize(width: 18, height: 18)
+        let dotRadius: CGFloat = 3.5
 
-        // Create composite image with icon and colored dot
-        let compositeImage = NSImage(size: iconSize, flipped: false) { rect in
-            // Draw the base SF Symbol as a filled shape
-            // This will render in the template color (adapts to menubar)
-            baseSymbol.draw(
-                in: rect,
-                from: .zero,
-                operation: .sourceOver,
-                fraction: 1.0
-            )
+        // Create composite image with explicit colors (not template mode)
+        let compositeImage = NSImage(size: iconSize)
+        compositeImage.lockFocus()
 
-            // Draw the status indicator dot (bottom-right corner, overlapping icon slightly)
-            let dotX = iconSize.width - dotRadius - 0.5
-            let dotY: CGFloat = 0.5
-            let dotRect = NSRect(
-                x: dotX,
-                y: dotY,
-                width: dotRadius,
-                height: dotRadius
-            )
+        // Determine icon color based on current appearance
+        // Menubar icons are typically white, but adapt based on system theme
+        let iconColor = NSColor.white
 
-            // Draw a white outline for contrast against both light and dark menubars
-            let outlinePath = NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.75, dy: -0.75))
-            outlinePath.lineWidth = 1.5
-            NSColor.white.setStroke()
-            outlinePath.stroke()
+        // Draw the base symbol in white (for dark menubar)
+        let symbolOrigin = NSPoint(
+            x: (iconSize.width - symbolSize.width) / 2,
+            y: (iconSize.height - symbolSize.height) / 2
+        )
+        let symbolRect = NSRect(origin: symbolOrigin, size: symbolSize)
 
-            // Draw the colored status dot
-            let dotPath = NSBezierPath(ovalIn: dotRect)
-            statusColor.setFill()
-            dotPath.fill()
+        // Use a mask to draw the symbol in the desired color
+        if let cgImage = baseSymbol.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let context = NSGraphicsContext.current?.cgContext
+            context?.saveGState()
 
-            return true
+            // Clip to the symbol shape
+            context?.translateBy(x: 0, y: iconSize.height)
+            context?.scaleBy(x: 1.0, y: -1.0)
+
+            let rect = CGRect(origin: CGPoint(x: symbolOrigin.x, y: iconSize.height - symbolOrigin.y - symbolSize.height), size: symbolSize)
+            context?.clip(to: rect, mask: cgImage)
+
+            // Fill with white color
+            iconColor.setFill()
+            NSBezierPath(rect: NSRect(origin: .zero, size: iconSize)).fill()
+
+            context?.restoreGState()
+        } else {
+            // Fallback: just draw the symbol normally
+            baseSymbol.draw(in: symbolRect)
         }
 
-        // Use template mode so the base icon adapts to menubar theme
-        // The colored dot will still show through
+        // Draw the status indicator dot (bottom-right corner)
+        let dotX = iconSize.width - dotRadius * 2 - 1.0
+        let dotY: CGFloat = 1.0
+        let dotRect = NSRect(
+            x: dotX,
+            y: dotY,
+            width: dotRadius * 2,
+            height: dotRadius * 2
+        )
+
+        // Draw a dark border around the dot for contrast on menubar
+        let borderPath = NSBezierPath(ovalIn: dotRect.insetBy(dx: -0.5, dy: -0.5))
+        borderPath.lineWidth = 1.0
+        NSColor.black.withAlphaComponent(0.3).setStroke()
+        borderPath.stroke()
+
+        // Draw the colored status dot
+        let dotPath = NSBezierPath(ovalIn: dotRect)
+        statusColor.setFill()
+        dotPath.fill()
+
+        compositeImage.unlockFocus()
+
+        // Do NOT use template mode - we want to preserve the colored dot
         compositeImage.isTemplate = false
 
         return compositeImage
