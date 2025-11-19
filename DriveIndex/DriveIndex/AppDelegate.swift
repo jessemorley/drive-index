@@ -177,45 +177,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return baseSymbol
         }
 
-        // Match the system status item size
+        // Use standard menubar icon size
         let iconSize = NSSize(width: 22, height: 22)
-        let symbolSize = NSSize(width: 18, height: 18)
         let dotRadius: CGFloat = 3.5
 
         // Create composite image with explicit colors (not template mode)
         let compositeImage = NSImage(size: iconSize)
         compositeImage.lockFocus()
 
-        // Determine icon color based on current appearance
-        // Menubar icons are typically white, but adapt based on system theme
-        let iconColor = NSColor.white
+        // Draw the base symbol in white for menubar visibility
+        let symbolRect = NSRect(origin: .zero, size: iconSize)
 
-        // Draw the base symbol in white (for dark menubar)
-        let symbolOrigin = NSPoint(
-            x: (iconSize.width - symbolSize.width) / 2,
-            y: (iconSize.height - symbolSize.height) / 2
-        )
-        let symbolRect = NSRect(origin: symbolOrigin, size: symbolSize)
-
-        // Use a mask to draw the symbol in the desired color
         if let cgImage = baseSymbol.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             let context = NSGraphicsContext.current?.cgContext
             context?.saveGState()
 
-            // Clip to the symbol shape
-            context?.translateBy(x: 0, y: iconSize.height)
-            context?.scaleBy(x: 1.0, y: -1.0)
-
-            let rect = CGRect(origin: CGPoint(x: symbolOrigin.x, y: iconSize.height - symbolOrigin.y - symbolSize.height), size: symbolSize)
-            context?.clip(to: rect, mask: cgImage)
-
-            // Fill with white color
-            iconColor.setFill()
-            NSBezierPath(rect: NSRect(origin: .zero, size: iconSize)).fill()
+            // Use the symbol as a mask to fill with white
+            context?.clip(to: symbolRect, mask: cgImage)
+            NSColor.white.setFill()
+            NSBezierPath(rect: symbolRect).fill()
 
             context?.restoreGState()
         } else {
-            // Fallback: just draw the symbol normally
+            // Fallback: draw the symbol normally
             baseSymbol.draw(in: symbolRect)
         }
 
