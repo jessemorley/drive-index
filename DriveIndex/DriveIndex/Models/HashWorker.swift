@@ -282,15 +282,9 @@ actor HashWorker {
 
     /// Compute hash for a file URL
     private func computeHash(for fileURL: URL, fileSize: Int64) async throws -> String {
-        // Use different strategies based on file size
-        // Memory-mapped I/O is fast up to ~50MB on modern systems
-        if fileSize <= 50_000_000 {
-            // Small-medium files (<50MB): Use memory-mapped I/O (fastest)
-            return try computeHashMemoryMapped(fileURL: fileURL)
-        } else {
-            // Large files (>50MB): Use positioned reads
-            return try computeHashPositioned(fileURL: fileURL, fileSize: fileSize)
-        }
+        // Always use positioned reads since we're only reading 64KB total (32KB × 2)
+        // Memory-mapped I/O is slower on external drives even for medium files
+        return try computeHashPositioned(fileURL: fileURL, fileSize: fileSize)
     }
 
     /// Compute hash using memory-mapped I/O (fast for small files)

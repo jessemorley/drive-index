@@ -303,6 +303,17 @@ struct ActiveHashingOverlay: View {
             }
 
             Spacer()
+
+            // Cancel button
+            Button(action: {
+                indexManager.cancelHashing()
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .imageScale(.medium)
+            }
+            .buttonStyle(.plain)
+            .help("Cancel hash computation")
         }
         .padding(Spacing.medium)
         .background(Color.purple.opacity(0.05))
