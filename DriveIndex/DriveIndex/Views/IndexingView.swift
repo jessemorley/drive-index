@@ -16,6 +16,7 @@ struct IndexingView: View {
     @State private var excludedDrives: [DriveMetadata] = []
     @State private var fsEventsEnabled: Bool = true
     @State private var fsEventsBufferDelay: Double = 10.0
+    @State private var minDuplicateFileSize: Double = 5.0  // Default 5 MB
     @State private var isLoading: Bool = true
     @State private var hasUnsavedChanges: Bool = false
 
@@ -88,6 +89,40 @@ struct IndexingView: View {
                                     .foregroundStyle(DesignSystem.Colors.secondaryText)
                             }
                             .padding(.top, DesignSystem.Spacing.small)
+                        }
+                    }
+                }
+
+                // Duplicate Detection
+                SettingsSection(
+                    title: "Duplicate Detection",
+                    description: "Configure how duplicate files are detected and analyzed",
+                    symbol: "doc.on.doc"
+                ) {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                            HStack {
+                                Text("Minimum file size:")
+                                    .font(DesignSystem.Typography.callout)
+                                    .foregroundStyle(DesignSystem.Colors.secondaryText)
+
+                                Spacer()
+
+                                Text("\(Int(minDuplicateFileSize)) MB")
+                                    .font(.system(.callout, design: .monospaced))
+                                    .foregroundStyle(DesignSystem.Colors.primaryText)
+                                    .frame(width: 60, alignment: .trailing)
+                            }
+
+                            Slider(value: $minDuplicateFileSize, in: 1...50, step: 1)
+                                .onChange(of: minDuplicateFileSize) { _, _ in
+                                    markAsChanged()
+                                }
+
+                            Text("Only detect duplicates for files larger than this size. Smaller threshold = more thorough but slower. Larger = faster but may miss small duplicates.")
+                                .font(DesignSystem.Typography.caption2)
+                                .foregroundStyle(DesignSystem.Colors.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -234,6 +269,16 @@ struct IndexingView: View {
         let fsEnabled = await FSEventsMonitor.shared.isEnabled()
         let fsDelay = await FSEventsMonitor.shared.getBufferDelay()
 
+        // Load minimum duplicate file size (default 5MB = 5242880 bytes)
+        let minSizeBytes: Int64
+        do {
+            let minSizeStr = try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "5242880"
+            minSizeBytes = Int64(minSizeStr) ?? 5_242_880
+        } catch {
+            print("Error loading min duplicate file size: \(error)")
+            minSizeBytes = 5_242_880
+        }
+
         await loadExcludedDrives()
 
         await MainActor.run {
@@ -241,6 +286,7 @@ struct IndexingView: View {
             excludedExtensions = exts
             fsEventsEnabled = fsEnabled
             fsEventsBufferDelay = fsDelay
+            minDuplicateFileSize = Double(minSizeBytes) / 1_048_576.0  // Convert bytes to MB
             isLoading = false
             hasUnsavedChanges = false
         }
@@ -270,6 +316,10 @@ struct IndexingView: View {
                 // Update FSEvents settings
                 await FSEventsMonitor.shared.setEnabled(fsEventsEnabled)
                 await FSEventsMonitor.shared.setBufferDelay(fsEventsBufferDelay)
+
+                // Save minimum duplicate file size (convert MB to bytes)
+                let minSizeBytes = Int64(minDuplicateFileSize * 1_048_576.0)
+                try await DatabaseManager.shared.setSetting("min_duplicate_file_size", value: String(minSizeBytes))
 
                 await MainActor.run {
                     hasUnsavedChanges = false

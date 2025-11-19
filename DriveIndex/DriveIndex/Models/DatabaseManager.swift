@@ -182,6 +182,53 @@ actor DatabaseManager {
         }
     }
 
+    /// Migrate existing files table to add hash columns
+    private func migrateAddHashColumns() throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(files)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasHash = false
+        var hasHashComputedAt = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let columnName = String(cString: sqlite3_column_text(stmt, 1))
+            if columnName == "hash" {
+                hasHash = true
+            } else if columnName == "hash_computed_at" {
+                hasHashComputedAt = true
+            }
+        }
+
+        // Add columns if they don't exist
+        if !hasHash {
+            print("📊 Migrating files table to add hash column")
+            try execute("ALTER TABLE files ADD COLUMN hash TEXT")
+            print("✅ Hash column added")
+        }
+
+        if !hasHashComputedAt {
+            print("📊 Migrating files table to add hash_computed_at column")
+            try execute("ALTER TABLE files ADD COLUMN hash_computed_at INTEGER")
+            print("✅ Hash computed_at column added")
+        }
+
+        // Add indexes if columns were just added or don't exist
+        if !hasHash {
+            print("📊 Creating hash indexes")
+            try execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash) WHERE hash IS NOT NULL")
+            try execute("CREATE INDEX IF NOT EXISTS idx_files_unhashed ON files(size, is_directory) WHERE hash IS NULL AND is_directory = 0")
+            print("✅ Hash indexes created")
+        }
+    }
+
     private func createSchema() throws {
         // Main files table
         try execute("""
@@ -254,6 +301,9 @@ actor DatabaseManager {
 
         // Migrate existing drives table to add is_excluded column if it doesn't exist
         try migrateAddIsExcludedColumn()
+
+        // Migrate files table to add hash columns if they don't exist
+        try migrateAddHashColumns()
 
         // Settings table
         try execute("""
@@ -1038,6 +1088,115 @@ actor DatabaseManager {
 
     // MARK: - Duplicate Detection
 
+    /// Get unhashed files for background processing
+    func getUnhashedFiles(minSize: Int64, limit: Int) throws -> [(id: Int64, driveUUID: String, relativePath: String, size: Int64)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT id, drive_uuid, relative_path, size
+            FROM files
+            WHERE hash IS NULL AND is_directory = 0 AND size >= ?
+            ORDER BY size DESC
+            LIMIT ?
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, minSize)
+        sqlite3_bind_int(stmt, 2, Int32(limit))
+
+        var results: [(Int64, String, String, Int64)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 1))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 2))
+            let size = sqlite3_column_int64(stmt, 3)
+            results.append((id, driveUUID, relativePath, size))
+        }
+
+        return results
+    }
+
+    /// Get count of unhashed files
+    func getUnhashedCount(minSize: Int64) throws -> Int {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let countSQL = """
+            SELECT COUNT(*)
+            FROM files
+            WHERE hash IS NULL AND is_directory = 0 AND size >= ?
+        """
+
+        guard sqlite3_prepare_v2(db, countSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, minSize)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return 0
+        }
+
+        return Int(sqlite3_column_int(stmt, 0))
+    }
+
+    /// Batch update file hashes
+    func updateHashesBatch(_ updates: [(fileID: Int64, hash: String)]) throws {
+        guard !updates.isEmpty else { return }
+
+        try execute("BEGIN TRANSACTION")
+
+        do {
+            let updateSQL = "UPDATE files SET hash = ?, hash_computed_at = ? WHERE id = ?"
+
+            var stmt: OpaquePointer?
+            defer {
+                if stmt != nil {
+                    sqlite3_finalize(stmt)
+                }
+            }
+
+            guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+                try? execute("ROLLBACK")
+                throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+            }
+
+            let timestamp = Int64(Date().timeIntervalSince1970)
+
+            for update in updates {
+                sqlite3_bind_text(stmt, 1, (update.hash as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int64(stmt, 2, timestamp)
+                sqlite3_bind_int64(stmt, 3, update.fileID)
+
+                guard sqlite3_step(stmt) == SQLITE_DONE else {
+                    let errorMsg = String(cString: sqlite3_errmsg(db))
+                    try? execute("ROLLBACK")
+                    throw DatabaseError.executeFailed(errorMsg)
+                }
+
+                sqlite3_reset(stmt)
+            }
+
+            try execute("COMMIT")
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
     /// Get the count of duplicates for a specific file (by name and size)
     func getDuplicateCount(name: String, size: Int64) throws -> Int {
         var stmt: OpaquePointer?
@@ -1066,8 +1225,12 @@ actor DatabaseManager {
         return Int(sqlite3_column_int(stmt, 0))
     }
 
-    /// Get all duplicate file groups (files with same name and size appearing multiple times)
+    /// Get all duplicate file groups (files with same hash appearing multiple times)
     func getDuplicateGroups() throws -> [DuplicateGroup] {
+        // Get minimum file size from settings (default 5MB)
+        let minSizeStr = try getSetting("min_duplicate_file_size") ?? "5242880"
+        let minSize = Int64(minSizeStr) ?? 5_242_880  // 5MB default
+
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -1075,13 +1238,13 @@ actor DatabaseManager {
             }
         }
 
-        // First, get all duplicate groups (name, size combinations that appear more than once)
-        // Only include files >= 1 MB to filter out tiny config files
+        // Get all duplicate groups (hash values that appear more than once)
+        // Only include files with computed hashes
         let groupSQL = """
-            SELECT name, size, COUNT(*) as count
+            SELECT hash, name, size, COUNT(*) as count
             FROM files
-            WHERE is_directory = 0 AND size >= 1048576
-            GROUP BY name, size
+            WHERE is_directory = 0 AND size >= ? AND hash IS NOT NULL
+            GROUP BY hash
             HAVING COUNT(*) > 1
             ORDER BY count DESC, size DESC
         """
@@ -1090,15 +1253,18 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
+        sqlite3_bind_int64(stmt, 1, minSize)
+
         var groups: [DuplicateGroup] = []
 
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let name = String(cString: sqlite3_column_text(stmt, 0))
-            let size = sqlite3_column_int64(stmt, 1)
-            let count = Int(sqlite3_column_int(stmt, 2))
+            let hash = String(cString: sqlite3_column_text(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            let size = sqlite3_column_int64(stmt, 2)
+            let count = Int(sqlite3_column_int(stmt, 3))
 
             // Get all files for this duplicate group
-            let files = try getDuplicateFiles(name: name, size: size)
+            let files = try getDuplicateFilesByHash(hash: hash)
 
             groups.append(DuplicateGroup(
                 name: name,
@@ -1111,8 +1277,8 @@ actor DatabaseManager {
         return groups
     }
 
-    /// Get all files matching a specific name and size
-    private func getDuplicateFiles(name: String, size: Int64) throws -> [DuplicateFile] {
+    /// Get all files matching a specific hash
+    private func getDuplicateFilesByHash(hash: String) throws -> [DuplicateFile] {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -1124,7 +1290,7 @@ actor DatabaseManager {
             SELECT f.id, f.drive_uuid, d.name as drive_name, f.relative_path, f.modified_at
             FROM files f
             JOIN drives d ON d.uuid = f.drive_uuid
-            WHERE f.name = ? AND f.size = ? AND f.is_directory = 0
+            WHERE f.hash = ? AND f.is_directory = 0
             ORDER BY d.name, f.relative_path
         """
 
@@ -1132,8 +1298,7 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_int64(stmt, 2, size)
+        sqlite3_bind_text(stmt, 1, (hash as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         var files: [DuplicateFile] = []
 

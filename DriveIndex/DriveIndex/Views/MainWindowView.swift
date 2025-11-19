@@ -37,7 +37,7 @@ struct MainWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Indexing progress overlay at bottom of detail area (shows pending changes, active indexing, or completion)
-                if indexManager.pendingChanges != nil || indexManager.isIndexing {
+                if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
                     Group {
                         if let pending = indexManager.pendingChanges {
                             PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount)
@@ -46,6 +46,9 @@ struct MainWindowView: View {
                         } else if indexManager.isIndexing {
                             ActiveIndexingOverlay()
                                 .environmentObject(indexManager)
+                        } else if indexManager.isHashing {
+                            ActiveHashingOverlay()
+                                .environmentObject(indexManager)
                         }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -53,6 +56,7 @@ struct MainWindowView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: indexManager.isIndexing)
+            .animation(.easeInOut(duration: 0.2), value: indexManager.isHashing)
             .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
             .frame(maxWidth: .infinity, maxHeight: .infinity)  // Constrain ZStack to detail area bounds
             .clipped()  // Prevent content from extending outside bounds
@@ -261,6 +265,66 @@ struct ActiveIndexingOverlay: View {
             }
         }
         .animation(nil, value: indexManager.currentProgress?.filesProcessed)
+    }
+}
+
+struct ActiveHashingOverlay: View {
+    @EnvironmentObject var indexManager: IndexManager
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.purple)
+                    .frame(width: 6, height: 6)
+                    .opacity(isAnimating ? 1.0 : 0.5)
+                    .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
+
+                Text("ANALYZING")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.purple)
+            }
+
+            if let progress = indexManager.hashProgress {
+                Text("\(formatFileCount(progress.filesHashed))/\(formatFileCount(progress.totalFiles)) files")
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+                    .frame(minWidth: 120, alignment: .leading)
+
+                Text(String(format: "%.0f%%", progress.percentage))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Computing file hashes for duplicate detection")
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            // Cancel button
+            Button(action: {
+                indexManager.cancelHashing()
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .imageScale(.medium)
+            }
+            .buttonStyle(.plain)
+            .help("Cancel hash computation")
+        }
+        .padding(Spacing.medium)
+        .background(Color.purple.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, Spacing.Container.horizontalPadding)
+        .padding(.bottom, Spacing.medium)
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
     }
 }
 

@@ -20,9 +20,13 @@ class IndexManager: ObservableObject {
     @Published var isIndexing: Bool = false
     @Published var indexingDriveName: String = ""
     @Published var pendingChanges: PendingChanges?
+    @Published var hashProgress: HashProgress?
+    @Published var isHashing: Bool = false
 
     private let fileIndexer = FileIndexer()
+    private let hashWorker = HashWorker()
     private var indexingTask: Task<Void, Never>?
+    private var hashingTask: Task<Void, Never>?
 
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
@@ -159,6 +163,11 @@ class IndexManager: ObservableObject {
                                     await StorageCache.shared.invalidate(driveUUID: uuid)
                                 }
 
+                                // Start background hash computation
+                                Task {
+                                    await self?.startHashComputation()
+                                }
+
                                 // Notify drive monitor to reload
                                 NotificationCenter.default.post(
                                     name: .driveIndexingComplete,
@@ -213,6 +222,73 @@ class IndexManager: ObservableObject {
         indexingTask = nil
         isIndexing = false
         currentProgress = nil
+    }
+
+    func startHashComputation() async {
+        // Cancel existing hashing if any
+        hashingTask?.cancel()
+
+        do {
+            // Get minimum file size from settings (default 5MB)
+            let minSizeStr = try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "5242880"
+            let minSize = Int64(minSizeStr) ?? 5_242_880
+
+            // Check if there are files to hash
+            let unhashed = try await DatabaseManager.shared.getUnhashedCount(minSize: minSize)
+            guard unhashed > 0 else {
+                print("✅ No files need hashing")
+                return
+            }
+
+            print("🔨 Starting background hash computation for \(unhashed) files")
+
+            isHashing = true
+            hashProgress = nil
+
+            hashingTask = Task {
+                do {
+                    try await hashWorker.hashAllFiles(minSize: minSize) { [weak self] progress in
+                        Task { @MainActor in
+                            self?.hashProgress = progress
+
+                            if progress.isComplete {
+                                // Show summary for 2 seconds before clearing
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                    self?.isHashing = false
+                                    self?.hashProgress = nil
+                                }
+
+                                // Notify that hash computation is complete
+                                NotificationCenter.default.post(
+                                    name: .hashComputationComplete,
+                                    object: nil
+                                )
+                            }
+                        }
+                    }
+                } catch {
+                    print("Error computing hashes: \(error)")
+                    Task { @MainActor in
+                        self.isHashing = false
+                        self.hashProgress = nil
+                    }
+                }
+            }
+        } catch {
+            print("Error starting hash computation: \(error)")
+            isHashing = false
+        }
+    }
+
+    func cancelHashing() {
+        Task {
+            await hashWorker.cancel()
+        }
+        hashingTask?.cancel()
+        hashingTask = nil
+        isHashing = false
+        hashProgress = nil
     }
 
     func getExcludedDirectories() async -> [String] {
@@ -282,4 +358,5 @@ class IndexManager: ObservableObject {
 extension Notification.Name {
     static let driveIndexingComplete = Notification.Name("driveIndexingComplete")
     static let changesDetected = Notification.Name("changesDetected")
+    static let hashComputationComplete = Notification.Name("hashComputationComplete")
 }
