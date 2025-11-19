@@ -8,6 +8,7 @@
 
 import AppKit
 import SwiftUI
+import Combine
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -36,6 +37,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Track if main window has been closed at least once
     private var mainWindowHasBeenClosed = false
 
+    /// Combine cancellables for observing IndexManager state
+    private var cancellables = Set<AnyCancellable>()
+
     // MARK: - Application Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -44,6 +48,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Set up status bar item
         setupStatusItem()
+
+        // Observe IndexManager state for menubar icon updates
+        observeIndexManagerState()
 
         // Set up global hotkey
         setupHotkey()
@@ -91,6 +98,115 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         button.image = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex")
         button.action = #selector(statusItemClicked)
         button.target = self
+    }
+
+    /// Observe IndexManager state changes to update menubar icon
+    private func observeIndexManagerState() {
+        // Observe all relevant state changes
+        Publishers.CombineLatest4(
+            indexManager.$isIndexing,
+            indexManager.$currentProgress,
+            indexManager.$pendingChanges,
+            indexManager.$isHashing
+        )
+        .sink { [weak self] isIndexing, currentProgress, pendingChanges, isHashing in
+            self?.updateMenubarIcon(
+                isIndexing: isIndexing,
+                currentProgress: currentProgress,
+                pendingChanges: pendingChanges,
+                isHashing: isHashing
+            )
+        }
+        .store(in: &cancellables)
+    }
+
+    /// Update the menubar icon with a status indicator dot
+    private func updateMenubarIcon(
+        isIndexing: Bool,
+        currentProgress: IndexProgress?,
+        pendingChanges: PendingChanges?,
+        isHashing: Bool
+    ) {
+        guard let button = statusItem?.button else { return }
+
+        // Determine the status color based on current state
+        let statusColor: NSColor?
+
+        // Priority order: indexing/scanning > hashing > pending changes > complete
+        if isIndexing {
+            if let progress = currentProgress {
+                if progress.isComplete {
+                    // Indexing complete - green (shown for 2 seconds)
+                    statusColor = .systemGreen
+                } else if progress.filesProcessed == 0 {
+                    // Scanning - orange
+                    statusColor = .systemOrange
+                } else {
+                    // Indexing - orange
+                    statusColor = .systemOrange
+                }
+            } else {
+                // Starting to index - orange
+                statusColor = .systemOrange
+            }
+        } else if isHashing {
+            // Analyzing/hashing - purple
+            statusColor = .systemPurple
+        } else if pendingChanges != nil {
+            // Changes detected - blue
+            statusColor = .systemBlue
+        } else {
+            // No active status - no dot
+            statusColor = nil
+        }
+
+        // Create the icon with or without status dot
+        button.image = createMenubarIcon(withStatusColor: statusColor)
+    }
+
+    /// Create the menubar icon with an optional status indicator dot
+    private func createMenubarIcon(withStatusColor statusColor: NSColor?) -> NSImage? {
+        guard let baseImage = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex") else {
+            return nil
+        }
+
+        // If no status color, return the base image
+        guard let statusColor = statusColor else {
+            return baseImage
+        }
+
+        // Create a new image with the status indicator dot
+        let iconSize = NSSize(width: 22, height: 22)
+        let dotRadius: CGFloat = 4.5
+        let dotOffset: CGFloat = 2.0
+
+        let compositeImage = NSImage(size: iconSize)
+        compositeImage.lockFocus()
+
+        // Draw the base icon
+        baseImage.draw(
+            in: NSRect(origin: .zero, size: iconSize),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1.0
+        )
+
+        // Draw the status indicator dot (bottom-right corner)
+        let dotRect = NSRect(
+            x: iconSize.width - dotRadius * 2 - dotOffset,
+            y: dotOffset,
+            width: dotRadius * 2,
+            height: dotRadius * 2
+        )
+
+        let dotPath = NSBezierPath(ovalIn: dotRect)
+        statusColor.setFill()
+        dotPath.fill()
+
+        compositeImage.unlockFocus()
+        compositeImage.isTemplate = true
+
+        return compositeImage
     }
 
     // MARK: - Hotkey Setup
