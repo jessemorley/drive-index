@@ -178,7 +178,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Use standard menubar icon size
-        let iconSize = NSSize(width: 22, height: 22)
+        let iconSize = NSSize(width: 18, height: 14)
         let dotRadius: CGFloat = 3.5
 
         // Create composite image with explicit colors (not template mode)
