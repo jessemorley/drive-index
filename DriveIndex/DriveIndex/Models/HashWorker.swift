@@ -68,13 +68,9 @@ actor HashWorker {
         let overallStartTime = Date()
 
         var filesHashed = 0
-        var batchNumber = 0
 
         // Process in batches until no more unhashed files
         while !shouldCancel {
-            batchNumber += 1
-            let batchStartTime = Date()
-
             // Get next batch of unhashed files (larger batch for parallel processing)
             let files = try await database.getUnhashedFiles(
                 minSize: minSize,
@@ -85,34 +81,20 @@ actor HashWorker {
                 break // No more files to hash
             }
 
-            // Calculate batch file size statistics
-            let fileSizes = files.map { $0.size }
-            let minSize = fileSizes.min() ?? 0
-            let maxSize = fileSizes.max() ?? 0
-            let avgSize = fileSizes.isEmpty ? 0 : fileSizes.reduce(0, +) / Int64(fileSizes.count)
-
-            print("📦 Batch \(batchNumber): Processing \(files.count) files (sizes: \(formatBytes(minSize)) - \(formatBytes(maxSize)), avg: \(formatBytes(avgSize)))...")
-
             // Process files in parallel groups with error handling
-            var batchSuccesses = 0
-            var batchFailures = 0
-
-            let batchResults = await withTaskGroup(of: (Int64, String, TimeInterval, Int64)?.self) { group in
+            let batchResults = await withTaskGroup(of: (Int64, String)?.self) { group in
                 var results: [(Int64, String)] = []
-                var slowFiles: [(String, TimeInterval, Int64)] = []
 
                 for file in files {
                     // Add task to group (will run up to PARALLEL_TASKS concurrently)
                     group.addTask {
-                        let fileStartTime = Date()
                         do {
                             let hash = try await self.computePartialHash(
                                 driveUUID: file.driveUUID,
                                 relativePath: file.relativePath,
                                 fileSize: file.size
                             )
-                            let duration = Date().timeIntervalSince(fileStartTime)
-                            return (file.id, hash, duration, file.size)
+                            return (file.id, hash)
                         } catch {
                             // Log error but don't fail the whole batch
                             await self.logHashError(error: error, relativePath: file.relativePath, driveUUID: file.driveUUID)
@@ -124,40 +106,21 @@ actor HashWorker {
                 // Collect all results
                 for await result in group {
                     if let result = result {
-                        results.append((result.0, result.1))
-
-                        // Track slow files (>1 second per file)
-                        if result.2 > 1.0 {
-                            slowFiles.append((formatBytes(result.3), result.2, result.3))
-                        }
-                    }
-                }
-
-                // Log slow files if any
-                if !slowFiles.isEmpty {
-                    print("   ⚠️ \(slowFiles.count) slow files detected (>1s each):")
-                    for (sizeStr, duration, size) in slowFiles.prefix(5) {
-                        print("      • \(sizeStr): \(String(format: "%.2f", duration))s")
-                    }
-                    if slowFiles.count > 5 {
-                        print("      ... and \(slowFiles.count - 5) more")
+                        results.append(result)
                     }
                 }
 
                 return results
             }
 
-            batchSuccesses = batchResults.count
-            batchFailures = files.count - batchSuccesses
+            let batchSuccesses = batchResults.count
+            let batchFailures = files.count - batchSuccesses
             totalSuccesses += batchSuccesses
             totalFailures += batchFailures
 
             // Batch update database
             if !batchResults.isEmpty {
-                let dbStartTime = Date()
                 try await database.updateHashesBatch(batchResults)
-                let dbDuration = Date().timeIntervalSince(dbStartTime)
-
                 filesHashed += batchResults.count
 
                 // Report progress
@@ -168,16 +131,6 @@ actor HashWorker {
                     isComplete: false,
                     currentFile: lastFile
                 ))
-
-                let batchDuration = Date().timeIntervalSince(batchStartTime)
-                let hashDuration = batchDuration - dbDuration
-                let filesPerSec = batchDuration > 0 ? Double(batchSuccesses) / batchDuration : 0
-
-                print("   ✓ Batch \(batchNumber): \(batchSuccesses) hashed, \(batchFailures) failed")
-                print("   ⏱ Timing: Hash=\(String(format: "%.2f", hashDuration))s, DB=\(String(format: "%.2f", dbDuration * 1000))ms, Total=\(String(format: "%.2f", batchDuration))s (\(String(format: "%.1f", filesPerSec)) files/sec)")
-                print("   📊 Progress: \(filesHashed)/\(totalFiles) (\(String(format: "%.1f", Double(filesHashed) / Double(totalFiles) * 100))%)")
-            } else {
-                print("   ⚠️ Batch \(batchNumber): All \(files.count) files failed to hash")
             }
 
             // Check if we should continue
@@ -196,11 +149,12 @@ actor HashWorker {
         ))
 
         let totalDuration = Date().timeIntervalSince(overallStartTime)
-        let avgFilesPerSec = totalDuration > 0 ? Double(totalSuccesses) / totalDuration : 0
 
-        print("✅ Hash computation complete!")
-        print("   📈 Total: \(totalSuccesses) hashed, \(totalFailures) failed")
-        print("   ⏱ Duration: \(String(format: "%.2f", totalDuration))s (\(String(format: "%.1f", avgFilesPerSec)) files/sec)")
+        if totalFailures > 0 {
+            print("✅ Hash computation complete: \(totalSuccesses) hashed, \(totalFailures) failed (\(String(format: "%.1f", totalDuration))s)")
+        } else {
+            print("✅ Hash computation complete: \(totalSuccesses) files (\(String(format: "%.1f", totalDuration))s)")
+        }
     }
 
     private func logHashError(error: Error, relativePath: String, driveUUID: String) {
