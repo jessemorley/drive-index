@@ -24,7 +24,8 @@ struct DuplicatesView: View {
                 // Duplicate Detection Section
                 SettingsSection(
                     title: "Duplicate Detection",
-                    description: "Enable or disable file hash computation for duplicate detection. When enabled, file hashes are computed during indexing to identify duplicate files."
+                    description: "Enable or disable file hash computation for duplicate detection. When enabled, file hashes are computed during indexing to identify duplicate files.",
+                    symbol: "doc.on.doc"
                 ) {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         Toggle("Enable duplicate detection", isOn: $duplicateHashingEnabled)
@@ -46,10 +47,11 @@ struct DuplicatesView: View {
                 // Information Section
                 SettingsSection(
                     title: "About Duplicate Detection",
-                    description: nil
+                    description: "",
+                    symbol: "info.circle"
                 ) {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        InfoRow(
+                        DuplicateInfoRow(
                             icon: "speedometer",
                             title: "Performance Impact",
                             description: "Computing file hashes requires reading file contents, which can slow down indexing for large drives."
@@ -57,7 +59,7 @@ struct DuplicatesView: View {
 
                         Divider()
 
-                        InfoRow(
+                        DuplicateInfoRow(
                             icon: "chart.bar",
                             title: "Hash Algorithm",
                             description: "Uses XXHash64 for fast, non-cryptographic hashing optimized for duplicate detection."
@@ -65,7 +67,7 @@ struct DuplicatesView: View {
 
                         Divider()
 
-                        InfoRow(
+                        DuplicateInfoRow(
                             icon: "arrow.clockwise",
                             title: "Changes Take Effect",
                             description: "Changes will apply to new indexing operations. Existing hashes in the database are not affected."
@@ -81,9 +83,9 @@ struct DuplicatesView: View {
     }
 }
 
-// MARK: - Info Row Component
+// MARK: - Duplicate Info Row Component
 
-private struct InfoRow: View {
+private struct DuplicateInfoRow: View {
     let icon: String
     let title: String
     let description: String

@@ -123,7 +123,7 @@ actor ThumbnailWorker {
                     }
 
                     // Collect results from this chunk
-                    for await success in group {
+                    for await _ in group {
                         filesProcessed += 1
 
                         // Small delay after each file to allow memory cleanup
