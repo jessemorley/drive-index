@@ -146,7 +146,7 @@ class IndexManager: ObservableObject {
                                 }
 
                                 if shouldOptimize {
-                                    Task {
+                                    Task { [weak self] in
                                         do {
                                             try await DatabaseManager.shared.optimize()
                                             await MainActor.run {
