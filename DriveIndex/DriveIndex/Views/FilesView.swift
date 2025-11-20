@@ -727,7 +727,11 @@ struct FileRow: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
-        .background(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
+                .padding(.horizontal, 4)
+        )
         .contentShape(Rectangle())
     }
 

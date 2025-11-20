@@ -1,13 +1,13 @@
 //
-//  TestWindowView.swift
+//  MainWindowView.swift
 //  DriveIndex
 //
-//  Test window view to debug toolbar transparency
+//  Main application window view
 //
 
 import SwiftUI
 
-struct TestWindowView: View {
+struct MainWindowView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
 
@@ -364,7 +364,7 @@ struct ActiveHashingOverlay: View {
 }
 
 #Preview {
-    TestWindowView()
+    MainWindowView()
         .environmentObject(DriveMonitor())
         .environmentObject(IndexManager())
         .frame(width: 900, height: 600)

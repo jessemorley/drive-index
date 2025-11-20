@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var floatingPanel: FloatingPanel?
 
     /// The main application window for browsing drives
-    private var mainWindow: TestWindow?
+    private var mainWindow: MainWindow?
 
     /// The settings window (opened via DriveIndex > Settings menu)
     private var settingsWindow: SettingsWindow?
@@ -376,17 +376,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.show()
     }
 
-    /// Create the main window with TestWindowView
+    /// Create the main window with MainWindowView
     private func createMainWindow() {
         // Create window with appropriate size for content browser
         let windowRect = NSRect(x: 0, y: 0, width: 900, height: 600)
-        let window = TestWindow(contentRect: windowRect)
+        let window = MainWindow(contentRect: windowRect)
 
         // Set delegate
         window.delegate = self
 
-        // Create TestWindowView with managers
-        let mainWindowView = TestWindowView()
+        // Create MainWindowView with managers
+        let mainWindowView = MainWindowView()
             .environmentObject(driveMonitor)
             .environmentObject(indexManager)
 

@@ -1,19 +1,19 @@
 //
-//  TestWindow.swift
+//  MainWindow.swift
 //  DriveIndex
 //
-//  Test window to debug toolbar transparency
+//  Main application window for DriveIndex
 //
 
 import AppKit
 import SwiftUI
 
-/// Custom NSWindow subclass for testing toolbar transparency
-class TestWindow: NSWindow {
+/// Custom NSWindow subclass for the main application window
+class MainWindow: NSWindow {
 
     // MARK: - Initialization
 
-    /// Initialize the test window with standard macOS styling
+    /// Initialize the main window with standard macOS styling
     /// - Parameters:
     ///   - contentRect: Initial frame
     ///   - styleMask: Window style mask
@@ -39,7 +39,7 @@ class TestWindow: NSWindow {
 
     private func configureWindow() {
         // Window properties
-        title = "Test Window"
+        title = "DriveIndex"
         titlebarAppearsTransparent = false
 
         // Enable unified toolbar style
@@ -53,10 +53,10 @@ class TestWindow: NSWindow {
         minSize = NSSize(width: 700, height: 500)
 
         // Position persistence
-        setFrameAutosaveName("TestWindow")
+        setFrameAutosaveName("MainWindow")
 
         // Center on first launch if no saved position
-        if frameAutosaveName.isEmpty || !setFrameUsingName("TestWindow") {
+        if frameAutosaveName.isEmpty || !setFrameUsingName("MainWindow") {
             center()
         }
 
@@ -67,7 +67,7 @@ class TestWindow: NSWindow {
 
     // MARK: - Public Methods
 
-    /// Show the test window
+    /// Show the main window
     func show() {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

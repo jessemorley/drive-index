@@ -50,8 +50,8 @@
 		87000003 /* SettingsNavigationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000013 /* SettingsNavigationSidebar.swift */; };
 		87000004 /* SettingsNavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000014 /* SettingsNavigationItem.swift */; };
 		87000005 /* AppSearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000015 /* AppSearchState.swift */; };
-		87000006 /* TestWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000016 /* TestWindow.swift */; };
-		87000007 /* TestWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000017 /* TestWindowView.swift */; };
+		87000006 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000016 /* MainWindow.swift */; };
+		87000007 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000017 /* MainWindowView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -101,8 +101,8 @@
 		87000013 /* SettingsNavigationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNavigationSidebar.swift; sourceTree = "<group>"; };
 		87000014 /* SettingsNavigationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNavigationItem.swift; sourceTree = "<group>"; };
 		87000015 /* AppSearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSearchState.swift; sourceTree = "<group>"; };
-		87000016 /* TestWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestWindow.swift; sourceTree = "<group>"; };
-		87000017 /* TestWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestWindowView.swift; sourceTree = "<group>"; };
+		87000016 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
+		87000017 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,7 +164,7 @@
 				867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */,
 				87000012 /* SearchView.swift */,
 				87000011 /* SettingsWindowView.swift */,
-				87000017 /* TestWindowView.swift */,
+				87000017 /* MainWindowView.swift */,
 				86B531A92EC04858007DC54C /* Components */,
 				1A000002 /* ContentView.swift */,
 				1A000004 /* DriveListView.swift */,
@@ -198,7 +198,7 @@
 			children = (
 				86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */,
 				86653A0F2EC695FF00DD4FB3 /* SettingsWindow.swift */,
-				87000016 /* TestWindow.swift */,
+				87000016 /* MainWindow.swift */,
 			);
 			path = Windows;
 			sourceTree = "<group>";
@@ -348,8 +348,8 @@
 				87000003 /* SettingsNavigationSidebar.swift in Sources */,
 				87000004 /* SettingsNavigationItem.swift in Sources */,
 				87000005 /* AppSearchState.swift in Sources */,
-				87000006 /* TestWindow.swift in Sources */,
-				87000007 /* TestWindowView.swift in Sources */,
+				87000006 /* MainWindow.swift in Sources */,
+				87000007 /* MainWindowView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

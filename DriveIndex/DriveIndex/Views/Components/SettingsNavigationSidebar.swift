@@ -12,19 +12,6 @@ struct SettingsNavigationSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Settings header
-            HStack(spacing: 8) {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 20))
-                    .foregroundStyle(DesignSystem.Colors.primaryText)
-                Text("Settings")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(DesignSystem.Colors.primaryText)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-
             // Navigation list
             List(selection: $selection) {
                 ForEach(SettingsNavigationSection.allCases) { section in
