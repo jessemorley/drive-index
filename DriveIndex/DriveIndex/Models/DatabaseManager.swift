@@ -681,6 +681,66 @@ actor DatabaseManager {
         }
     }
 
+    /// Get recently added files across all drives
+    /// Returns files ordered by ID (most recent first) up to specified limit
+    func getRecentFiles(limit: Int = 1000) throws -> [FileEntry] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT id, drive_uuid, name, relative_path, size, created_at, modified_at, is_directory
+            FROM files
+            WHERE is_directory = 0
+            ORDER BY id DESC
+            LIMIT ?
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+
+        var results: [FileEntry] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 1))
+            let name = String(cString: sqlite3_column_text(stmt, 2))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 3))
+            let size = sqlite3_column_int64(stmt, 4)
+
+            var createdAt: Date?
+            if sqlite3_column_type(stmt, 5) != SQLITE_NULL {
+                createdAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 5)))
+            }
+
+            var modifiedAt: Date?
+            if sqlite3_column_type(stmt, 6) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 6)))
+            }
+
+            let isDirectory = sqlite3_column_int(stmt, 7) != 0
+
+            results.append(FileEntry(
+                id: id,
+                driveUUID: driveUUID,
+                name: name,
+                relativePath: relativePath,
+                size: size,
+                createdAt: createdAt,
+                modifiedAt: modifiedAt,
+                isDirectory: isDirectory
+            ))
+        }
+
+        return results
+    }
+
     // MARK: - Drive Metadata Operations
 
     func upsertDriveMetadata(_ metadata: DriveMetadata) throws {
