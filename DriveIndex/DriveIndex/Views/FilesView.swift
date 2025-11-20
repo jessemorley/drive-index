@@ -103,7 +103,10 @@ struct FileDisplayItem: Identifiable {
     }
 
     var formattedSize: String {
-        ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        if isDirectory {
+            return "—"
+        }
+        return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
     var formattedDate: String {
