@@ -17,6 +17,20 @@ struct MainWindowView: View {
     @FocusState private var isSearchFieldFocused: Bool
 
     var body: some View {
+        GeometryReader { geometry in
+            mainContent(windowWidth: geometry.size.width)
+                .onChange(of: geometry.size.width) { oldWidth, newWidth in
+                    updateSidebarVisibility(for: newWidth)
+                }
+                .onChange(of: appSearchState.showInspector) { oldValue, newValue in
+                    // Re-evaluate sidebar visibility when inspector opens/closes
+                    updateSidebarVisibility(for: geometry.size.width)
+                }
+        }
+    }
+
+    @ViewBuilder
+    private func mainContent(windowWidth: CGFloat) -> some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
             NavigationSidebar(selection: $selectedItem)
@@ -122,6 +136,26 @@ struct MainWindowView: View {
                 NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
                 // Revert selection back to previous item
                 selectedItem = oldValue ?? .drives
+            }
+        }
+    }
+
+    // MARK: - Sidebar Visibility
+
+    private func updateSidebarVisibility(for width: CGFloat) {
+        // Auto-collapse sidebar when window is too narrow
+        // Base threshold: 800px (220px sidebar + 580px content minimum)
+        // When inspector is open: add 280px for inspector panel
+        let inspectorWidth: CGFloat = appSearchState.showInspector ? 280 : 0
+        let collapseThreshold: CGFloat = 800 + inspectorWidth
+
+        if width < collapseThreshold {
+            if columnVisibility != .detailOnly {
+                columnVisibility = .detailOnly
+            }
+        } else {
+            if columnVisibility == .detailOnly {
+                columnVisibility = .all
             }
         }
     }
