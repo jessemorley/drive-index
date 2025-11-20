@@ -42,7 +42,7 @@ actor ThumbnailGenerator {
         print("📸 Processing: \(fileURL.lastPathComponent) (.\(ext), \(String(format: "%.1f", fileSizeMB))MB)")
 
         // Determine file type and use appropriate generator
-        if isImageFile(ext) {
+        if isImageFile(ext) || isCR3File(ext) {
             let startTime = Date()
             let result = try await generateImageThumbnail(for: fileURL)
             let duration = Date().timeIntervalSince(startTime)
@@ -91,8 +91,8 @@ actor ThumbnailGenerator {
     private func isImageFile(_ ext: String) -> Bool {
         let imageExtensions: Set<String> = [
             "jpg", "jpeg", "png", "gif", "heic", "heif", "tiff", "tif", "bmp", "webp",
-            // RAW formats
-            "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
+            // RAW formats (CR3 handled separately to track it specifically in logs)
+            "nef", "cr2", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
         ]
         return imageExtensions.contains(ext)
     }
@@ -125,19 +125,26 @@ actor ThumbnailGenerator {
 
                     let ext = url.pathExtension.lowercased()
                     let isRawFile = self.isRawFile(ext)
+                    let isCR3 = self.isCR3File(ext)
 
-                    if isRawFile {
-                        print("  🎞️ RAW file detected - using embedded thumbnail only")
+                    if isRawFile || isCR3 {
+                        print("  🎞️ RAW file detected (\(ext.uppercased())) - extracting embedded thumbnail only")
                     }
 
-                    // For RAW files: ONLY use embedded thumbnails to avoid memory pressure from decoding full RAW
-                    // For regular images (JPEG, PNG, etc.): Allow fallback to full image decoding (they're small)
-                    let options: [CFString: Any] = [
+                    // For RAW files (including CR3): Build options WITHOUT kCGImageSourceCreateThumbnailFromImageIfAbsent
+                    // This tells ImageIO to ONLY extract embedded thumbnails, never decode the full image
+                    // For regular images: Include the key to allow fallback to full image decoding
+                    var options: [CFString: Any] = [
                         kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceCreateThumbnailFromImageIfAbsent: !isRawFile,  // Only decode full image for non-RAW
                         kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize,
                         kCGImageSourceShouldCache: false  // Don't cache, we're saving to disk
                     ]
+
+                    // Only add the "IfAbsent" key for non-RAW files
+                    // For RAW files, omitting this key ensures ONLY embedded thumbnails are used
+                    if !isRawFile && !isCR3 {
+                        options[kCGImageSourceCreateThumbnailFromImageIfAbsent] = true
+                    }
 
                     guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
                         // For RAW files without embedded thumbnails, this is expected
@@ -158,9 +165,13 @@ actor ThumbnailGenerator {
 
     private func isRawFile(_ ext: String) -> Bool {
         let rawExtensions: Set<String> = [
-            "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
+            "nef", "cr2", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
         ]
         return rawExtensions.contains(ext)
+    }
+
+    private func isCR3File(_ ext: String) -> Bool {
+        return ext == "cr3"
     }
 
     // MARK: - Video Thumbnail Generation

@@ -216,7 +216,7 @@ struct SearchView: View {
                     size: result.size,
                     driveUUID: result.driveUUID,
                     driveName: result.driveName,
-                    modifiedAt: nil, // SearchResult doesn't include dates
+                    modifiedAt: result.modifiedAt,
                     createdAt: nil,
                     isConnected: result.isConnected,
                     isDirectory: result.isDirectory

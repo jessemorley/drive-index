@@ -64,6 +64,7 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appSearchState.showInspector)
+            .toolbarBackground(.hidden, for: .windowToolbar)
             .toolbar {
                 // Centered search bar
                 ToolbarItem(placement: .principal) {

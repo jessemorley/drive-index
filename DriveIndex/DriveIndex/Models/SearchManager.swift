@@ -18,6 +18,7 @@ struct SearchResult: Identifiable, Hashable {
     var isConnected: Bool
     let duplicateCount: Int?
     let isDirectory: Bool
+    let modifiedAt: Date?
 }
 
 actor SearchManager {
@@ -52,7 +53,7 @@ actor SearchManager {
         // Step 4: Add wildcard for prefix matching
         let fts5Term = cleaned + "*"
 
-        // Step 5: Build FTS5 query matching Raycast logic with duplicate counts
+        // Step 5: Build FTS5 query matching Raycast logic with duplicate counts and modified date
         let sql = """
         SELECT
             f.id,
@@ -63,7 +64,8 @@ actor SearchManager {
             d.name as drive_name,
             (SELECT COUNT(*) FROM files f2
              WHERE f2.name = f.name AND f2.size = f.size AND f2.is_directory = 0) as dup_count,
-            f.is_directory
+            f.is_directory,
+            f.modified_at
         FROM files_fts
         JOIN files f ON f.id = files_fts.rowid
         JOIN drives d ON d.uuid = f.drive_uuid
@@ -85,6 +87,10 @@ actor SearchManager {
                 let dupCount = Int(sqlite3_column_int(stmt, 6))
                 let isDirectory = sqlite3_column_int(stmt, 7) != 0
 
+                // Read modified_at timestamp (column 8)
+                let modifiedAtTimestamp = sqlite3_column_int64(stmt, 8)
+                let modifiedAt = modifiedAtTimestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(modifiedAtTimestamp)) : nil
+
                 let isConnected = isDriveMounted(driveName)
 
                 results.append(SearchResult(
@@ -96,7 +102,8 @@ actor SearchManager {
                     driveName: driveName,
                     isConnected: isConnected,
                     duplicateCount: dupCount > 1 ? dupCount : nil,
-                    isDirectory: isDirectory
+                    isDirectory: isDirectory,
+                    modifiedAt: modifiedAt
                 ))
             }
 
