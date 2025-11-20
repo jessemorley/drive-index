@@ -411,8 +411,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let windowRect = NSRect(x: 0, y: 0, width: 700, height: 500)
         let window = SettingsWindow(contentRect: windowRect)
 
-        // Create SettingsWindowView
+        // Create SettingsWindowView with managers
         let settingsView = SettingsWindowView()
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
 
         // Host SwiftUI view in the window
         window.contentView = NSHostingView(rootView: settingsView)

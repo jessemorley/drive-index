@@ -26,6 +26,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 struct SettingsWindowView: View {
+    @EnvironmentObject var driveMonitor: DriveMonitor
+    @EnvironmentObject var indexManager: IndexManager
+
     @State private var selectedTab: SettingsTab = .appearance
     @State private var searchText = ""
 
@@ -47,6 +50,8 @@ struct SettingsWindowView: View {
 
             // Indexing tab
             IndexingView()
+                .environmentObject(driveMonitor)
+                .environmentObject(indexManager)
                 .tabItem {
                     Label(SettingsTab.indexing.rawValue, systemImage: SettingsTab.indexing.icon)
                 }
@@ -54,6 +59,7 @@ struct SettingsWindowView: View {
 
             // Advanced tab
             AdvancedView()
+                .environmentObject(driveMonitor)
                 .tabItem {
                     Label(SettingsTab.advanced.rawValue, systemImage: SettingsTab.advanced.icon)
                 }
@@ -93,4 +99,6 @@ struct SettingsWindowView: View {
 
 #Preview {
     SettingsWindowView()
+        .environmentObject(DriveMonitor())
+        .environmentObject(IndexManager())
 }
