@@ -339,7 +339,7 @@ struct DuplicatesView: View {
 
                 // File rows
                 ForEach(sortedFiles) { file in
-                    FileRow(
+                    DuplicateFileRow(
                         file: file,
                         driveStates: driveStates,
                         drives: driveMonitor.drives,
@@ -680,9 +680,9 @@ struct DriveGridCard: View {
     }
 }
 
-// MARK: - File Row
+// MARK: - Duplicate File Row
 
-struct FileRow: View {
+struct DuplicateFileRow: View {
     let file: MultiDriveFile
     let driveStates: [String: Bool]
     let drives: [DriveInfo]
