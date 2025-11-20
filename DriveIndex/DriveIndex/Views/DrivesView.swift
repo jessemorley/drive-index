@@ -207,26 +207,44 @@ struct DriveCard: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
-            // Action buttons
-            HStack(spacing: DesignSystem.Spacing.medium) {
+            // Action buttons: Rescan and Reveal on left, Eject on right
+            HStack(spacing: Spacing.small) {
                 Button(action: {
                     scanDrive(drive)
                 }) {
                     Label(drive.lastScanDate == nil ? "Scan" : "Rescan", systemImage: "arrow.clockwise")
-                        .font(DesignSystem.Typography.caption)
-                        .frame(maxWidth: .infinity)
+                        .font(.caption)
                 }
                 .buttonStyle(.bordered)
-                .disabled(indexManager.isIndexing)
+                .disabled(indexManager.isIndexing || !drive.isConnected)
 
                 Button(action: {
-                    openInFinder(drive)
+                    revealInFinder(drive)
                 }) {
-                    Label("Finder", systemImage: "folder")
-                        .font(DesignSystem.Typography.caption)
-                        .frame(maxWidth: .infinity)
+                    Label("Reveal", systemImage: "folder")
+                        .font(.caption)
                 }
                 .buttonStyle(.bordered)
+                .disabled(!drive.isConnected)
+
+                Spacer()
+
+                Button(action: {
+                    ejectDrive(drive)
+                }) {
+                    Label("Eject", systemImage: "eject")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                )
+                .disabled(!drive.isConnected)
+                .help("Eject drive")
             }
         }
         .padding(Spacing.medium)
@@ -248,12 +266,20 @@ struct DriveCard: View {
         }
     }
 
-    private func openInFinder(_ drive: DriveInfo) {
+    private func revealInFinder(_ drive: DriveInfo) {
         guard let driveURL = driveMonitor.getDriveURL(for: drive) else {
             return
         }
 
         NSWorkspace.shared.open(driveURL)
+    }
+
+    private func ejectDrive(_ drive: DriveInfo) {
+        guard let driveURL = driveMonitor.getDriveURL(for: drive) else {
+            return
+        }
+
+        try? NSWorkspace.shared.unmountAndEjectDevice(at: driveURL)
     }
 }
 
