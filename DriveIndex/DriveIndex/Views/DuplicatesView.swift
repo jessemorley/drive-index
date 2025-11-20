@@ -2,97 +2,396 @@
 //  DuplicatesView.swift
 //  DriveIndex
 //
-//  Displays duplicate files grouped by name and size
+//  Displays files that exist across multiple drives with backup/source management
 //
 
 import SwiftUI
 
-enum DuplicateSortOption: String, CaseIterable {
-    case duplicates = "Most Duplicates"
-    case size = "Largest Files"
-    case name = "Name"
-}
+// MARK: - Data Models
 
-struct DuplicateStats {
-    let totalDuplicates: Int
-    let wastedSpace: Int64
-    let groupCount: Int
+/// Represents a file that exists on one or more drives
+struct MultiDriveFile: Identifiable {
+    let id: String // Name + size combination
+    let name: String
+    let size: Int64
+    let locations: [FileLocation]
+    let modifiedAt: Date?
 
-    var formattedWastedSpace: String {
-        ByteCountFormatter.string(fromByteCount: wastedSpace, countStyle: .file)
+    var driveIds: [String] {
+        locations.map { $0.driveId }
+    }
+
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    var formattedDate: String {
+        guard let date = modifiedAt else { return "—" }
+
+        let formatter = DateFormatter()
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(date) {
+            formatter.timeStyle = .short
+            return "Today, " + formatter.string(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            formatter.timeStyle = .short
+            return "Yesterday, " + formatter.string(from: date)
+        } else if calendar.dateComponents([.day], from: date, to: Date()).day ?? 0 < 7 {
+            formatter.dateFormat = "EEEE, h:mm a"
+            return formatter.string(from: date)
+        } else {
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
+        }
+    }
+
+    var fileType: String {
+        let ext = (name as NSString).pathExtension.lowercased()
+        switch ext {
+        case "mov", "mp4", "avi", "mkv": return "video"
+        case "jpg", "jpeg", "png", "gif", "heic", "dng", "cr2", "nef": return "image"
+        case "mp3", "wav", "aiff", "m4a": return "audio"
+        case "db", "sqlite": return "database"
+        default: return "document"
+        }
     }
 }
 
+struct FileLocation: Identifiable {
+    let id: Int64
+    let driveId: String
+    let relativePath: String
+}
+
+/// Drive with backup designation
+struct DriveState: Identifiable {
+    let id: String
+    let name: String
+    let size: String
+    let type: String
+    let isBackup: Bool
+    let isConnected: Bool
+}
+
+enum DuplicateFilterMode {
+    case backedUp
+    case duplicates
+}
+
+enum DuplicateSortOption: String, CaseIterable {
+    case size = "Size"
+    case name = "Name"
+    case locations = "Locations"
+}
+
+// MARK: - Main View
+
 struct DuplicatesView: View {
-    @State private var duplicateGroups: [DuplicateGroup] = []
-    @State private var stats: DuplicateStats?
+    @EnvironmentObject var driveMonitor: DriveMonitor
+    @Environment(AppSearchState.self) private var appSearchState
+
+    @State private var files: [MultiDriveFile] = []
+    @State private var driveStates: [String: Bool] = [:] // driveId -> isBackup
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var expandedGroups: Set<String> = []
-    @State private var sortOption: DuplicateSortOption = .duplicates
+    @State private var hoveredFileId: String?
+    @State private var sortOption: DuplicateSortOption = .size
+    @State private var showBackedUp = true
+    @State private var showDuplicates = true
+
+    private var searchText: String {
+        appSearchState.searchText
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Group {
-                    if isLoading {
-                        loadingView
-                    } else if let error = errorMessage {
-                        errorView(error)
-                    } else if duplicateGroups.isEmpty {
-                        emptyStateView
-                    } else {
-                        duplicatesList
-                    }
+                if isLoading {
+                    loadingView
+                } else if let error = errorMessage {
+                    errorView(error)
+                } else {
+                    contentView
                 }
             }
             .navigationTitle("Duplicates")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "duplicates-toolbar") {
-                ToolbarItem(id: "sort", placement: .automatic) {
-                    Menu {
-                        ForEach(DuplicateSortOption.allCases, id: \.self) { option in
-                            Button {
-                                sortOption = option
-                            } label: {
-                                if option == sortOption {
-                                    Label(option.rawValue, systemImage: "checkmark")
-                                } else {
-                                    Text(option.rawValue)
-                                }
-                            }
-                        }
-                    } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
-                    }
-                    .help("Sort duplicate groups")
-                }
-
                 ToolbarItem(id: "refresh", placement: .automatic) {
                     Button(action: {
                         Task {
-                            await loadDuplicates()
+                            await loadFiles()
                         }
                     }) {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
-                    .help("Refresh duplicate detection")
+                    .help("Refresh file list")
                 }
             }
         }
         .task {
-            await loadDuplicates()
+            await loadFiles()
         }
     }
 
-    // MARK: - Content Views
+    // MARK: - Content View
+
+    private var contentView: some View {
+        VStack(spacing: 0) {
+            // Drive Grid Section
+            driveGridSection
+
+            Divider()
+
+            // Toolbar
+            toolbarSection
+
+            Divider()
+
+            // File List
+            if filteredFiles.isEmpty {
+                emptyStateView
+            } else {
+                fileListSection
+            }
+        }
+    }
+
+    // MARK: - Drive Grid Section
+
+    private var driveGridSection: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+            // Header
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Indexed Drives")
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+
+                    Text("Toggle 'Backup' to configure safety logic.")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                }
+
+                Spacer()
+
+                // Legend
+                HStack(spacing: DesignSystem.Spacing.large) {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 6, height: 6)
+                        Text("Duplicate")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    }
+
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("Backup")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    }
+                }
+            }
+
+            // Drive Grid
+            let columns = [
+                GridItem(.adaptive(minimum: 140, maximum: 180), spacing: DesignSystem.Spacing.medium)
+            ]
+
+            LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.medium) {
+                ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
+                    DriveGridCard(
+                        drive: drive,
+                        isBackup: driveStates[drive.id] ?? false,
+                        highlightStatus: getHighlightStatus(driveId: drive.id),
+                        onToggleBackup: {
+                            driveStates[drive.id] = !(driveStates[drive.id] ?? false)
+                        }
+                    )
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.sectionPadding)
+        .background(DesignSystem.Colors.windowBackground)
+    }
+
+    // MARK: - Toolbar Section
+
+    private var toolbarSection: some View {
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            // Sort Button
+            Menu {
+                ForEach(DuplicateSortOption.allCases, id: \.self) { option in
+                    Button {
+                        sortOption = option
+                    } label: {
+                        if option == sortOption {
+                            Label(option.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(option.rawValue)
+                        }
+                    }
+                }
+            } label: {
+                Label("Sort by \(sortOption.rawValue)", systemImage: "arrow.up.arrow.down")
+                    .font(DesignSystem.Typography.caption)
+            }
+            .frame(width: 180, alignment: .leading)
+
+            Spacer()
+
+            // Filter Toggles
+            HStack(spacing: 2) {
+                filterToggle(
+                    title: "Backed Up",
+                    icon: "checkmark.circle",
+                    isActive: showBackedUp,
+                    color: .green
+                ) {
+                    showBackedUp.toggle()
+                }
+
+                Divider()
+                    .frame(height: 20)
+
+                filterToggle(
+                    title: "Duplicates",
+                    icon: "exclamationmark.triangle",
+                    isActive: showDuplicates,
+                    color: .orange
+                ) {
+                    showDuplicates.toggle()
+                }
+            }
+            .padding(2)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(6)
+
+            Spacer()
+
+            // Search info
+            Text("\(filteredFiles.count) of \(files.count) files")
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .frame(width: 180, alignment: .trailing)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
+        .padding(.vertical, DesignSystem.Spacing.medium)
+        .background(Color.secondary.opacity(0.03))
+    }
+
+    @ViewBuilder
+    private func filterToggle(
+        title: String,
+        icon: String,
+        isActive: Bool,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if isActive {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                }
+                Text(title)
+                    .font(.system(size: 11))
+            }
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, 6)
+            .background(
+                isActive
+                    ? color.opacity(0.15)
+                    : Color.clear
+            )
+            .foregroundColor(
+                isActive
+                    ? color
+                    : DesignSystem.Colors.secondaryText
+            )
+            .cornerRadius(4)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(
+                        isActive ? color.opacity(0.3) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - File List Section
+
+    private var fileListSection: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                // Header
+                fileListHeader
+
+                Divider()
+
+                // File rows
+                ForEach(sortedFiles) { file in
+                    FileRow(
+                        file: file,
+                        driveStates: driveStates,
+                        drives: driveMonitor.drives,
+                        isHovered: hoveredFileId == file.id
+                    )
+                    .onHover { isHovering in
+                        hoveredFileId = isHovering ? file.id : nil
+                    }
+                    .onTapGesture {
+                        revealFirstLocation(file)
+                    }
+
+                    if file.id != sortedFiles.last?.id {
+                        Divider()
+                            .padding(.leading, DesignSystem.Spacing.cardPadding)
+                    }
+                }
+            }
+        }
+    }
+
+    private var fileListHeader: some View {
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            Text("Filename")
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Size")
+                .frame(width: 100, alignment: .trailing)
+
+            Text("Locations")
+                .frame(width: 150, alignment: .center)
+
+            Text("Date")
+                .frame(width: 140, alignment: .trailing)
+        }
+        .font(DesignSystem.Typography.caption)
+        .fontWeight(.semibold)
+        .foregroundColor(DesignSystem.Colors.secondaryText)
+        .textCase(.uppercase)
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        .padding(.vertical, DesignSystem.Spacing.small)
+        .background(Color.secondary.opacity(0.05))
+    }
+
+    // MARK: - State Views
 
     private var loadingView: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
             ProgressView()
                 .controlSize(.large)
 
-            Text("Analysing files for duplicates...")
+            Text("Analyzing files...")
                 .font(DesignSystem.Typography.subheadline)
                 .foregroundColor(DesignSystem.Colors.secondaryText)
         }
@@ -104,7 +403,7 @@ struct DuplicatesView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 32))
                 .foregroundStyle(.orange)
-            Text("Error loading duplicates")
+            Text("Error loading files")
                 .font(.callout)
                 .fontWeight(.medium)
             Text(message)
@@ -119,252 +418,145 @@ struct DuplicatesView: View {
     private var emptyStateView: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
             VStack(spacing: DesignSystem.Spacing.medium) {
-                Image(systemName: "checkmark.circle")
+                Image(systemName: "doc.text.magnifyingglass")
                     .font(.system(size: 56))
-                    .foregroundColor(.green)
+                    .foregroundColor(.gray)
                     .opacity(0.7)
 
                 VStack(spacing: DesignSystem.Spacing.small) {
-                    Text("No Duplicates Found")
+                    Text("No Files Found")
                         .font(DesignSystem.Typography.headline)
 
-                    Text("Your indexed drives have no duplicate files")
+                    Text("No files match your current filters")
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.secondaryText)
-                        .multilineTextAlignment(.center)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(DesignSystem.Spacing.xxxLarge)
-            .background(Color.green.opacity(0.05))
+            .background(Color.gray.opacity(0.05))
             .cornerRadius(DesignSystem.CornerRadius.card)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(DesignSystem.Spacing.sectionPadding)
     }
 
-    private var sortedGroups: [DuplicateGroup] {
-        duplicateGroups.sorted { lhs, rhs in
+    // MARK: - Logic
+
+    private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
+        guard let fileId = hoveredFileId,
+              let file = files.first(where: { $0.id == fileId }) else {
+            return .none
+        }
+
+        let hasFile = file.driveIds.contains(driveId)
+        if !hasFile {
+            return .dimmed
+        }
+
+        let isBackup = driveStates[driveId] ?? false
+        let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
+        let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
+
+        // Single source + backup(s) scenario
+        if sourceDrives.count == 1 && backupDrives.count >= 1 {
+            return isBackup ? .safe : .sourceSafe
+        }
+
+        return isBackup ? .safe : .warning
+    }
+
+    private var filteredFiles: [MultiDriveFile] {
+        files.filter { file in
+            // Get backup and source drives for this file
+            let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
+            let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
+
+            let isBackedUp = !backupDrives.isEmpty
+            let hasRedundantSource = sourceDrives.count > 1
+            let isUnsafe = backupDrives.isEmpty
+
+            // Show if it matches "Backed Up" filter
+            if showBackedUp && isBackedUp {
+                return true
+            }
+
+            // Show if it matches "Duplicates" filter
+            if showDuplicates && (hasRedundantSource || isUnsafe) {
+                return true
+            }
+
+            return false
+        }
+    }
+
+    private var sortedFiles: [MultiDriveFile] {
+        filteredFiles.sorted { lhs, rhs in
             switch sortOption {
-            case .duplicates:
-                return lhs.count > rhs.count
             case .size:
                 return lhs.size > rhs.size
             case .name:
                 return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+            case .locations:
+                return lhs.locations.count > rhs.locations.count
             }
         }
     }
 
-    private var duplicatesList: some View {
-        ScrollView {
-            LazyVStack(spacing: DesignSystem.Spacing.large) {
-                ForEach(sortedGroups) { group in
-                    DuplicateGroupRow(
-                        group: group,
-                        isExpanded: expandedGroups.contains(group.id)
-                    ) {
-                        toggleGroup(group)
-                    }
-                }
-            }
-            .padding(DesignSystem.Spacing.sectionPadding)
-        }
-    }
+    // MARK: - Data Loading
 
-    // MARK: - Actions
-
-    private func toggleGroup(_ group: DuplicateGroup) {
-        if expandedGroups.contains(group.id) {
-            expandedGroups.remove(group.id)
-        } else {
-            expandedGroups.insert(group.id)
-        }
-    }
-
-    private func loadDuplicates() async {
+    private func loadFiles() async {
         isLoading = true
         errorMessage = nil
 
         do {
+            // Get all duplicate groups from the database
             let groups = try await DatabaseManager.shared.getDuplicateGroups()
-            duplicateGroups = groups
 
-            // Calculate stats
-            let totalDuplicates = groups.reduce(0) { $0 + $1.count }
-            let wastedSpace = groups.reduce(0) { $0 + ($1.size * Int64($1.count - 1)) }
-            stats = DuplicateStats(
-                totalDuplicates: totalDuplicates,
-                wastedSpace: wastedSpace,
-                groupCount: groups.count
-            )
+            // Convert to MultiDriveFile format
+            var multiDriveFiles: [MultiDriveFile] = []
+
+            for group in groups {
+                // Only include files that exist on 2+ drives
+                guard group.files.count >= 2 else { continue }
+
+                let locations = group.files.map { file in
+                    FileLocation(
+                        id: file.id,
+                        driveId: file.driveUUID,
+                        relativePath: file.relativePath
+                    )
+                }
+
+                // Use the most recent modified date
+                let mostRecentDate = group.files.compactMap { $0.modifiedAt }.max()
+
+                multiDriveFiles.append(MultiDriveFile(
+                    id: "\(group.name)-\(group.size)",
+                    name: group.name,
+                    size: group.size,
+                    locations: locations,
+                    modifiedAt: mostRecentDate
+                ))
+            }
+
+            files = multiDriveFiles
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
     }
-}
 
-// MARK: - Duplicate Group Row
-
-struct DuplicateGroupRow: View {
-    let group: DuplicateGroup
-    let isExpanded: Bool
-    let onToggle: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Group header (clickable)
-            Button(action: onToggle) {
-                HStack(spacing: DesignSystem.Spacing.medium) {
-                    // Expand/collapse icon
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                        .frame(width: 12)
-
-                    // File icon (KEEP ORANGE)
-                    Image(systemName: "doc.on.doc.fill")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
-                        .frame(width: 24)
-
-                    // File info
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxSmall) {
-                        Text(group.name)
-                            .font(DesignSystem.Typography.headline)
-                            .lineLimit(1)
-
-                        HStack(spacing: DesignSystem.Spacing.small) {
-                            Text("\(group.count) copies")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-
-                            Text("•")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.tertiaryText)
-
-                            Text(ByteCountFormatter.string(fromByteCount: group.size, countStyle: .file))
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-
-                            Text("•")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.tertiaryText)
-
-                            Text("Total: \(ByteCountFormatter.string(fromByteCount: group.size * Int64(group.count), countStyle: .file))")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Duplicate count badge (KEEP ORANGE)
-                    HStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Text("\(group.count)×")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.orange)
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.small)
-                    .padding(.vertical, DesignSystem.Spacing.xSmall)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(4)
-                }
-                .padding(DesignSystem.Spacing.cardPadding)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // Expanded file list
-            if isExpanded {
-                Divider()
-
-                VStack(spacing: 0) {
-                    ForEach(group.files, id: \.id) { file in
-                        DuplicateFileRow(file: file)
-
-                        if file.id != group.files.last?.id {
-                            Divider()
-                                .padding(.leading, DesignSystem.Spacing.cardPadding)
-                        }
-                    }
-                }
-            }
+    private func revealFirstLocation(_ file: MultiDriveFile) {
+        guard let firstLocation = file.locations.first,
+              let drive = driveMonitor.drives.first(where: { $0.id == firstLocation.driveId }) else {
+            NSSound.beep()
+            return
         }
-        .background(DesignSystem.Colors.cardBackground)
-        .cornerRadius(DesignSystem.CornerRadius.card)
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
-                .stroke(DesignSystem.Colors.border, lineWidth: 1)
-        )
-    }
-}
 
-// MARK: - Duplicate File Row
-
-struct DuplicateFileRow: View {
-    let file: DuplicateFile
-
-    var body: some View {
-        HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
-            // File location icon
-            Image(systemName: "location")
-                .font(.caption)
-                .foregroundColor(DesignSystem.Colors.tertiaryText)
-                .frame(width: 12)
-
-            // File info
-            VStack(alignment: .leading, spacing: 2) {
-                Text(file.relativePath)
-                    .font(DesignSystem.Typography.technicalData)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                    .lineLimit(1)
-
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    Text(file.driveName)
-                        .font(.caption2)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-
-                    if let modifiedAt = file.modifiedAt {
-                        Text("•")
-                            .font(.caption2)
-                            .foregroundColor(DesignSystem.Colors.tertiaryText)
-
-                        Text(formatDate(modifiedAt))
-                            .font(.caption2)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-                }
-            }
-
-            Spacer()
-
-            // Reveal in Finder button
-            Button(action: { revealInFinder(file) }) {
-                Image(systemName: "arrow.right.circle")
-                    .font(.caption)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-            }
-            .buttonStyle(.plain)
-            .help("Reveal in Finder")
-        }
-        .padding(DesignSystem.Spacing.medium)
-        .background(Color.secondary.opacity(0.03))
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-
-    private func revealInFinder(_ file: DuplicateFile) {
-        let volumePath = "/Volumes/\(file.driveName)"
-        let fullPath = volumePath + "/" + file.relativePath
-
+        let volumePath = "/Volumes/\(drive.name)"
+        let fullPath = volumePath + "/" + firstLocation.relativePath
         let url = URL(fileURLWithPath: fullPath)
 
         if FileManager.default.fileExists(atPath: fullPath) {
@@ -375,7 +567,266 @@ struct DuplicateFileRow: View {
     }
 }
 
+// MARK: - Drive Grid Card
+
+enum DriveHighlightStatus {
+    case none
+    case warning
+    case safe
+    case sourceSafe
+    case dimmed
+}
+
+struct DriveGridCard: View {
+    let drive: DriveInfo
+    let isBackup: Bool
+    let highlightStatus: DriveHighlightStatus
+    let onToggleBackup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .center, spacing: DesignSystem.Spacing.medium) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: "externaldrive.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(iconColor)
+            }
+
+            // Drive name
+            VStack(spacing: 2) {
+                Text(drive.name)
+                    .font(.system(size: 11))
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
+
+                Text(drive.formattedTotal)
+                    .font(.system(size: 10))
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+            }
+
+            // Toggle
+            HStack(spacing: 4) {
+                Toggle("", isOn: Binding(
+                    get: { isBackup },
+                    set: { _ in onToggleBackup() }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+
+                Text(isBackup ? "Backup" : "Src")
+                    .font(.system(size: 10))
+                    .fontWeight(.medium)
+                    .foregroundColor(isBackup ? .green : DesignSystem.Colors.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(DesignSystem.Spacing.medium)
+        .background(backgroundColor)
+        .cornerRadius(DesignSystem.CornerRadius.card)
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
+                .stroke(borderColor, lineWidth: highlightStatus == .none ? 0.5 : 1.5)
+        )
+        .shadow(color: shadowColor, radius: shadowRadius)
+        .scaleEffect(highlightStatus == .dimmed ? 0.95 : 1.0)
+        .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: highlightStatus)
+    }
+
+    private var iconColor: Color {
+        switch highlightStatus {
+        case .warning: return .orange
+        case .safe: return .green
+        case .sourceSafe: return Color.secondary
+        default: return .blue
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.08)
+        case .safe: return Color.green.opacity(0.08)
+        case .sourceSafe: return Color.secondary.opacity(0.08)
+        default: return DesignSystem.Colors.cardBackground
+        }
+    }
+
+    private var borderColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.5)
+        case .safe: return Color.green.opacity(0.5)
+        case .sourceSafe: return Color.secondary.opacity(0.5)
+        default: return DesignSystem.Colors.border
+        }
+    }
+
+    private var shadowColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.3)
+        case .safe: return Color.green.opacity(0.3)
+        case .sourceSafe: return Color.secondary.opacity(0.3)
+        default: return Color.clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        highlightStatus == .none || highlightStatus == .dimmed ? 0 : 8
+    }
+}
+
+// MARK: - File Row
+
+struct FileRow: View {
+    let file: MultiDriveFile
+    let driveStates: [String: Bool]
+    let drives: [DriveInfo]
+    let isHovered: Bool
+
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            // File icon and name
+            HStack(spacing: DesignSystem.Spacing.medium) {
+                Image(systemName: fileIcon)
+                    .font(.title3)
+                    .foregroundColor(fileIconColor)
+                    .frame(width: 24)
+
+                Text(file.name)
+                    .font(DesignSystem.Typography.body)
+                    .lineLimit(1)
+                    .foregroundColor(
+                        isHovered
+                            ? DesignSystem.Colors.accent
+                            : DesignSystem.Colors.primaryText
+                    )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Size
+            Text(file.formattedSize)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .frame(width: 100, alignment: .trailing)
+
+            // Location pills
+            HStack(spacing: 4) {
+                ForEach(file.driveIds, id: \.self) { driveId in
+                    LocationPill(
+                        driveId: driveId,
+                        driveName: drives.first(where: { $0.id == driveId })?.name ?? "Unknown",
+                        isBackup: driveStates[driveId] ?? false,
+                        isHighlighted: isHovered,
+                        isSingleSourceSafe: isSingleSourceSafe
+                    )
+                }
+
+                Text("\(file.locations.count)")
+                    .font(.system(size: 10))
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
+            }
+            .frame(width: 150, alignment: .center)
+
+            // Date
+            Text(file.formattedDate)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .frame(width: 140, alignment: .trailing)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        .padding(.vertical, DesignSystem.Spacing.medium)
+        .background(
+            isHovered
+                ? DesignSystem.Colors.cardBackgroundHover
+                : Color.clear
+        )
+        .contentShape(Rectangle())
+    }
+
+    private var fileIcon: String {
+        switch file.fileType {
+        case "video": return "video.fill"
+        case "image": return "photo.fill"
+        case "audio": return "music.note"
+        case "database": return "cylinder.fill"
+        default: return "doc.fill"
+        }
+    }
+
+    private var fileIconColor: Color {
+        switch file.fileType {
+        case "video": return .purple
+        case "image": return .blue
+        case "audio": return .pink
+        case "database": return .gray
+        default: return .blue
+        }
+    }
+
+    private var isSingleSourceSafe: Bool {
+        let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
+        let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
+        return sourceDrives.count == 1 && backupDrives.count >= 1
+    }
+}
+
+// MARK: - Location Pill
+
+struct LocationPill: View {
+    let driveId: String
+    let driveName: String
+    let isBackup: Bool
+    let isHighlighted: Bool
+    let isSingleSourceSafe: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(pillColor)
+            .frame(width: 6, height: 20)
+            .shadow(color: shadowColor, radius: isHighlighted ? 3 : 0)
+            .scaleEffect(x: 1.0, y: isHighlighted ? 1.1 : 1.0)
+            .help(driveName)
+            .animation(.easeInOut(duration: 0.2), value: isHighlighted)
+    }
+
+    private var pillColor: Color {
+        if !isHighlighted {
+            return Color.secondary.opacity(0.3)
+        }
+
+        if isBackup {
+            return .green
+        } else if isSingleSourceSafe {
+            return Color.secondary
+        } else {
+            return .orange
+        }
+    }
+
+    private var shadowColor: Color {
+        if !isHighlighted {
+            return Color.clear
+        }
+
+        if isBackup {
+            return Color.green.opacity(0.5)
+        } else if isSingleSourceSafe {
+            return Color.secondary.opacity(0.5)
+        } else {
+            return Color.orange.opacity(0.5)
+        }
+    }
+}
+
+// MARK: - Preview
+
 #Preview {
     DuplicatesView()
-        .frame(width: 600, height: 500)
+        .environmentObject(DriveMonitor())
+        .frame(width: 900, height: 700)
 }
