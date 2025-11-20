@@ -68,7 +68,7 @@ struct FileDisplayItem: Identifiable {
 
     var formattedDate: String {
         guard let date = modifiedAt ?? createdAt else {
-            return "Unknown"
+            return "—" // Em dash for search results without dates
         }
 
         let formatter = DateFormatter()
@@ -95,8 +95,10 @@ struct FilesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
 
     @State private var files: [FileDisplayItem] = []
+    @State private var searchResults: [FileDisplayItem] = []
     @State private var isLoading = true
     @State private var isLoadingMore = false
+    @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var sortOption: FileSortOption = .dateAdded
     @State private var searchText = ""
@@ -107,6 +109,7 @@ struct FilesView: View {
 
     private let batchSize = 100
     private let loadMoreThreshold = 20 // Load more when within 20 items of the end
+    private let searchManager = SearchManager()
 
     var body: some View {
         NavigationStack {
@@ -117,7 +120,7 @@ struct FilesView: View {
                         loadingView
                     } else if let error = errorMessage {
                         errorView(error)
-                    } else if files.isEmpty {
+                    } else if displayedFiles.isEmpty {
                         emptyStateView
                     } else {
                         filesTableView
@@ -152,18 +155,35 @@ struct FilesView: View {
         .task {
             await loadInitialFiles()
         }
+        .onChange(of: searchText) { oldValue, newValue in
+            Task {
+                await performSearch(newValue)
+            }
+        }
     }
 
-    // MARK: - Subtitle
+    // MARK: - Computed Properties
+
+    /// Files to display - either search results or lazy-loaded files
+    private var displayedFiles: [FileDisplayItem] {
+        if !searchText.isEmpty {
+            return searchResults
+        } else {
+            return files
+        }
+    }
 
     private var subtitle: String {
-        let count = filteredAndSearchedFiles.count
+        let count = filteredFiles.count
         if searchText.isEmpty {
             if hasMoreFiles && !isLoading {
                 return "\(count)+ file\(count == 1 ? "" : "s")"
             }
             return "\(count) file\(count == 1 ? "" : "s")"
         } else {
+            if isSearching {
+                return "Searching..."
+            }
             return "\(count) result\(count == 1 ? "" : "s")"
         }
     }
@@ -207,8 +227,8 @@ struct FilesView: View {
                         }
                     }
 
-                    // Loading indicator at bottom
-                    if isLoadingMore {
+                    // Loading indicator at bottom (only for lazy loading, not search)
+                    if isLoadingMore && searchText.isEmpty {
                         HStack(spacing: DesignSystem.Spacing.small) {
                             ProgressView()
                                 .controlSize(.small)
@@ -390,6 +410,41 @@ struct FilesView: View {
         .help("Filter by drive")
     }
 
+    // MARK: - Search
+
+    private func performSearch(_ query: String) async {
+        guard !query.isEmpty else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+
+        do {
+            let results = try await searchManager.search(query)
+            // Convert SearchResult to FileDisplayItem
+            searchResults = results.map { result in
+                FileDisplayItem(
+                    id: result.id,
+                    name: result.name,
+                    relativePath: result.relativePath,
+                    size: result.size,
+                    driveUUID: result.driveUUID,
+                    driveName: result.driveName,
+                    modifiedAt: nil, // SearchResult doesn't include dates
+                    createdAt: nil,
+                    isConnected: result.isConnected
+                )
+            }
+        } catch {
+            print("Search error: \(error)")
+            searchResults = []
+        }
+
+        isSearching = false
+    }
+
     // MARK: - Data Loading
 
     private func loadInitialFiles() async {
@@ -473,28 +528,19 @@ struct FilesView: View {
 
     // MARK: - Filtering and Sorting
 
-    private var filteredAndSearchedFiles: [FileDisplayItem] {
-        var results = files
+    private var filteredFiles: [FileDisplayItem] {
+        var results = displayedFiles
 
         // Filter by drive if selected
         if let driveId = selectedDriveFilter {
             results = results.filter { $0.driveUUID == driveId }
         }
 
-        // Search filter
-        if !searchText.isEmpty {
-            let lowercasedSearch = searchText.lowercased()
-            results = results.filter {
-                $0.name.lowercased().contains(lowercasedSearch) ||
-                $0.relativePath.lowercased().contains(lowercasedSearch)
-            }
-        }
-
         return results
     }
 
     private var sortedFiles: [FileDisplayItem] {
-        return filteredAndSearchedFiles.sorted { lhs, rhs in
+        return filteredFiles.sorted { lhs, rhs in
             switch sortOption {
             case .dateAdded:
                 // Higher ID = more recent
