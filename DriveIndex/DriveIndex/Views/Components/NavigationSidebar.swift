@@ -25,7 +25,7 @@ struct NavigationSidebar: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
 
-            // Navigation list
+            // Navigation list (main content)
             List(selection: $selection) {
                 // Search (no section)
                 NavigationSidebarRow(item: .search)
@@ -35,8 +35,6 @@ struct NavigationSidebar: View {
                 Section {
                     NavigationSidebarRow(item: .drives)
                         .tag(NavigationItem.drives)
-                    NavigationSidebarRow(item: .files)
-                        .tag(NavigationItem.files)
                     NavigationSidebarRow(item: .duplicates)
                         .tag(NavigationItem.duplicates)
                 } header: {
@@ -45,16 +43,22 @@ struct NavigationSidebar: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(DesignSystem.Colors.secondaryText)
                 }
-
-                // Spacer to push Settings to bottom
-                Spacer()
-                    .listRowBackground(Color.clear)
-
-                // Settings at bottom (no section)
-                NavigationSidebarRow(item: .settings)
-                    .tag(NavigationItem.settings)
             }
             .listStyle(.sidebar)
+
+            // Settings pinned to bottom
+            Divider()
+
+            Button(action: {
+                selection = .settings
+            }) {
+                NavigationSidebarRow(item: .settings)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(selection == .settings ? Color.accentColor.opacity(0.15) : Color.clear)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         }
         .navigationTitle("DriveIndex")
     }

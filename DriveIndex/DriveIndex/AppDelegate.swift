@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var floatingPanel: FloatingPanel?
 
     /// The main application window for browsing drives
-    private var mainWindow: NSWindow?
+    private var mainWindow: MainWindow?
 
     /// The settings window (opened via DriveIndex > Settings menu)
     private var settingsWindow: SettingsWindow?
@@ -357,8 +357,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Show and activate the window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window.show()
     }
 
     /// Open the settings window
@@ -381,26 +380,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func createMainWindow() {
         // Create window with appropriate size for content browser
         let windowRect = NSRect(x: 0, y: 0, width: 900, height: 600)
-        let window = NSWindow(
-            contentRect: windowRect,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
+        let window = MainWindow(contentRect: windowRect)
 
-        // Configure window
-        window.title = "DriveIndex"
-        window.titlebarAppearsTransparent = false
-        window.toolbarStyle = .unified
-        window.center()
-        window.setFrameAutosaveName("MainWindow")
+        // Set delegate
         window.delegate = self
-
-        // Prevent the window from being released when closed
-        window.isReleasedWhenClosed = false
-
-        // Set minimum window size
-        window.minSize = NSSize(width: 800, height: 500)
 
         // Create MainWindowView with managers
         let mainWindowView = MainWindowView()

@@ -118,8 +118,6 @@ struct MainWindowView: View {
             DrivesView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-        case .files:
-            FilesView()
         case .duplicates:
             DuplicatesView()
         case .settings:
