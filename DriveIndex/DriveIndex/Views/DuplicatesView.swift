@@ -218,7 +218,6 @@ struct DuplicatesView: View {
             }
         }
         .padding(DesignSystem.Spacing.sectionPadding)
-        .background(DesignSystem.Colors.windowBackground)
     }
 
     // MARK: - Toolbar Section
@@ -474,6 +473,7 @@ struct DuplicatesView: View {
 
             let isBackedUp = !backupDrives.isEmpty
             let hasRedundantSource = sourceDrives.count > 1
+            let hasRedundantBackup = backupDrives.count > 1
             let isUnsafe = backupDrives.isEmpty
 
             // Show if it matches "Backed Up" filter
@@ -482,7 +482,8 @@ struct DuplicatesView: View {
             }
 
             // Show if it matches "Duplicates" filter
-            if showDuplicates && (hasRedundantSource || isUnsafe) {
+            // Duplicates include: multiple sources, multiple backups, or no backup at all
+            if showDuplicates && (hasRedundantSource || hasRedundantBackup || isUnsafe) {
                 return true
             }
 
