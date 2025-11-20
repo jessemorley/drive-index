@@ -14,11 +14,12 @@ struct ShortcutView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
                 // Keyboard Shortcut
-                SettingsSection(
-                    title: "Global Shortcut",
-                    description: "Keyboard shortcut to open the search window",
-                    symbol: "keyboard"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Global Shortcut")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         ShortcutRecorder(shortcut: $keyboardShortcut)
                             .onChange(of: keyboardShortcut) { _, _ in
@@ -28,8 +29,11 @@ struct ShortcutView: View {
                         Text("Press a key combination with at least one modifier (⌘, ⌃, ⌥, or ⇧)")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
-                            .italic()
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Info callout
@@ -51,9 +55,10 @@ struct ShortcutView: View {
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
                 }
-                .padding(DesignSystem.Spacing.medium)
+                .padding(DesignSystem.Spacing.large)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)

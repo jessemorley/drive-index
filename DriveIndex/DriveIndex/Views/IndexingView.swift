@@ -51,19 +51,28 @@ struct IndexingView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
                 // Automatic Indexing
-                SettingsSection(
-                    title: "Automatic Indexing",
-                    description: "Monitor drives for file changes and automatically update the index",
-                    symbol: "arrow.triangle.2.circlepath"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Automatic Indexing")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        Toggle(isOn: $fsEventsEnabled) {
+                        HStack {
                             Text("Enable automatic indexing")
                                 .font(DesignSystem.Typography.callout)
-                        }
-                        .toggleStyle(.switch)
-                        .onChange(of: fsEventsEnabled) { _, newValue in
-                            autoSaveFSEventsEnabled(newValue)
+
+                            Spacer()
+
+                            Toggle(isOn: $fsEventsEnabled) {
+                                EmptyView()
+                            }
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .onChange(of: fsEventsEnabled) { _, newValue in
+                                autoSaveFSEventsEnabled(newValue)
+                            }
                         }
 
                         if fsEventsEnabled {
@@ -93,14 +102,19 @@ struct IndexingView: View {
                             .padding(.top, DesignSystem.Spacing.small)
                         }
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Duplicate Detection
-                SettingsSection(
-                    title: "Duplicate Detection",
-                    description: "Configure how duplicate files are detected and analyzed",
-                    symbol: "doc.on.doc"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Duplicate Detection")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                             HStack {
@@ -127,14 +141,19 @@ struct IndexingView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Excluded Directories
-                SettingsSection(
-                    title: "Excluded Directories",
-                    description: "Directory names to skip during indexing",
-                    symbol: "folder.badge.minus"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Excluded Directories")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         TagInputView(
                             tags: $excludedDirectories,
@@ -154,14 +173,19 @@ struct IndexingView: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(.blue)
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Excluded Extensions
-                SettingsSection(
-                    title: "Excluded Extensions",
-                    description: "File extensions and names to skip",
-                    symbol: "doc.badge.gearshape"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Excluded Extensions")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         TagInputView(
                             tags: $excludedExtensions,
@@ -181,47 +205,58 @@ struct IndexingView: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(.blue)
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Excluded Drives
-                SettingsSection(
-                    title: "Excluded Drives",
-                    description: "Drives that won't be automatically indexed",
-                    symbol: "externaldrive.badge.minus"
-                ) {
-                    if excludedDrives.isEmpty {
-                        Text("No excluded drives")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                            .italic()
-                            .padding(.vertical, DesignSystem.Spacing.small)
-                    } else {
-                        VStack(spacing: DesignSystem.Spacing.small) {
-                            ForEach(excludedDrives, id: \.uuid) { drive in
-                                HStack {
-                                    Image(systemName: "externaldrive")
-                                        .foregroundStyle(DesignSystem.Colors.secondaryText)
-                                        .font(DesignSystem.Typography.caption)
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Excluded Drives")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
 
-                                    Text(drive.name)
-                                        .font(DesignSystem.Typography.caption)
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                        if excludedDrives.isEmpty {
+                            Text("No excluded drives")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundStyle(DesignSystem.Colors.secondaryText)
+                                .italic()
+                                .padding(.vertical, DesignSystem.Spacing.small)
+                        } else {
+                            VStack(spacing: DesignSystem.Spacing.small) {
+                                ForEach(excludedDrives, id: \.uuid) { drive in
+                                    HStack {
+                                        Image(systemName: "externaldrive")
+                                            .foregroundStyle(DesignSystem.Colors.secondaryText)
+                                            .font(DesignSystem.Typography.caption)
 
-                                    Spacer()
+                                        Text(drive.name)
+                                            .font(DesignSystem.Typography.caption)
 
-                                    Button("Include") {
-                                        Task {
-                                            await driveMonitor.unexcludeDrive(drive.uuid)
-                                            await loadExcludedDrives()
+                                        Spacer()
+
+                                        Button("Include") {
+                                            Task {
+                                                await driveMonitor.unexcludeDrive(drive.uuid)
+                                                await loadExcludedDrives()
+                                            }
                                         }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                        .font(DesignSystem.Typography.caption)
                                     }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
-                                    .font(DesignSystem.Typography.caption)
+                                    .padding(.vertical, DesignSystem.Spacing.xSmall)
                                 }
-                                .padding(.vertical, DesignSystem.Spacing.xSmall)
                             }
                         }
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Info callout
@@ -243,9 +278,10 @@ struct IndexingView: View {
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
                 }
-                .padding(DesignSystem.Spacing.medium)
+                .padding(DesignSystem.Spacing.large)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)

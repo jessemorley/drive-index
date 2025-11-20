@@ -17,11 +17,12 @@ struct AdvancedView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
                 // Database Location
-                SettingsSection(
-                    title: "Database Location",
-                    description: "Where indexed data is stored",
-                    symbol: "folder.fill.badge.gearshape"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Database Location")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         HStack {
                             Text(databasePath)
@@ -54,18 +55,20 @@ struct AdvancedView: View {
                                 .help("Delete entire database")
                             }
                         }
-                        .padding(DesignSystem.Spacing.medium)
-                        .background(DesignSystem.Colors.cardBackgroundDefault)
-                        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Danger Zone
-                SettingsSection(
-                    title: "Danger Zone",
-                    description: "Destructive actions that cannot be undone",
-                    symbol: "exclamationmark.triangle.fill"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Danger Zone")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         Button(action: {
                             showDeleteDatabaseConfirmation = true
@@ -83,6 +86,10 @@ struct AdvancedView: View {
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Warning callout
@@ -104,9 +111,10 @@ struct AdvancedView: View {
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
                 }
-                .padding(DesignSystem.Spacing.medium)
+                .padding(DesignSystem.Spacing.large)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.orange.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)
