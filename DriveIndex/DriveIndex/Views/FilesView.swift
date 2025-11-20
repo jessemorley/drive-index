@@ -660,9 +660,9 @@ struct FileRow: View {
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
             // File icon and name (flexible)
-            HStack(spacing: DesignSystem.Spacing.small) {
+            HStack(spacing: DesignSystem.Spacing.medium) {
                 fileIcon
-                    .frame(width: 20)
+                    .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.name)
@@ -711,7 +711,7 @@ struct FileRow: View {
                 .frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
-        .padding(.vertical, DesignSystem.Spacing.small)
+        .padding(.vertical, DesignSystem.Spacing.medium)
         .background(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
         .contentShape(Rectangle())
     }
@@ -776,7 +776,7 @@ struct FileRow: View {
 
         return Image(systemName: iconName)
             .foregroundColor(iconColor)
-            .font(.system(size: 16))
+            .font(.title3)
     }
 }
 
