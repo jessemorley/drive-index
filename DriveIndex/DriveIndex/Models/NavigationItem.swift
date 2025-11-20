@@ -16,6 +16,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     // Index section
     case drives
     case duplicates
+    case indexingTest  // Temporary test
 
     // Settings section (bottom)
     case settings
@@ -27,6 +28,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .search: return "Search"
         case .drives: return "Drives"
         case .duplicates: return "Duplicates"
+        case .indexingTest: return "Indexing Test"
         case .settings: return "Settings"
         }
     }
@@ -36,6 +38,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .search: return "magnifyingglass"
         case .drives: return "externaldrive"
         case .duplicates: return "doc.on.doc"
+        case .indexingTest: return "gearshape.fill"
         case .settings: return "gearshape"
         }
     }
@@ -44,7 +47,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .search:
             return .search
-        case .drives, .duplicates:
+        case .drives, .duplicates, .indexingTest:
             return .index
         case .settings:
             return .preferences

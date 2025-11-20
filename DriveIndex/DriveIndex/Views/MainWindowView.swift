@@ -121,6 +121,10 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .duplicates:
             DuplicatesView()
+        case .indexingTest:
+            IndexingView()
+                .environmentObject(driveMonitor)
+                .environmentObject(indexManager)
         case .settings:
             // Settings window is opened via notification, this should never be reached
             EmptyView()

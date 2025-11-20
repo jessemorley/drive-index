@@ -61,7 +61,7 @@ struct NavigationSidebar: View {
             .buttonStyle(.plain)
             .background(selection == .settings ? Color.accentColor.opacity(0.15) : Color.clear)
             .padding(.horizontal, 8)
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
         }
         .navigationTitle("DriveIndex")
     }
