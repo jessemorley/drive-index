@@ -169,7 +169,7 @@ struct SearchView: View {
                 }
             }
         }
-        .onKeyPress(.space) { press in
+        .onKeyPress(.space) {
             // Spacebar to toggle QuickLook
             if let selectedFile = appSearchState.selectedFile {
                 Task { @MainActor in
