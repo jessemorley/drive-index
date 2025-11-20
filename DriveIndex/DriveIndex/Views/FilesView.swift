@@ -8,11 +8,30 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum FileSortOption: String, CaseIterable {
-    case dateAdded = "Date Added"
+enum FileSortColumn: String {
     case name = "Name"
     case size = "Size"
     case kind = "Kind"
+    case dateAdded = "Date Added"
+}
+
+enum SortDirection {
+    case ascending
+    case descending
+
+    var icon: String {
+        switch self {
+        case .ascending: return "chevron.up"
+        case .descending: return "chevron.down"
+        }
+    }
+
+    func toggled() -> SortDirection {
+        switch self {
+        case .ascending: return .descending
+        case .descending: return .ascending
+        }
+    }
 }
 
 struct FileDisplayItem: Identifiable {
@@ -100,7 +119,8 @@ struct FilesView: View {
     @State private var isLoadingMore = false
     @State private var isSearching = false
     @State private var errorMessage: String?
-    @State private var sortOption: FileSortOption = .dateAdded
+    @State private var sortColumn: FileSortColumn = .dateAdded
+    @State private var sortDirection: SortDirection = .descending
     @State private var searchText = ""
     @State private var selectedDriveFilter: String? = nil
     @State private var hoveredFileID: Int64?
@@ -134,10 +154,6 @@ struct FilesView: View {
             .toolbar(id: "files-toolbar") {
                 ToolbarItem(id: "filter", placement: .automatic) {
                     filterMenu
-                }
-
-                ToolbarItem(id: "sort", placement: .automatic) {
-                    sortMenu
                 }
 
                 ToolbarItem(id: "refresh", placement: .automatic) {
@@ -264,27 +280,30 @@ struct FilesView: View {
     private var tableHeader: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
             // Name column (flexible)
-            Text("Name")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            columnHeader(
+                title: "Name",
+                column: .name,
+                alignment: .leading,
+                width: nil
+            )
 
             // Size column (fixed width)
-            Text("Size")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 80, alignment: .trailing)
+            columnHeader(
+                title: "Size",
+                column: .size,
+                alignment: .trailing,
+                width: 80
+            )
 
             // Kind column (fixed width)
-            Text("Kind")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 140, alignment: .leading)
+            columnHeader(
+                title: "Kind",
+                column: .kind,
+                alignment: .leading,
+                width: 140
+            )
 
-            // Drive column (fixed width)
+            // Drive column (fixed width) - not sortable
             Text("Drive")
                 .font(DesignSystem.Typography.caption)
                 .fontWeight(.semibold)
@@ -292,15 +311,55 @@ struct FilesView: View {
                 .frame(width: 120, alignment: .leading)
 
             // Date Added column (fixed width)
-            Text("Date Added")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 140, alignment: .leading)
+            columnHeader(
+                title: "Date Added",
+                column: .dateAdded,
+                alignment: .leading,
+                width: 140
+            )
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.small)
         .background(DesignSystem.Colors.cardBackgroundDefault)
+    }
+
+    @ViewBuilder
+    private func columnHeader(
+        title: String,
+        column: FileSortColumn,
+        alignment: Alignment,
+        width: CGFloat?
+    ) -> some View {
+        let isActive = sortColumn == column && searchText.isEmpty
+
+        Button(action: {
+            if sortColumn == column {
+                sortDirection = sortDirection.toggled()
+            } else {
+                sortColumn = column
+                // Default direction based on column type
+                sortDirection = column == .dateAdded ? .descending : .ascending
+            }
+        }) {
+            HStack(spacing: DesignSystem.Spacing.xSmall) {
+                Text(title)
+                    .font(DesignSystem.Typography.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isActive ? DesignSystem.Colors.primaryText : DesignSystem.Colors.secondaryText)
+
+                if isActive {
+                    Image(systemName: sortDirection.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                }
+            }
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment == .leading ? .leading : (alignment == .trailing ? .trailing : .center))
+            .frame(width: width)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(searchText.isEmpty ? "Sort by \(title.lowercased())" : "Sorting disabled during search")
+        .disabled(!searchText.isEmpty)
     }
 
     // MARK: - State Views
@@ -361,25 +420,6 @@ struct FilesView: View {
     }
 
     // MARK: - Toolbar Items
-
-    private var sortMenu: some View {
-        Menu {
-            ForEach(FileSortOption.allCases, id: \.self) { option in
-                Button {
-                    sortOption = option
-                } label: {
-                    if option == sortOption {
-                        Label(option.rawValue, systemImage: "checkmark")
-                    } else {
-                        Text(option.rawValue)
-                    }
-                }
-            }
-        } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
-        }
-        .help("Sort files")
-    }
 
     private var filterMenu: some View {
         Menu {
@@ -540,23 +580,33 @@ struct FilesView: View {
     }
 
     private var sortedFiles: [FileDisplayItem] {
+        // When searching, preserve BM25 ranking order from FTS5
+        guard searchText.isEmpty else {
+            return filteredFiles
+        }
+
+        // Apply custom sorting when browsing
         return filteredFiles.sorted { lhs, rhs in
-            switch sortOption {
+            let result: Bool
+            switch sortColumn {
             case .dateAdded:
                 // Higher ID = more recent
-                return lhs.id > rhs.id
+                result = lhs.id > rhs.id
             case .name:
-                return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+                result = lhs.name.localizedCompare(rhs.name) == .orderedAscending
             case .size:
-                return lhs.size > rhs.size
+                result = lhs.size > rhs.size
             case .kind:
                 let lhsKind = lhs.kind
                 let rhsKind = rhs.kind
                 if lhsKind == rhsKind {
                     return lhs.name.localizedCompare(rhs.name) == .orderedAscending
                 }
-                return lhsKind.localizedCompare(rhsKind) == .orderedAscending
+                result = lhsKind.localizedCompare(rhsKind) == .orderedAscending
             }
+
+            // Apply sort direction
+            return sortDirection == .ascending ? result : !result
         }
     }
 
