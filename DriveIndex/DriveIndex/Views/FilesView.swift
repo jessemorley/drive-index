@@ -297,6 +297,7 @@ struct FilesView: View {
                         .padding(.vertical, DesignSystem.Spacing.large)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

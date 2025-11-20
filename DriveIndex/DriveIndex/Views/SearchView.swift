@@ -170,6 +170,7 @@ struct SearchView: View {
                             .padding(.leading, DesignSystem.Spacing.cardPadding)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .focusable()
