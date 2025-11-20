@@ -75,6 +75,17 @@ struct DuplicatesView: View {
                     }
                     .help("Sort duplicate groups")
                 }
+
+                ToolbarItem(id: "refresh", placement: .automatic) {
+                    Button(action: {
+                        Task {
+                            await loadDuplicates()
+                        }
+                    }) {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .help("Refresh duplicate detection")
+                }
             }
         }
         .task {
