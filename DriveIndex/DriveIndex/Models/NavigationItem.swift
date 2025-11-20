@@ -57,12 +57,26 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
 // MARK: - Navigation Section
 
-enum NavigationSection: String, CaseIterable, Identifiable {
-    case search = "" // No header for search
-    case index = "Index"
-    case preferences = "" // No header for settings
+enum NavigationSection: CaseIterable, Identifiable {
+    case search
+    case index
+    case preferences
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .search: return "search"
+        case .index: return "index"
+        case .preferences: return "preferences"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .search: return "" // No header for search
+        case .index: return "Index"
+        case .preferences: return "" // No header for settings
+        }
+    }
 
     var items: [NavigationItem] {
         NavigationItem.allCases.filter { $0.section == self }

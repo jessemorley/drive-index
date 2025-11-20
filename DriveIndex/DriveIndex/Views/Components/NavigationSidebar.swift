@@ -34,9 +34,9 @@ struct NavigationSidebar: View {
                                 .tag(item)
                         }
                     } header: {
-                        // Only show header if section name is not empty
-                        if !section.rawValue.isEmpty {
-                            Text(section.rawValue)
+                        // Only show header if section title is not empty
+                        if !section.title.isEmpty {
+                            Text(section.title)
                                 .font(.system(size: 11))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(DesignSystem.Colors.secondaryText)
