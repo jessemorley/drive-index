@@ -21,7 +21,6 @@
 		863168352EC999C3007B6201 /* NavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168342EC999C3007B6201 /* NavigationItem.swift */; };
 		863168372EC999D3007B6201 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168362EC999D3007B6201 /* DesignSystem.swift */; };
 		863168402EC999E8007B6201 /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683B2EC999E8007B6201 /* FilesView.swift */; };
-		863168412EC999E8007B6201 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683D2EC999E8007B6201 /* MainWindowView.swift */; };
 		863168422EC999E8007B6201 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168392EC999E8007B6201 /* AppearanceView.swift */; };
 		863168432EC999E8007B6201 /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168382EC999E8007B6201 /* AdvancedView.swift */; };
 		863168442EC999E8007B6201 /* DrivesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683A2EC999E8007B6201 /* DrivesView.swift */; };
@@ -32,7 +31,6 @@
 		863BF7F72ECE757C0014E923 /* HashWorker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863BF7F62ECE757C0014E923 /* HashWorker.swift */; };
 		866227B92EC693D300B42819 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866227B82EC693D300B42819 /* AppDelegate.swift */; };
 		86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */; };
-		86653A0C2EC695FE00DD4FB3 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A0E2EC695FE00DD4FB3 /* MainWindow.swift */; };
 		86653A0D2EC695FF00DD4FB3 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86653A0F2EC695FF00DD4FB3 /* SettingsWindow.swift */; };
 		86758BD32ECA78F200270DC6 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86758BD22ECA78F100270DC6 /* TagInputView.swift */; };
 		867891A82EC0655800E2CDAD /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891A52EC0655800E2CDAD /* Spacing.swift */; };
@@ -78,14 +76,12 @@
 		8631683A2EC999E8007B6201 /* DrivesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivesView.swift; sourceTree = "<group>"; };
 		8631683B2EC999E8007B6201 /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesView.swift; sourceTree = "<group>"; };
 		8631683C2EC999E8007B6201 /* IndexingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexingView.swift; sourceTree = "<group>"; };
-		8631683D2EC999E8007B6201 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		8631683E2EC999E8007B6201 /* RaycastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastView.swift; sourceTree = "<group>"; };
 		8631683F2EC999E8007B6201 /* ShortcutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutView.swift; sourceTree = "<group>"; };
 		863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveDetailView.swift; sourceTree = "<group>"; };
 		863BF7F62ECE757C0014E923 /* HashWorker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HashWorker.swift; sourceTree = "<group>"; };
 		866227B82EC693D300B42819 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
-		86653A0E2EC695FE00DD4FB3 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		86653A0F2EC695FF00DD4FB3 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 		86758BD22ECA78F100270DC6 /* TagInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagInputView.swift; sourceTree = "<group>"; };
 		867891A52EC0655800E2CDAD /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
@@ -163,7 +159,6 @@
 				8631683A2EC999E8007B6201 /* DrivesView.swift */,
 				8631683B2EC999E8007B6201 /* FilesView.swift */,
 				8631683C2EC999E8007B6201 /* IndexingView.swift */,
-				8631683D2EC999E8007B6201 /* MainWindowView.swift */,
 				8631683E2EC999E8007B6201 /* RaycastView.swift */,
 				8631683F2EC999E8007B6201 /* ShortcutView.swift */,
 				867891AE2EC0A55A00E2CDAD /* SearchResultsView.swift */,
@@ -202,7 +197,6 @@
 			isa = PBXGroup;
 			children = (
 				86653A092EC695FD00DD4FB3 /* FloatingPanel.swift */,
-				86653A0E2EC695FE00DD4FB3 /* MainWindow.swift */,
 				86653A0F2EC695FF00DD4FB3 /* SettingsWindow.swift */,
 				87000016 /* TestWindow.swift */,
 			);
@@ -314,7 +308,6 @@
 				867891B22EC0B34E00E2CDAD /* HotkeyManager.swift in Sources */,
 				867891B32EC0B34E00E2CDAD /* KeyboardShortcut.swift in Sources */,
 				86653A0B2EC695FD00DD4FB3 /* FloatingPanel.swift in Sources */,
-				86653A0C2EC695FE00DD4FB3 /* MainWindow.swift in Sources */,
 				86653A0D2EC695FF00DD4FB3 /* SettingsWindow.swift in Sources */,
 				8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */,
 				863168332EC96F65007B6201 /* StorageCache.swift in Sources */,
