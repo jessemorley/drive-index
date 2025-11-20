@@ -34,10 +34,13 @@ struct NavigationSidebar: View {
                                 .tag(item)
                         }
                     } header: {
-                        Text(section.rawValue)
-                            .font(.system(size: 11))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
+                        // Only show header if section name is not empty
+                        if !section.rawValue.isEmpty {
+                            Text(section.rawValue)
+                                .font(.system(size: 11))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(DesignSystem.Colors.secondaryText)
+                        }
                     }
                 }
             }

@@ -31,14 +31,13 @@ struct DrivesView: View {
 
     @State private var viewMode: DriveViewMode = .list
     @State private var sortOption: DriveSortOption = .name
-    @State private var searchText: String = ""
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 if viewMode == .list {
                     LazyVStack(spacing: DesignSystem.Spacing.small) {
-                        ForEach(filteredAndSortedDrives) { drive in
+                        ForEach(sortedDrives) { drive in
                             NavigationLink(value: drive) {
                                 DriveDetailCard(drive: drive)
                             }
@@ -51,7 +50,7 @@ struct DrivesView: View {
                         GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing),
                         GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing)
                     ], spacing: DesignSystem.Card.gridSpacing) {
-                        ForEach(filteredAndSortedDrives) { drive in
+                        ForEach(sortedDrives) { drive in
                             NavigationLink(value: drive) {
                                 DriveCard(drive: drive)
                             }
@@ -62,8 +61,7 @@ struct DrivesView: View {
                 }
             }
             .navigationTitle("Drives")
-            .navigationSubtitle("\(filteredAndSortedDrives.count) drive\(filteredAndSortedDrives.count == 1 ? "" : "s")")
-            .searchable(text: $searchText, placement: .toolbar, prompt: "Search drives")
+            .navigationSubtitle("\(sortedDrives.count) drive\(sortedDrives.count == 1 ? "" : "s")")
             .toolbar(id: "drives-toolbar") {
                 ToolbarItem(id: "view-mode", placement: .automatic) {
                     Picker("View", selection: $viewMode) {
@@ -102,13 +100,8 @@ struct DrivesView: View {
         .frame(minWidth: 600, minHeight: 400)
     }
 
-    private var filteredAndSortedDrives: [DriveInfo] {
+    private var sortedDrives: [DriveInfo] {
         var drives = driveMonitor.drives
-
-        // Filter by search
-        if !searchText.isEmpty {
-            drives = drives.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-        }
 
         // Sort
         switch sortOption {

@@ -60,6 +60,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil
         )
 
+        // Listen for settings window open requests
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(showSettingsWindow),
+            name: .openSettingsWindow,
+            object: nil
+        )
+
         // Always show main window on launch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.showMainWindow()
@@ -464,4 +472,7 @@ extension Notification.Name {
 
     /// Posted when ContentView wants to open the main window
     static let openMainWindow = Notification.Name("openMainWindow")
+
+    /// Posted when a view wants to open the settings window
+    static let openSettingsWindow = Notification.Name("openSettingsWindow")
 }

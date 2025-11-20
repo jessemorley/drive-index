@@ -14,6 +14,7 @@ struct MainWindowView: View {
     @State private var selectedItem: NavigationItem? = .drives
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var appSearchState = AppSearchState()
+    @FocusState private var isSearchFieldFocused: Bool
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -46,9 +47,10 @@ struct MainWindowView: View {
                             TextField("Search files", text: $appSearchState.searchText)
                                 .textFieldStyle(.plain)
                                 .frame(maxWidth: 400)
+                                .focused($isSearchFieldFocused)
                                 .onSubmit {
                                     if !appSearchState.searchText.isEmpty {
-                                        selectedItem = .files
+                                        selectedItem = .search
                                     }
                                 }
                         }
@@ -87,9 +89,21 @@ struct MainWindowView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .onChange(of: appSearchState.searchText) { oldValue, newValue in
-            // Automatically switch to Files view when user types in search
-            if !newValue.isEmpty && selectedItem != .files {
-                selectedItem = .files
+            // Automatically switch to Search view when user types in search
+            if !newValue.isEmpty && selectedItem != .search {
+                selectedItem = .search
+            }
+        }
+        .onChange(of: selectedItem) { oldValue, newValue in
+            // Focus search bar when Search is selected
+            if newValue == .search {
+                isSearchFieldFocused = true
+            }
+            // Open Settings window when Settings is selected
+            if newValue == .settings {
+                NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
+                // Revert selection back to previous item
+                selectedItem = oldValue ?? .drives
             }
         }
     }
@@ -97,6 +111,9 @@ struct MainWindowView: View {
     @ViewBuilder
     private func detailView(for item: NavigationItem) -> some View {
         switch item {
+        case .search:
+            SearchView()
+                .environmentObject(driveMonitor)
         case .drives:
             DrivesView()
                 .environmentObject(driveMonitor)
@@ -105,6 +122,9 @@ struct MainWindowView: View {
             FilesView()
         case .duplicates:
             DuplicatesView()
+        case .settings:
+            // Settings window is opened via notification, this should never be reached
+            EmptyView()
         }
     }
 }
