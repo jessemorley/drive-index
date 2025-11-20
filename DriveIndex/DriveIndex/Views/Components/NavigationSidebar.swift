@@ -52,13 +52,16 @@ struct NavigationSidebar: View {
             Button(action: {
                 selection = .settings
             }) {
-                NavigationSidebarRow(item: .settings)
-                    .contentShape(Rectangle())
+                HStack {
+                    NavigationSidebarRow(item: .settings)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .background(selection == .settings ? Color.accentColor.opacity(0.15) : Color.clear)
             .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
         }
         .navigationTitle("DriveIndex")
     }

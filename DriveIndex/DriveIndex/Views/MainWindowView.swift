@@ -61,6 +61,7 @@ struct MainWindowView: View {
                         .frame(width: 450)
                     }
                 }
+                .toolbarBackground(.hidden, for: .windowToolbar)
 
                 // Indexing progress overlay at bottom of detail area (shows pending changes, active indexing, or completion)
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
