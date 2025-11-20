@@ -107,16 +107,20 @@ actor ThumbnailGenerator {
                         return
                     }
 
-                    // For RAW files, try to extract embedded thumbnail first (faster)
+                    let ext = url.pathExtension.lowercased()
+                    let isRawFile = self.isRawFile(ext)
+
+                    // For RAW files: ONLY use embedded thumbnails to avoid memory pressure from decoding full RAW
+                    // For regular images (JPEG, PNG, etc.): Allow fallback to full image decoding (they're small)
                     let options: [CFString: Any] = [
                         kCGImageSourceCreateThumbnailWithTransform: true,
-                        kCGImageSourceCreateThumbnailFromImageIfAbsent: true,  // Create from full image if no embedded thumbnail
+                        kCGImageSourceCreateThumbnailFromImageIfAbsent: !isRawFile,  // Only decode full image for non-RAW
                         kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize,
                         kCGImageSourceShouldCache: false  // Don't cache, we're saving to disk
                     ]
 
                     guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
-                        // Log more detail about failure
+                        // For RAW files without embedded thumbnails, this is expected
                         let type = CGImageSourceGetType(imageSource)
                         let typeString = type.map { String($0 as String) } ?? "unknown"
                         continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create thumbnail for \(url.lastPathComponent) (type: \(typeString))"))
@@ -130,6 +134,13 @@ actor ThumbnailGenerator {
                 }
             }
         }
+    }
+
+    private func isRawFile(_ ext: String) -> Bool {
+        let rawExtensions: Set<String> = [
+            "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
+        ]
+        return rawExtensions.contains(ext)
     }
 
     // MARK: - Video Thumbnail Generation
