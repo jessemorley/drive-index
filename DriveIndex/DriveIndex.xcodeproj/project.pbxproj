@@ -23,6 +23,7 @@
 		863168402EC999E8007B6201 /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683B2EC999E8007B6201 /* FilesView.swift */; };
 		863168422EC999E8007B6201 /* AppearanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168392EC999E8007B6201 /* AppearanceView.swift */; };
 		863168432EC999E8007B6201 /* AdvancedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863168382EC999E8007B6201 /* AdvancedView.swift */; };
+		8305C1EBAB7645EAB3D0CC67 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DA1CF0DEB44944B1BD8C57 /* DuplicateSettingsView.swift */; };
 		863168442EC999E8007B6201 /* DrivesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683A2EC999E8007B6201 /* DrivesView.swift */; };
 		863168452EC999E8007B6201 /* IndexingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683C2EC999E8007B6201 /* IndexingView.swift */; };
 		863168462EC999E8007B6201 /* RaycastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631683E2EC999E8007B6201 /* RaycastView.swift */; };
@@ -74,6 +75,7 @@
 		863168382EC999E8007B6201 /* AdvancedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedView.swift; sourceTree = "<group>"; };
 		863168392EC999E8007B6201 /* AppearanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceView.swift; sourceTree = "<group>"; };
 		8631683A2EC999E8007B6201 /* DrivesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivesView.swift; sourceTree = "<group>"; };
+		E5DA1CF0DEB44944B1BD8C57 /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		8631683B2EC999E8007B6201 /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesView.swift; sourceTree = "<group>"; };
 		8631683C2EC999E8007B6201 /* IndexingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndexingView.swift; sourceTree = "<group>"; };
 		8631683E2EC999E8007B6201 /* RaycastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastView.swift; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 				86758BD22ECA78F100270DC6 /* TagInputView.swift */,
 				863168382EC999E8007B6201 /* AdvancedView.swift */,
 				863168392EC999E8007B6201 /* AppearanceView.swift */,
+				E5DA1CF0DEB44944B1BD8C57 /* DuplicateSettingsView.swift */,
 				8631683A2EC999E8007B6201 /* DrivesView.swift */,
 				8631683B2EC999E8007B6201 /* FilesView.swift */,
 				8631683C2EC999E8007B6201 /* IndexingView.swift */,
@@ -320,6 +323,7 @@
 				863168412EC999E8007B6201 /* MainWindowView.swift in Sources */,
 				863168422EC999E8007B6201 /* AppearanceView.swift in Sources */,
 				863168432EC999E8007B6201 /* AdvancedView.swift in Sources */,
+				8305C1EBAB7645EAB3D0CC67 /* DuplicateSettingsView.swift in Sources */,
 				863168442EC999E8007B6201 /* DrivesView.swift in Sources */,
 				863168452EC999E8007B6201 /* IndexingView.swift in Sources */,
 				863168462EC999E8007B6201 /* RaycastView.swift in Sources */,

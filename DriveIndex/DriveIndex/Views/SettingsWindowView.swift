@@ -12,13 +12,11 @@ struct SettingsWindowView: View {
     @EnvironmentObject var indexManager: IndexManager
 
     @State private var selectedItem: SettingsNavigationItem? = .appearance
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var searchText = ""
     @State private var navigationHistory: [SettingsNavigationItem] = [.appearance]
     @State private var historyIndex: Int = 0
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        NavigationSplitView {
             // Sidebar
             SettingsNavigationSidebar(selection: $selectedItem)
                 .navigationSplitViewColumnWidth(
@@ -52,32 +50,15 @@ struct SettingsWindowView: View {
                     .disabled(!canGoForward)
                     .help("Go Forward")
                 }
-
-                // Search bar on the right
-                ToolbarItem(placement: .primaryAction) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search settings", text: $searchText)
-                            .textFieldStyle(.plain)
-                            .frame(width: 200)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
-                }
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
         .onChange(of: selectedItem) { oldValue, newValue in
             if let newValue = newValue, oldValue != newValue {
                 // Add to navigation history when selection changes
                 addToHistory(newValue)
             }
-        }
-        .onChange(of: searchText) { oldValue, newValue in
-            filterSettings(newValue)
         }
     }
 
@@ -92,6 +73,8 @@ struct SettingsWindowView: View {
             IndexingView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
+        case .duplicates:
+            DuplicateSettingsView()
         case .advanced:
             AdvancedView()
                 .environmentObject(driveMonitor)
@@ -131,28 +114,6 @@ struct SettingsWindowView: View {
         guard canGoForward else { return }
         historyIndex += 1
         selectedItem = navigationHistory[historyIndex]
-    }
-
-    // MARK: - Search
-
-    private func filterSettings(_ query: String) {
-        // Simple keyword-based navigation
-        guard !query.isEmpty else { return }
-
-        let lowercasedQuery = query.lowercased()
-
-        // Navigate to relevant section based on keywords
-        if lowercasedQuery.contains("theme") || lowercasedQuery.contains("appearance") || lowercasedQuery.contains("dark") || lowercasedQuery.contains("light") {
-            selectedItem = .appearance
-        } else if lowercasedQuery.contains("shortcut") || lowercasedQuery.contains("hotkey") || lowercasedQuery.contains("keyboard") {
-            selectedItem = .shortcuts
-        } else if lowercasedQuery.contains("index") || lowercasedQuery.contains("scan") || lowercasedQuery.contains("exclude") {
-            selectedItem = .indexing
-        } else if lowercasedQuery.contains("advanced") || lowercasedQuery.contains("database") || lowercasedQuery.contains("cache") {
-            selectedItem = .advanced
-        } else if lowercasedQuery.contains("raycast") || lowercasedQuery.contains("extension") {
-            selectedItem = .raycast
-        }
     }
 }
 

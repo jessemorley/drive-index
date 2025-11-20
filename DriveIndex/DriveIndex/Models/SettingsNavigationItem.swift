@@ -14,6 +14,7 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
     case appearance
     case shortcuts
     case indexing
+    case duplicates
     case advanced
 
     // Integration section
@@ -26,6 +27,7 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
         case .appearance: return "Appearance"
         case .shortcuts: return "Shortcuts"
         case .indexing: return "Indexing"
+        case .duplicates: return "Duplicates"
         case .advanced: return "Advanced"
         case .raycast: return "Raycast"
         }
@@ -36,6 +38,7 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
         case .appearance: return "paintbrush"
         case .shortcuts: return "command"
         case .indexing: return "doc.text"
+        case .duplicates: return "doc.on.doc"
         case .advanced: return "gearshape"
         case .raycast: return "sparkles"
         }
@@ -43,7 +46,7 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
 
     var section: SettingsNavigationSection {
         switch self {
-        case .appearance, .shortcuts, .indexing, .advanced:
+        case .appearance, .shortcuts, .indexing, .duplicates, .advanced:
             return .settings
         case .raycast:
             return .integrations

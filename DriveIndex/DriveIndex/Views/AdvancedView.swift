@@ -108,6 +108,8 @@ struct AdvancedView: View {
                 .background(Color.orange.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
             }
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
             .padding(.vertical, DesignSystem.Spacing.large)
         }

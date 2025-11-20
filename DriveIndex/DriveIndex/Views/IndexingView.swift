@@ -19,6 +19,8 @@ struct IndexingView: View {
     @State private var minDuplicateFileSize: Double = 5.0  // Default 5 MB
     @State private var isLoading: Bool = true
     @State private var hasUnsavedChanges: Bool = false
+    @State private var bufferDelayDebounceTask: Task<Void, Never>?
+    @State private var minDuplicateSizeDebounceTask: Task<Void, Never>?
 
     // Default values from FileIndexer
     private let defaultExcludedDirectories = [
@@ -60,8 +62,8 @@ struct IndexingView: View {
                                 .font(DesignSystem.Typography.callout)
                         }
                         .toggleStyle(.switch)
-                        .onChange(of: fsEventsEnabled) { _, _ in
-                            markAsChanged()
+                        .onChange(of: fsEventsEnabled) { _, newValue in
+                            autoSaveFSEventsEnabled(newValue)
                         }
 
                         if fsEventsEnabled {
@@ -80,8 +82,8 @@ struct IndexingView: View {
                                 }
 
                                 Slider(value: $fsEventsBufferDelay, in: 5...60, step: 5)
-                                    .onChange(of: fsEventsBufferDelay) { _, _ in
-                                        markAsChanged()
+                                    .onChange(of: fsEventsBufferDelay) { _, newValue in
+                                        debouncedAutoSaveBufferDelay(newValue)
                                     }
 
                                 Text("How long to wait after file changes before triggering a scan")
@@ -115,8 +117,8 @@ struct IndexingView: View {
                             }
 
                             Slider(value: $minDuplicateFileSize, in: 1...50, step: 1)
-                                .onChange(of: minDuplicateFileSize) { _, _ in
-                                    markAsChanged()
+                                .onChange(of: minDuplicateFileSize) { _, newValue in
+                                    debouncedAutoSaveMinDuplicateSize(newValue)
                                 }
 
                             Text("Only detect duplicates for files larger than this size. Smaller threshold = more thorough but slower. Larger = faster but may miss small duplicates.")
@@ -245,6 +247,8 @@ struct IndexingView: View {
                 .background(Color.blue.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
             }
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
             .padding(.vertical, DesignSystem.Spacing.large)
         }
@@ -313,14 +317,6 @@ struct IndexingView: View {
                 try await indexManager.updateExcludedDirectories(dirs)
                 try await indexManager.updateExcludedExtensions(exts)
 
-                // Update FSEvents settings
-                await FSEventsMonitor.shared.setEnabled(fsEventsEnabled)
-                await FSEventsMonitor.shared.setBufferDelay(fsEventsBufferDelay)
-
-                // Save minimum duplicate file size (convert MB to bytes)
-                let minSizeBytes = Int64(minDuplicateFileSize * 1_048_576.0)
-                try await DatabaseManager.shared.setSetting("min_duplicate_file_size", value: String(minSizeBytes))
-
                 await MainActor.run {
                     hasUnsavedChanges = false
                 }
@@ -329,9 +325,49 @@ struct IndexingView: View {
             }
         }
     }
-    
+
     private func markAsChanged() {
         hasUnsavedChanges = true
+    }
+
+    // Auto-save methods for non-tag settings
+    private func autoSaveFSEventsEnabled(_ enabled: Bool) {
+        Task {
+            await FSEventsMonitor.shared.setEnabled(enabled)
+        }
+    }
+
+    private func debouncedAutoSaveBufferDelay(_ delay: Double) {
+        // Cancel previous task
+        bufferDelayDebounceTask?.cancel()
+
+        // Create new debounced task
+        bufferDelayDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+            guard !Task.isCancelled else { return }
+
+            await FSEventsMonitor.shared.setBufferDelay(delay)
+        }
+    }
+
+    private func debouncedAutoSaveMinDuplicateSize(_ size: Double) {
+        // Cancel previous task
+        minDuplicateSizeDebounceTask?.cancel()
+
+        // Create new debounced task
+        minDuplicateSizeDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+
+            guard !Task.isCancelled else { return }
+
+            do {
+                let minSizeBytes = Int64(size * 1_048_576.0)
+                try await DatabaseManager.shared.setSetting("min_duplicate_file_size", value: String(minSizeBytes))
+            } catch {
+                print("Error saving min duplicate file size: \(error)")
+            }
+        }
     }
 }
 

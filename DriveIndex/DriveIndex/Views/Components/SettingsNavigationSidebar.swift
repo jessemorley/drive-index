@@ -14,18 +14,9 @@ struct SettingsNavigationSidebar: View {
         VStack(spacing: 0) {
             // Navigation list
             List(selection: $selection) {
-                ForEach(SettingsNavigationSection.allCases) { section in
-                    Section {
-                        ForEach(section.items) { item in
-                            SettingsNavigationSidebarRow(item: item)
-                                .tag(item)
-                        }
-                    } header: {
-                        Text(section.rawValue)
-                            .font(.system(size: 11))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                    }
+                ForEach(SettingsNavigationItem.allCases) { item in
+                    SettingsNavigationSidebarRow(item: item)
+                        .tag(item)
                 }
             }
             .listStyle(.sidebar)

@@ -50,7 +50,7 @@ class SettingsWindow: NSWindow {
         isMovableByWindowBackground = false
 
         // Set minimum size for settings window
-        minSize = NSSize(width: 700, height: 500)
+        minSize = NSSize(width: 600, height: 500)
 
         // Position persistence
         setFrameAutosaveName("SettingsWindow")

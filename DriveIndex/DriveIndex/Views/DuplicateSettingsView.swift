@@ -1,34 +1,35 @@
 //
-//  ShortcutView.swift
+//  DuplicateSettingsView.swift
 //  DriveIndex
 //
-//  Keyboard shortcut configuration view
+//  Duplicate detection settings view
 //
 
 import SwiftUI
 
-struct ShortcutView: View {
-    @State private var keyboardShortcut: KeyboardShortcut?
+struct DuplicateSettingsView: View {
+    @AppStorage("enableDuplicateDetection") private var enableDuplicateDetection: Bool = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
-                // Keyboard Shortcut
+                // Duplicate Detection
                 SettingsSection(
-                    title: "Global Shortcut",
-                    description: "Keyboard shortcut to open the search window",
-                    symbol: "keyboard"
+                    title: "Duplicate Detection",
+                    description: "Control whether files are hashed to detect duplicates",
+                    symbol: "doc.on.doc"
                 ) {
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        ShortcutRecorder(shortcut: $keyboardShortcut)
-                            .onChange(of: keyboardShortcut) { _, _ in
-                                saveSettings()
-                            }
+                        Toggle(isOn: $enableDuplicateDetection) {
+                            Text("Enable duplicate detection")
+                                .font(DesignSystem.Typography.callout)
+                        }
+                        .toggleStyle(.switch)
 
-                        Text("Press a key combination with at least one modifier (⌘, ⌃, ⌥, or ⇧)")
+                        Text("Calculate file hashes during indexing to detect duplicate files. Disabling this will speed up indexing but you won't be able to find duplicates.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
-                            .italic()
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -42,11 +43,11 @@ struct ShortcutView: View {
                     .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                        Text("Quick Access")
+                        Text("Changes take effect on next scan")
                             .font(DesignSystem.Typography.caption)
                             .fontWeight(.semibold)
 
-                        Text("Use the keyboard shortcut from anywhere to quickly search your indexed drives.")
+                        Text("Existing indexed files won't be affected. Only new scans will respect this setting.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
@@ -60,25 +61,10 @@ struct ShortcutView: View {
             .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
             .padding(.vertical, DesignSystem.Spacing.large)
         }
-        .navigationTitle("Shortcut")
-        .task {
-            loadSettings()
-        }
-    }
-
-    private func loadSettings() {
-        keyboardShortcut = HotkeyManager.shared.currentShortcut
-    }
-
-    private func saveSettings() {
-        if let shortcut = keyboardShortcut {
-            HotkeyManager.shared.updateShortcut(shortcut)
-        } else {
-            HotkeyManager.shared.clearShortcut()
-        }
+        .navigationTitle("Duplicates")
     }
 }
 
 #Preview {
-    ShortcutView()
+    DuplicateSettingsView()
 }
