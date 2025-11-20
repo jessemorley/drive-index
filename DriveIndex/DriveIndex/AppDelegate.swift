@@ -27,6 +27,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// The settings window (opened via DriveIndex > Settings menu)
     private var settingsWindow: SettingsWindow?
 
+    /// Test window for debugging toolbar transparency
+    private var testWindow: TestWindow?
+
     /// Managers - create our own instances since DriveIndexApp's @StateObject can't be easily shared
     private let driveMonitor = DriveMonitor()
     private let indexManager = IndexManager()
@@ -275,9 +278,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let button = statusItem?.button else { return }
         
         let menu = NSMenu()
-        
+
         menu.addItem(NSMenuItem(title: "Quick Search", action: #selector(togglePanel), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Show Test Window", action: #selector(showTestWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         
@@ -411,6 +415,39 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: settingsView)
 
         settingsWindow = window
+    }
+
+    /// Open the test window
+    @objc func showTestWindow() {
+        // Create window if it doesn't exist
+        if testWindow == nil {
+            createTestWindow()
+        }
+
+        guard let window = testWindow else {
+            print("Failed to create test window")
+            return
+        }
+
+        // Show and activate the window
+        window.show()
+    }
+
+    /// Create the test window with TestWindowView
+    private func createTestWindow() {
+        // Create test window with appropriate size
+        let windowRect = NSRect(x: 0, y: 0, width: 900, height: 600)
+        let window = TestWindow(contentRect: windowRect)
+
+        // Create TestWindowView with managers
+        let testView = TestWindowView()
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
+
+        // Host SwiftUI view in the window
+        window.contentView = NSHostingView(rootView: testView)
+
+        testWindow = window
     }
 
     // MARK: - NSWindowDelegate
