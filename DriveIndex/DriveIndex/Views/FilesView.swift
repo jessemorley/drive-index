@@ -247,14 +247,28 @@ struct FilesView: View {
                     ForEach(Array(sortedFiles.enumerated()), id: \.element.id) { index, file in
                         FileRow(
                             file: file,
-                            isHovered: hoveredFileID == file.id
+                            isHovered: hoveredFileID == file.id,
+                            isSelected: appSearchState.selectedFile?.id == file.id
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            // Single click selects the file and shows inspector
+                            appSearchState.selectFile(file)
+                        }
+                        .onTapGesture(count: 2) {
+                            // Double click reveals in Finder
                             revealInFinder(file)
                         }
                         .onHover { isHovering in
                             hoveredFileID = isHovering ? file.id : nil
+                        }
+                        .contextMenu {
+                            Button("Show in Finder") {
+                                revealInFinder(file)
+                            }
+                            Button("Show Inspector") {
+                                appSearchState.selectFile(file)
+                            }
                         }
                         .onAppear {
                             // Load more when approaching the end
@@ -666,6 +680,7 @@ struct FilesView: View {
 struct FileRow: View {
     let file: FileDisplayItem
     let isHovered: Bool
+    var isSelected: Bool = false
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.medium) {
@@ -729,7 +744,10 @@ struct FileRow: View {
         .padding(.vertical, DesignSystem.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
+                .fill(
+                    isSelected ? Color.accentColor.opacity(0.15) :
+                    isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear
+                )
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())

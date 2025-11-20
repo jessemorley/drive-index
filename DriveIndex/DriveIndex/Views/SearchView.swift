@@ -130,14 +130,28 @@ struct SearchView: View {
                 ForEach(filteredResults, id: \.id) { file in
                     FileRow(
                         file: file,
-                        isHovered: hoveredFileID == file.id
+                        isHovered: hoveredFileID == file.id,
+                        isSelected: appSearchState.selectedFile?.id == file.id
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        // Single click selects the file and shows inspector
+                        appSearchState.selectFile(file)
+                    }
+                    .onTapGesture(count: 2) {
+                        // Double click reveals in Finder
                         revealInFinder(file)
                     }
                     .onHover { isHovering in
                         hoveredFileID = isHovering ? file.id : nil
+                    }
+                    .contextMenu {
+                        Button("Show in Finder") {
+                            revealInFinder(file)
+                        }
+                        Button("Show Inspector") {
+                            appSearchState.selectFile(file)
+                        }
                     }
 
                     if file.id != filteredResults.last?.id {

@@ -12,6 +12,8 @@ import SwiftUI
 class AppSearchState {
     var searchText: String = ""
     var shouldNavigateToFiles: Bool = false
+    var selectedFile: FileDisplayItem? = nil
+    var showInspector: Bool = false
 
     /// Triggers search from the main toolbar
     func performSearch(_ text: String) {
@@ -30,5 +32,25 @@ class AppSearchState {
     /// Resets the navigation flag after navigation completes
     func resetNavigationFlag() {
         shouldNavigateToFiles = false
+    }
+
+    /// Selects a file and shows the inspector
+    func selectFile(_ file: FileDisplayItem) {
+        selectedFile = file
+        showInspector = true
+    }
+
+    /// Deselects the file and hides the inspector
+    func deselectFile() {
+        selectedFile = nil
+        showInspector = false
+    }
+
+    /// Toggles the inspector visibility
+    func toggleInspector() {
+        showInspector.toggle()
+        if !showInspector {
+            selectedFile = nil
+        }
     }
 }

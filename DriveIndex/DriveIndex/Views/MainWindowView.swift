@@ -27,16 +27,27 @@ struct MainWindowView: View {
                 )
         } detail: {
             // Detail view - no ZStack wrapper to preserve toolbar transparency
-            Group {
-                if let selectedItem = selectedItem {
-                    detailView(for: selectedItem)
-                        .environment(appSearchState)
-                } else {
-                    Text("Select an item from the sidebar")
-                        .secondaryText()
+            HStack(spacing: 0) {
+                Group {
+                    if let selectedItem = selectedItem {
+                        detailView(for: selectedItem)
+                            .environment(appSearchState)
+                    } else {
+                        Text("Select an item from the sidebar")
+                            .secondaryText()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Inspector panel
+                if appSearchState.showInspector, let selectedFile = appSearchState.selectedFile {
+                    Divider()
+
+                    MediaInspectorView(file: selectedFile)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appSearchState.showInspector)
             .toolbar {
                 // Centered search bar
                 ToolbarItem(placement: .principal) {
@@ -58,6 +69,17 @@ struct MainWindowView: View {
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
                     .frame(width: 450)
+                }
+
+                // Inspector toggle button
+                ToolbarItem(placement: .automatic) {
+                    Button(action: {
+                        appSearchState.toggleInspector()
+                    }) {
+                        Label("Inspector", systemImage: "sidebar.right")
+                    }
+                    .help("Toggle inspector panel")
+                    .disabled(appSearchState.selectedFile == nil)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
