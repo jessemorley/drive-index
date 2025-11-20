@@ -151,11 +151,15 @@ struct MainWindowView: View {
 
         if width < collapseThreshold {
             if columnVisibility != .detailOnly {
-                columnVisibility = .detailOnly
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    columnVisibility = .detailOnly
+                }
             }
         } else {
             if columnVisibility == .detailOnly {
-                columnVisibility = .all
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    columnVisibility = .all
+                }
             }
         }
     }

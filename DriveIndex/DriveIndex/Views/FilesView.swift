@@ -320,66 +320,55 @@ struct FilesView: View {
     // MARK: - Table Header
 
     private var tableHeader: some View {
-        GeometryReader { geometry in
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                // Name column (flexible with minimum width)
-                columnHeader(
-                    title: "Name",
-                    column: .name,
-                    alignment: .leading,
-                    width: nil
-                )
-                .frame(minWidth: 250, maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            // Name column (flexible with minimum width)
+            columnHeader(
+                title: "Name",
+                column: .name,
+                alignment: .leading,
+                width: nil
+            )
+            .frame(minWidth: 250)
 
-                Spacer(minLength: 0)
+            // Size column (fixed width)
+            columnHeader(
+                title: "Size",
+                column: .size,
+                alignment: .trailing,
+                width: 80
+            )
 
-                // Size column (always visible, fixed width)
-                columnHeader(
-                    title: "Size",
-                    column: .size,
-                    alignment: .trailing,
-                    width: 80
-                )
+            // Kind column (fixed width)
+            columnHeader(
+                title: "Kind",
+                column: .kind,
+                alignment: .leading,
+                width: 140
+            )
 
-                // Kind column (hidden below 500px width)
-                if geometry.size.width > 500 {
-                    columnHeader(
-                        title: "Kind",
-                        column: .kind,
-                        alignment: .leading,
-                        width: 140
-                    )
+            // Drive column (fixed width) - not sortable
+            Button(action: {}) {
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Text("Drive")
+                        .font(DesignSystem.Typography.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
                 }
-
-                // Drive column (hidden below 600px width) - not sortable
-                if geometry.size.width > 600 {
-                    Button(action: {}) {
-                        HStack(spacing: DesignSystem.Spacing.xSmall) {
-                            Text("Drive")
-                                .font(DesignSystem.Typography.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                        }
-                        .frame(width: 120, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(true)
-                }
-
-                // Date Added column (hidden below 700px width)
-                if geometry.size.width > 700 {
-                    columnHeader(
-                        title: "Date Added",
-                        column: .dateAdded,
-                        alignment: .leading,
-                        width: 140
-                    )
-                }
+                .frame(width: 120, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+            .buttonStyle(.plain)
+            .disabled(true)
+
+            // Date Added column (fixed width)
+            columnHeader(
+                title: "Date Added",
+                column: .dateAdded,
+                alignment: .leading,
+                width: 140
+            )
         }
-        .frame(height: 24)
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.small)
     }
 
@@ -695,75 +684,65 @@ struct FileRow: View {
     var isSelected: Bool = false
 
     var body: some View {
-        GeometryReader { geometry in
+        HStack(spacing: DesignSystem.Spacing.medium) {
+            // File icon and name (flexible with minimum width)
             HStack(spacing: DesignSystem.Spacing.medium) {
-                // File icon and name (flexible with minimum width)
-                HStack(spacing: DesignSystem.Spacing.medium) {
-                    fileIcon
-                        .frame(width: 24)
+                fileIcon
+                    .frame(width: 24)
 
-                    HStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Text(file.name)
-                            .font(DesignSystem.Typography.body)
-                            .lineLimit(1)
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Text(file.name)
+                        .font(DesignSystem.Typography.body)
+                        .lineLimit(1)
 
-                        Text("—")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    Text("—")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
 
-                        Text(file.relativePath)
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-                .frame(minWidth: 250, maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 0)
-
-                // Size (always visible, fixed width)
-                Text(file.formattedSize)
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-                    .frame(width: 80, alignment: .trailing)
-
-                // Kind (hidden below 500px width)
-                if geometry.size.width > 500 {
-                    Text(file.kind)
+                    Text(file.relativePath)
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.secondaryText)
                         .lineLimit(1)
-                        .frame(width: 140, alignment: .leading)
-                }
-
-                // Drive (hidden below 600px width)
-                if geometry.size.width > 600 {
-                    HStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Circle()
-                            .fill(file.isConnected ? Color.green : Color.gray)
-                            .frame(width: 6, height: 6)
-
-                        Text(file.driveName)
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                            .lineLimit(1)
-                    }
-                    .frame(width: 120, alignment: .leading)
-                }
-
-                // Date Added (hidden below 700px width)
-                if geometry.size.width > 700 {
-                    Text(file.formattedDate)
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                        .lineLimit(1)
-                        .frame(width: 140, alignment: .leading)
+                        .truncationMode(.middle)
                 }
             }
-            .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+            .frame(minWidth: 250, maxWidth: .infinity, alignment: .leading)
+
+            // Size (fixed width)
+            Text(file.formattedSize)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .frame(width: 80, alignment: .trailing)
+
+            // Kind (fixed width)
+            Text(file.kind)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .lineLimit(1)
+                .frame(width: 140, alignment: .leading)
+
+            // Drive (fixed width) with status indicator
+            HStack(spacing: DesignSystem.Spacing.xSmall) {
+                Circle()
+                    .fill(file.isConnected ? Color.green : Color.gray)
+                    .frame(width: 6, height: 6)
+
+                Text(file.driveName)
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(width: 120, alignment: .leading)
+
+            // Date Added (fixed width)
+            Text(file.formattedDate)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .lineLimit(1)
+                .frame(width: 140, alignment: .leading)
         }
-        .frame(height: 32)
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        .padding(.vertical, DesignSystem.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(
