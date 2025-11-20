@@ -51,6 +51,7 @@ class SettingsWindow: NSWindow {
 
         // Set minimum size for settings window
         minSize = NSSize(width: 600, height: 500)
+        contentMinSize = NSSize(width: 600, height: 500)
 
         // Position persistence
         setFrameAutosaveName("SettingsWindow")

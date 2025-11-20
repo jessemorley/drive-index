@@ -39,49 +39,75 @@ struct AppearanceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
                 // Theme Selection
-                SettingsSection(
-                    title: "Theme",
-                    description: "Choose your preferred color scheme",
-                    symbol: "paintbrush.fill"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Theme")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        Picker("Theme", selection: $appTheme) {
-                            ForEach(AppTheme.allCases) { theme in
-                                Label(theme.rawValue, systemImage: theme.icon)
-                                    .tag(theme)
+                        HStack {
+                            Text("Appearance")
+                                .font(DesignSystem.Typography.callout)
+
+                            Spacer()
+
+                            Picker("Theme", selection: $appTheme) {
+                                ForEach(AppTheme.allCases) { theme in
+                                    Label(theme.rawValue, systemImage: theme.icon)
+                                        .tag(theme)
+                                }
                             }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: appTheme) { _, newValue in
-                            applyTheme(newValue)
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .onChange(of: appTheme) { _, newValue in
+                                applyTheme(newValue)
+                            }
                         }
 
                         Text("Auto mode follows your system appearance settings")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Dock Icon
-                SettingsSection(
-                    title: "Dock Icon",
-                    description: "Control dock icon visibility",
-                    symbol: "square.grid.3x3.fill.square"
-                ) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                    Text("Dock Icon")
+                        .font(DesignSystem.Typography.headline)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        Toggle(isOn: $showDockIcon) {
+                        HStack {
                             Text("Show Dock icon")
                                 .font(DesignSystem.Typography.callout)
-                        }
-                        .toggleStyle(.switch)
-                        .onChange(of: showDockIcon) { _, newValue in
-                            updateDockIconVisibility(newValue)
+
+                            Spacer()
+
+                            Toggle(isOn: $showDockIcon) {
+                                EmptyView()
+                            }
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .onChange(of: showDockIcon) { _, newValue in
+                                updateDockIconVisibility(newValue)
+                            }
                         }
 
                         Text("Hide the Dock icon to run DriveIndex as a menu bar-only app. Requires app restart to take full effect.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
+                    .padding(DesignSystem.Spacing.large)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
                 // Info callout
@@ -103,9 +129,10 @@ struct AppearanceView: View {
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
                 }
-                .padding(DesignSystem.Spacing.medium)
+                .padding(DesignSystem.Spacing.large)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: 600)
             .frame(maxWidth: .infinity)
