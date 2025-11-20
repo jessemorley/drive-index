@@ -92,6 +92,8 @@ struct SettingsWindowView: View {
             IndexingView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
+        case .duplicates:
+            DuplicatesView()
         case .advanced:
             AdvancedView()
                 .environmentObject(driveMonitor)
@@ -148,6 +150,8 @@ struct SettingsWindowView: View {
             selectedItem = .shortcuts
         } else if lowercasedQuery.contains("index") || lowercasedQuery.contains("scan") || lowercasedQuery.contains("exclude") {
             selectedItem = .indexing
+        } else if lowercasedQuery.contains("duplicate") || lowercasedQuery.contains("hash") {
+            selectedItem = .duplicates
         } else if lowercasedQuery.contains("advanced") || lowercasedQuery.contains("database") || lowercasedQuery.contains("cache") {
             selectedItem = .advanced
         } else if lowercasedQuery.contains("raycast") || lowercasedQuery.contains("extension") {

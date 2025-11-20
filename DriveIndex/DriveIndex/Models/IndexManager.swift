@@ -229,6 +229,13 @@ class IndexManager: ObservableObject {
     }
 
     func startHashComputation() async {
+        // Check if duplicate hashing is enabled (default: true)
+        let duplicateHashingEnabled = UserDefaults.standard.object(forKey: "duplicateHashingEnabled") as? Bool ?? true
+        guard duplicateHashingEnabled else {
+            print("⏭️ Duplicate hashing is disabled in settings, skipping hash computation")
+            return
+        }
+
         // Cancel existing hashing if any
         hashingTask?.cancel()
 
