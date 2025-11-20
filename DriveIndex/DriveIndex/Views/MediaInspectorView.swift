@@ -10,6 +10,10 @@ import SwiftUI
 struct MediaInspectorView: View {
     let file: FileDisplayItem
 
+    @State private var thumbnail: NSImage?
+    @State private var isLoadingThumbnail = false
+    @State private var thumbnailError: Error?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.large) {
@@ -54,6 +58,9 @@ struct MediaInspectorView: View {
         }
         .frame(width: 280)
         .background(DesignSystem.Colors.windowBackground)
+        .task(id: file.id) {
+            await loadThumbnail()
+        }
     }
 
     // MARK: - Thumbnail Section
@@ -64,9 +71,21 @@ struct MediaInspectorView: View {
                 .fill(DesignSystem.Colors.cardBackgroundDefault)
                 .frame(height: 200)
                 .overlay(
-                    Image(systemName: fileIconName)
-                        .font(.system(size: 64))
-                        .foregroundColor(fileIconColor.opacity(0.3))
+                    Group {
+                        if isLoadingThumbnail {
+                            ProgressView()
+                                .controlSize(.large)
+                        } else if let thumbnail = thumbnail {
+                            Image(nsImage: thumbnail)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                        } else {
+                            Image(systemName: fileIconName)
+                                .font(.system(size: 64))
+                                .foregroundColor(fileIconColor.opacity(0.3))
+                        }
+                    }
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
@@ -143,6 +162,56 @@ struct MediaInspectorView: View {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    // MARK: - Thumbnail Loading
+
+    private func loadThumbnail() async {
+        // Only load thumbnails for media files
+        guard isMediaFile() else { return }
+
+        // Only load if file is connected
+        guard file.isConnected else { return }
+
+        isLoadingThumbnail = true
+        thumbnailError = nil
+
+        do {
+            // Construct file URL
+            let volumePath = "/Volumes/\(file.driveName)"
+            let fullPath = volumePath + "/" + file.relativePath
+            let fileURL = URL(fileURLWithPath: fullPath)
+
+            // Check if file exists before trying to generate thumbnail
+            guard FileManager.default.fileExists(atPath: fullPath) else {
+                isLoadingThumbnail = false
+                return
+            }
+
+            // Get or generate thumbnail
+            let loadedThumbnail = try await ThumbnailCache.shared.getThumbnail(
+                for: file.id,
+                fileURL: fileURL
+            )
+
+            thumbnail = loadedThumbnail
+        } catch {
+            thumbnailError = error
+            print("Failed to load thumbnail for \(file.name): \(error.localizedDescription)")
+        }
+
+        isLoadingThumbnail = false
+    }
+
+    private func isMediaFile() -> Bool {
+        let ext = (file.name as NSString).pathExtension.lowercased()
+        let mediaExtensions: Set<String> = [
+            "jpg", "jpeg", "png", "gif", "heic", "heif", "tiff", "tif", "bmp", "webp",
+            "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw",
+            "mp4", "mov", "m4v", "avi",
+            "pdf"
+        ]
+        return mediaExtensions.contains(ext)
     }
 }
 
