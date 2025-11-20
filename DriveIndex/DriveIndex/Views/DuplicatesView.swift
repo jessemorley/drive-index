@@ -116,7 +116,7 @@ struct DuplicatesView: View {
             Spacer()
         }
         .padding(DesignSystem.Spacing.cardPadding)
-        .background(DesignSystem.Colors.cardBackgroundDefault)
+        .background(.thinMaterial)
         .cornerRadius(DesignSystem.CornerRadius.card)
         .padding(DesignSystem.Spacing.sectionPadding)
     }

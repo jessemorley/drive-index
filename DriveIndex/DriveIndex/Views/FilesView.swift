@@ -328,11 +328,18 @@ struct FilesView: View {
             )
 
             // Drive column (fixed width) - not sortable
-            Text("Drive")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+            Button(action: {}) {
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Text("Drive")
+                        .font(DesignSystem.Typography.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                }
                 .frame(width: 120, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
 
             // Date Added column (fixed width)
             columnHeader(
@@ -344,7 +351,6 @@ struct FilesView: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.small)
-        .background(DesignSystem.Colors.cardBackgroundDefault)
     }
 
     @ViewBuilder
