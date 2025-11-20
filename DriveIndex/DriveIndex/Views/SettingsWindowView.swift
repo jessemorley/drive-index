@@ -95,7 +95,7 @@ struct SettingsWindowView: View {
         case .thumbnails:
             ThumbnailsView()
         case .duplicates:
-            DuplicatesView()
+            DuplicatesSettingsView()
         case .advanced:
             AdvancedView()
                 .environmentObject(driveMonitor)
