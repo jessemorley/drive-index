@@ -53,8 +53,12 @@ class QuickLookHelper: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     private func showQuickLook(for url: URL) {
         previewItems = [url]
         currentPreviewIndex = 0
-        
-        let panel = QLPreviewPanel.shared()
+
+        guard let panel = QLPreviewPanel.shared() else {
+            print("⚠️ Failed to get QuickLook panel")
+            return
+        }
+
         panel.dataSource = self
         panel.delegate = self
         panel.reloadData()
