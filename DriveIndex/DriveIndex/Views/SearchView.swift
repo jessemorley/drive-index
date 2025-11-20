@@ -15,6 +15,7 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var selectedDriveFilter: String? = nil
     @State private var hoveredFileID: Int64?
+    @FocusState private var isResultsViewFocused: Bool
 
     private let searchManager = SearchManager()
 
@@ -137,6 +138,8 @@ struct SearchView: View {
                     .onTapGesture {
                         // Single click selects the file and shows inspector
                         appSearchState.selectFile(file)
+                        // Move focus to results view so keyboard shortcuts work
+                        isResultsViewFocused = true
                     }
                     .onTapGesture(count: 2) {
                         // Double click reveals in Finder
@@ -169,12 +172,30 @@ struct SearchView: View {
                 }
             }
         }
+        .focusable()
+        .focused($isResultsViewFocused)
         .onKeyPress(.space) {
             // Spacebar to toggle QuickLook
             if let selectedFile = appSearchState.selectedFile {
                 Task { @MainActor in
                     QuickLookHelper.shared.togglePreview(for: selectedFile)
                 }
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.downArrow) {
+            selectNextFile()
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            selectPreviousFile()
+            return .handled
+        }
+        .onKeyPress(.return) {
+            // Enter key to reveal in Finder
+            if let selectedFile = appSearchState.selectedFile {
+                revealInFinder(selectedFile)
                 return .handled
             }
             return .ignored
@@ -246,6 +267,34 @@ struct SearchView: View {
         }
 
         isSearching = false
+    }
+
+    // MARK: - Keyboard Navigation
+
+    private func selectNextFile() {
+        guard !filteredResults.isEmpty else { return }
+
+        if let currentFile = appSearchState.selectedFile,
+           let currentIndex = filteredResults.firstIndex(where: { $0.id == currentFile.id }) {
+            let nextIndex = min(currentIndex + 1, filteredResults.count - 1)
+            appSearchState.selectFile(filteredResults[nextIndex])
+        } else {
+            // No selection, select first file
+            appSearchState.selectFile(filteredResults[0])
+        }
+    }
+
+    private func selectPreviousFile() {
+        guard !filteredResults.isEmpty else { return }
+
+        if let currentFile = appSearchState.selectedFile,
+           let currentIndex = filteredResults.firstIndex(where: { $0.id == currentFile.id }) {
+            let previousIndex = max(currentIndex - 1, 0)
+            appSearchState.selectFile(filteredResults[previousIndex])
+        } else {
+            // No selection, select last file
+            appSearchState.selectFile(filteredResults[filteredResults.count - 1])
+        }
     }
 
     // MARK: - Actions

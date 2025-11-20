@@ -15,6 +15,7 @@ struct MainWindowView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var appSearchState = AppSearchState()
     @FocusState private var isSearchFieldFocused: Bool
+    @FocusState private var isResultsViewFocused: Bool
 
     var body: some View {
         GeometryReader { geometry in
