@@ -108,13 +108,17 @@ class QuickLookHelper: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegat
     }
     
     // MARK: - QLPreviewPanelDataSource
-    
+
     nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
-        return previewItems.count
+        return MainActor.assumeIsolated {
+            previewItems.count
+        }
     }
-    
+
     nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! {
-        return previewItems[index] as NSURL
+        return MainActor.assumeIsolated {
+            previewItems[index] as NSURL
+        }
     }
     
     // MARK: - QLPreviewPanelDelegate
