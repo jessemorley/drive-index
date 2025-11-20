@@ -66,6 +66,21 @@ struct FileDisplayItem: Identifiable {
         case "png": return "PNG Image"
         case "gif": return "GIF Image"
         case "svg": return "SVG Image"
+        case "heic", "heif": return "HEIC Image"
+        case "tiff", "tif": return "TIFF Image"
+        case "bmp": return "BMP Image"
+        case "webp": return "WebP Image"
+        // Raw image formats
+        case "nef": return "Nikon RAW Image"
+        case "cr2", "cr3": return "Canon RAW Image"
+        case "arw": return "Sony RAW Image"
+        case "dng": return "Digital Negative"
+        case "raf": return "Fujifilm RAW Image"
+        case "orf": return "Olympus RAW Image"
+        case "rw2": return "Panasonic RAW Image"
+        case "pef": return "Pentax RAW Image"
+        case "srw": return "Samsung RAW Image"
+        case "raw": return "RAW Image"
         case "mp4", "mov": return "Video"
         case "mp3", "m4a", "wav": return "Audio"
         case "zip", "tar", "gz": return "Archive"
@@ -725,7 +740,8 @@ struct FileRow: View {
             case "txt", "rtf":
                 iconName = "doc.plaintext.fill"
                 iconColor = .gray
-            case "jpg", "jpeg", "png", "gif", "svg":
+            case "jpg", "jpeg", "png", "gif", "svg", "heic", "heif", "tiff", "tif", "bmp", "webp",
+                 "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw":
                 iconName = "photo.fill"
                 iconColor = .purple
             case "mp4", "mov":
