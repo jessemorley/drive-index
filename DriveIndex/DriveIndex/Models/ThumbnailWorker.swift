@@ -40,7 +40,7 @@ actor ThumbnailWorker {
 
     // Configuration
     static let BATCH_SIZE = 100    // Process in smaller batches
-    static let PARALLEL_TASKS = 4  // Lower parallelism than hash computation
+    static let PARALLEL_TASKS = 2  // Conservative parallelism to avoid IOSurface memory pressure
 
     /// Start generating thumbnails for media files
     func generateThumbnails(
@@ -84,52 +84,63 @@ actor ThumbnailWorker {
             let batchEnd = min(batchStart + Self.BATCH_SIZE, mediaFiles.count)
             let batch = Array(mediaFiles[batchStart..<batchEnd])
 
-            // Process batch with parallel tasks
-            await withTaskGroup(of: Bool.self) { group in
-                for file in batch {
-                    group.addTask {
-                        do {
-                            let fileURL = try await self.getFileURL(
-                                driveUUID: file.driveUUID,
-                                relativePath: file.relativePath
-                            )
+            // Process batch with LIMITED parallel tasks to avoid memory pressure
+            // Break batch into chunks of PARALLEL_TASKS size
+            for chunkStart in stride(from: 0, to: batch.count, by: Self.PARALLEL_TASKS) {
+                guard !shouldCancel else { break }
 
-                            // Generate and cache thumbnail
-                            _ = try await self.thumbnailCache.getThumbnail(
-                                for: file.id,
-                                fileURL: fileURL
-                            )
+                let chunkEnd = min(chunkStart + Self.PARALLEL_TASKS, batch.count)
+                let chunk = Array(batch[chunkStart..<chunkEnd])
 
-                            await self.incrementSuccess()
-                            return true
-                        } catch {
-                            await self.logThumbnailError(
-                                error: error,
-                                relativePath: file.relativePath,
-                                driveUUID: file.driveUUID
-                            )
-                            await self.incrementFailure()
-                            return false
+                await withTaskGroup(of: Bool.self) { group in
+                    for file in chunk {
+                        group.addTask {
+                            do {
+                                let fileURL = try await self.getFileURL(
+                                    driveUUID: file.driveUUID,
+                                    relativePath: file.relativePath
+                                )
+
+                                // Generate and cache thumbnail
+                                _ = try await self.thumbnailCache.getThumbnail(
+                                    for: file.id,
+                                    fileURL: fileURL
+                                )
+
+                                await self.incrementSuccess()
+                                return true
+                            } catch {
+                                await self.logThumbnailError(
+                                    error: error,
+                                    relativePath: file.relativePath,
+                                    driveUUID: file.driveUUID
+                                )
+                                await self.incrementFailure()
+                                return false
+                            }
+                        }
+                    }
+
+                    // Collect results from this chunk
+                    for await success in group {
+                        filesProcessed += 1
+
+                        // Report progress every 10 files or at the end
+                        if filesProcessed % 10 == 0 || filesProcessed == totalFiles {
+                            let currentFile = filesProcessed < batch.count ? batch[min(filesProcessed, batch.count - 1)].relativePath : nil
+                            onProgress(ThumbnailProgress(
+                                filesProcessed: filesProcessed,
+                                totalFiles: totalFiles,
+                                isComplete: filesProcessed == totalFiles,
+                                currentFile: currentFile
+                            ))
                         }
                     }
                 }
-
-                // Collect results
-                for await success in group {
-                    filesProcessed += 1
-
-                    // Report progress every 10 files or at the end
-                    if filesProcessed % 10 == 0 || filesProcessed == totalFiles {
-                        let currentFile = filesProcessed < batch.count ? batch[filesProcessed].relativePath : nil
-                        onProgress(ThumbnailProgress(
-                            filesProcessed: filesProcessed,
-                            totalFiles: totalFiles,
-                            isComplete: filesProcessed == totalFiles,
-                            currentFile: currentFile
-                        ))
-                    }
-                }
             }
+
+            // Small delay between batches to allow memory cleanup
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
         }
 
         let duration = Date().timeIntervalSince(overallStartTime)
