@@ -664,15 +664,20 @@ struct FileRow: View {
                 fileIcon
                     .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
                     Text(file.name)
                         .font(DesignSystem.Typography.body)
                         .lineLimit(1)
+
+                    Text("—")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
 
                     Text(file.relativePath)
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.secondaryText)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
