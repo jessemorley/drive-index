@@ -55,9 +55,17 @@ struct SettingsWindowView: View {
 
                 // Search bar on the right
                 ToolbarItem(placement: .primaryAction) {
-                    TextField("Search settings", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 200)
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search settings", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .frame(width: 200)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
                 }
             }
         }
@@ -84,6 +92,8 @@ struct SettingsWindowView: View {
             IndexingView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
+        case .thumbnails:
+            ThumbnailsView()
         case .duplicates:
             DuplicatesView()
         case .advanced:
@@ -142,6 +152,8 @@ struct SettingsWindowView: View {
             selectedItem = .shortcuts
         } else if lowercasedQuery.contains("index") || lowercasedQuery.contains("scan") || lowercasedQuery.contains("exclude") {
             selectedItem = .indexing
+        } else if lowercasedQuery.contains("thumbnail") || lowercasedQuery.contains("preview") || lowercasedQuery.contains("image") {
+            selectedItem = .thumbnails
         } else if lowercasedQuery.contains("duplicate") || lowercasedQuery.contains("hash") {
             selectedItem = .duplicates
         } else if lowercasedQuery.contains("advanced") || lowercasedQuery.contains("database") || lowercasedQuery.contains("cache") {

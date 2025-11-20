@@ -42,7 +42,11 @@ actor ThumbnailGenerator {
         print("📸 Processing: \(fileURL.lastPathComponent) (.\(ext), \(String(format: "%.1f", fileSizeMB))MB)")
 
         // Determine file type and use appropriate generator
-        if isImageFile(ext) || isCR3File(ext) {
+        if isCR3File(ext) {
+            // Skip CR3 files - embedded thumbnail extraction still causes IOSurface memory pressure
+            print("⏭️ Skipping CR3 (memory issues with embedded thumbnails): \(fileURL.lastPathComponent)")
+            throw ThumbnailError.unsupportedFileType
+        } else if isImageFile(ext) {
             let startTime = Date()
             let result = try await generateImageThumbnail(for: fileURL)
             let duration = Date().timeIntervalSince(startTime)

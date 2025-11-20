@@ -308,6 +308,13 @@ class IndexManager: ObservableObject {
     }
 
     func startThumbnailGeneration() async {
+        // Check if thumbnail generation is enabled (default: true)
+        let thumbnailGenerationEnabled = UserDefaults.standard.object(forKey: "thumbnailGenerationEnabled") as? Bool ?? true
+        guard thumbnailGenerationEnabled else {
+            print("⏭️ Thumbnail generation is disabled in settings, skipping")
+            return
+        }
+
         // Cancel existing thumbnail generation if any
         thumbnailTask?.cancel()
 
