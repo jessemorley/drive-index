@@ -2,97 +2,156 @@
 //  SettingsWindowView.swift
 //  DriveIndex
 //
-//  Settings window view with native macOS tabs and search functionality
+//  Settings window view with sidebar navigation and search functionality
 //
 
 import SwiftUI
-
-enum SettingsTab: String, CaseIterable, Identifiable {
-    case appearance = "Appearance"
-    case shortcuts = "Shortcuts"
-    case indexing = "Indexing"
-    case advanced = "Advanced"
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .appearance: return "paintbrush.fill"
-        case .shortcuts: return "command.square.fill"
-        case .indexing: return "folder.fill.badge.gearshape"
-        case .advanced: return "gearshape.fill"
-        }
-    }
-}
 
 struct SettingsWindowView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
 
-    @State private var selectedTab: SettingsTab = .appearance
+    @State private var selectedItem: SettingsNavigationItem? = .appearance
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var searchText = ""
+    @State private var navigationHistory: [SettingsNavigationItem] = [.appearance]
+    @State private var historyIndex: Int = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // Appearance tab
-            AppearanceView()
-                .tabItem {
-                    Label(SettingsTab.appearance.rawValue, systemImage: SettingsTab.appearance.icon)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // Sidebar
+            SettingsNavigationSidebar(selection: $selectedItem)
+                .navigationSplitViewColumnWidth(
+                    min: DesignSystem.Sidebar.minWidth,
+                    ideal: DesignSystem.Sidebar.width,
+                    max: DesignSystem.Sidebar.maxWidth
+                )
+        } detail: {
+            // Detail view
+            Group {
+                if let selectedItem = selectedItem {
+                    detailView(for: selectedItem)
+                } else {
+                    Text("Select a settings section from the sidebar")
+                        .secondaryText()
                 }
-                .tag(SettingsTab.appearance)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                // Back/Forward navigation buttons
+                ToolbarItemGroup(placement: .navigation) {
+                    Button(action: goBack) {
+                        Image(systemName: "chevron.left")
+                    }
+                    .disabled(!canGoBack)
+                    .help("Go Back")
 
-            // Shortcuts tab
-            ShortcutView()
-                .tabItem {
-                    Label(SettingsTab.shortcuts.rawValue, systemImage: SettingsTab.shortcuts.icon)
+                    Button(action: goForward) {
+                        Image(systemName: "chevron.right")
+                    }
+                    .disabled(!canGoForward)
+                    .help("Go Forward")
                 }
-                .tag(SettingsTab.shortcuts)
 
-            // Indexing tab
-            IndexingView()
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
-                .tabItem {
-                    Label(SettingsTab.indexing.rawValue, systemImage: SettingsTab.indexing.icon)
+                // Search bar on the right
+                ToolbarItem(placement: .automatic) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search settings", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .frame(width: 200)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
                 }
-                .tag(SettingsTab.indexing)
-
-            // Advanced tab
-            AdvancedView()
-                .environmentObject(driveMonitor)
-                .tabItem {
-                    Label(SettingsTab.advanced.rawValue, systemImage: SettingsTab.advanced.icon)
-                }
-                .tag(SettingsTab.advanced)
+            }
         }
-        .frame(minWidth: 700, minHeight: 500)
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search settings")
+        .navigationSplitViewStyle(.balanced)
+        .onChange(of: selectedItem) { oldValue, newValue in
+            if let newValue = newValue, oldValue != newValue {
+                // Add to navigation history when selection changes
+                addToHistory(newValue)
+            }
+        }
         .onChange(of: searchText) { oldValue, newValue in
-            // Filter settings based on search text
-            // This can be expanded to implement actual filtering logic
             filterSettings(newValue)
         }
     }
 
-    private func filterSettings(_ query: String) {
-        // TODO: Implement settings search/filtering
-        // For now, this is a placeholder for future search functionality
-        // Could highlight matching sections or switch to relevant tabs
-        if query.isEmpty {
-            return
+    @ViewBuilder
+    private func detailView(for item: SettingsNavigationItem) -> some View {
+        switch item {
+        case .appearance:
+            AppearanceView()
+        case .shortcuts:
+            ShortcutView()
+        case .indexing:
+            IndexingView()
+                .environmentObject(driveMonitor)
+                .environmentObject(indexManager)
+        case .advanced:
+            AdvancedView()
+                .environmentObject(driveMonitor)
+        case .raycast:
+            RaycastView()
         }
+    }
+
+    // MARK: - Navigation History
+
+    private var canGoBack: Bool {
+        historyIndex > 0
+    }
+
+    private var canGoForward: Bool {
+        historyIndex < navigationHistory.count - 1
+    }
+
+    private func addToHistory(_ item: SettingsNavigationItem) {
+        // Remove any forward history when navigating to a new item
+        if historyIndex < navigationHistory.count - 1 {
+            navigationHistory.removeSubrange((historyIndex + 1)...)
+        }
+
+        // Add new item to history
+        navigationHistory.append(item)
+        historyIndex = navigationHistory.count - 1
+    }
+
+    private func goBack() {
+        guard canGoBack else { return }
+        historyIndex -= 1
+        selectedItem = navigationHistory[historyIndex]
+    }
+
+    private func goForward() {
+        guard canGoForward else { return }
+        historyIndex += 1
+        selectedItem = navigationHistory[historyIndex]
+    }
+
+    // MARK: - Search
+
+    private func filterSettings(_ query: String) {
+        // Simple keyword-based navigation
+        guard !query.isEmpty else { return }
 
         let lowercasedQuery = query.lowercased()
 
-        // Simple tab switching based on keywords
+        // Navigate to relevant section based on keywords
         if lowercasedQuery.contains("theme") || lowercasedQuery.contains("appearance") || lowercasedQuery.contains("dark") || lowercasedQuery.contains("light") {
-            selectedTab = .appearance
+            selectedItem = .appearance
         } else if lowercasedQuery.contains("shortcut") || lowercasedQuery.contains("hotkey") || lowercasedQuery.contains("keyboard") {
-            selectedTab = .shortcuts
+            selectedItem = .shortcuts
         } else if lowercasedQuery.contains("index") || lowercasedQuery.contains("scan") || lowercasedQuery.contains("exclude") {
-            selectedTab = .indexing
+            selectedItem = .indexing
         } else if lowercasedQuery.contains("advanced") || lowercasedQuery.contains("database") || lowercasedQuery.contains("cache") {
-            selectedTab = .advanced
+            selectedItem = .advanced
+        } else if lowercasedQuery.contains("raycast") || lowercasedQuery.contains("extension") {
+            selectedItem = .raycast
         }
     }
 }

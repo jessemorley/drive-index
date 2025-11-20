@@ -15,9 +15,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     case files
     case duplicates
 
-    // Other section
-    case raycast
-
     var id: String { rawValue }
 
     var title: String {
@@ -25,7 +22,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .drives: return "Drives"
         case .files: return "Files"
         case .duplicates: return "Duplicates"
-        case .raycast: return "Raycast"
         }
     }
 
@@ -34,7 +30,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .drives: return "externaldrive"
         case .files: return "clock"
         case .duplicates: return "doc.on.doc"
-        case .raycast: return "sparkles"
         }
     }
 
@@ -42,8 +37,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .drives, .files, .duplicates:
             return .index
-        case .raycast:
-            return .other
         }
     }
 }
@@ -52,7 +45,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
 enum NavigationSection: String, CaseIterable, Identifiable {
     case index = "Index"
-    case other = "Other"
 
     var id: String { rawValue }
 

@@ -105,8 +105,6 @@ struct MainWindowView: View {
             FilesView()
         case .duplicates:
             DuplicatesView()
-        case .raycast:
-            RaycastView()
         }
     }
 }
