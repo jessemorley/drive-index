@@ -2,7 +2,7 @@
 //  NavigationItem.swift
 //  DriveIndex
 //
-//  Created for macOS System Settings-style navigation
+//  Navigation items for main app window (content-focused)
 //
 
 import SwiftUI
@@ -15,12 +15,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     case files
     case duplicates
 
-    // Settings section
-    case appearance
-    case shortcut
-    case indexing
-    case advanced
-
     // Other section
     case raycast
 
@@ -31,10 +25,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .drives: return "Drives"
         case .files: return "Files"
         case .duplicates: return "Duplicates"
-        case .appearance: return "Appearance"
-        case .shortcut: return "Shortcut"
-        case .indexing: return "Indexing"
-        case .advanced: return "Advanced"
         case .raycast: return "Raycast"
         }
     }
@@ -44,10 +34,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         case .drives: return "externaldrive"
         case .files: return "clock"
         case .duplicates: return "doc.on.doc"
-        case .appearance: return "paintbrush"
-        case .shortcut: return "command"
-        case .indexing: return "doc.text"
-        case .advanced: return "gearshape"
         case .raycast: return "sparkles"
         }
     }
@@ -56,8 +42,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .drives, .files, .duplicates:
             return .index
-        case .appearance, .shortcut, .indexing, .advanced:
-            return .settings
         case .raycast:
             return .other
         }
@@ -68,7 +52,6 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
 enum NavigationSection: String, CaseIterable, Identifiable {
     case index = "Index"
-    case settings = "Settings"
     case other = "Other"
 
     var id: String { rawValue }

@@ -2,7 +2,7 @@
 //  MainWindowView.swift
 //  DriveIndex
 //
-//  Main application window with macOS System Settings-style navigation
+//  Main application window with unified toolbar and content navigation
 //
 
 import SwiftUI
@@ -13,6 +13,7 @@ struct MainWindowView: View {
 
     @State private var selectedItem: NavigationItem? = .drives
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var appSearchState = AppSearchState()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -24,17 +25,40 @@ struct MainWindowView: View {
                     max: DesignSystem.Sidebar.maxWidth
                 )
         } detail: {
-            // Detail view with overlay
+            // Detail view with overlay and unified toolbar
             ZStack(alignment: .bottom) {
                 Group {
                     if let selectedItem = selectedItem {
                         detailView(for: selectedItem)
+                            .environment(appSearchState)
                     } else {
                         Text("Select an item from the sidebar")
                             .secondaryText()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar {
+                    // Centered search bar
+                    ToolbarItem(placement: .principal) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                            TextField("Search files", text: $appSearchState.searchText)
+                                .textFieldStyle(.plain)
+                                .frame(maxWidth: 400)
+                                .onSubmit {
+                                    if !appSearchState.searchText.isEmpty {
+                                        selectedItem = .files
+                                    }
+                                }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(8)
+                        .frame(width: 450)
+                    }
+                }
 
                 // Indexing progress overlay at bottom of detail area (shows pending changes, active indexing, or completion)
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
@@ -62,6 +86,12 @@ struct MainWindowView: View {
             .clipped()  // Prevent content from extending outside bounds
         }
         .navigationSplitViewStyle(.balanced)
+        .onChange(of: appSearchState.searchText) { oldValue, newValue in
+            // Automatically switch to Files view when user types in search
+            if !newValue.isEmpty && selectedItem != .files {
+                selectedItem = .files
+            }
+        }
     }
 
     @ViewBuilder
@@ -75,17 +105,6 @@ struct MainWindowView: View {
             FilesView()
         case .duplicates:
             DuplicatesView()
-        case .appearance:
-            AppearanceView()
-        case .shortcut:
-            ShortcutView()
-        case .indexing:
-            IndexingView()
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
-        case .advanced:
-            AdvancedView()
-                .environmentObject(driveMonitor)
         case .raycast:
             RaycastView()
         }

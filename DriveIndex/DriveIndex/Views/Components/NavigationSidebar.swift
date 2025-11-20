@@ -2,7 +2,7 @@
 //  NavigationSidebar.swift
 //  DriveIndex
 //
-//  macOS System Settings-style sidebar with collapsible sections
+//  Sidebar navigation for main app window content sections
 //
 
 import SwiftUI
