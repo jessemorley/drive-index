@@ -21,7 +21,7 @@ class SettingsWindow: NSWindow {
     ///   - defer: Whether to defer window creation
     override init(
         contentRect: NSRect,
-        styleMask: NSWindow.StyleMask = [.titled, .closable, .resizable],
+        styleMask: NSWindow.StyleMask = [.titled, .closable, .resizable, .fullSizeContentView],
         backing: NSWindow.BackingStoreType = .buffered,
         defer flag: Bool = false
     ) {
@@ -59,6 +59,10 @@ class SettingsWindow: NSWindow {
         if frameAutosaveName.isEmpty || !setFrameUsingName("SettingsWindow") {
             center()
         }
+
+        // Hide toolbar customization button
+        toolbar?.isVisible = true
+        toolbar?.showsBaselineSeparator = false
     }
 
     // MARK: - Public Methods

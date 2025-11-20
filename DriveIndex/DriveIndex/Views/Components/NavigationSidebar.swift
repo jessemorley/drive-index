@@ -27,22 +27,32 @@ struct NavigationSidebar: View {
 
             // Navigation list
             List(selection: $selection) {
-                ForEach(NavigationSection.allCases) { section in
-                    Section {
-                        ForEach(section.items) { item in
-                            NavigationSidebarRow(item: item)
-                                .tag(item)
-                        }
-                    } header: {
-                        // Only show header if section title is not empty
-                        if !section.title.isEmpty {
-                            Text(section.title)
-                                .font(.system(size: 11))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(DesignSystem.Colors.secondaryText)
-                        }
-                    }
+                // Search (no section)
+                NavigationSidebarRow(item: .search)
+                    .tag(NavigationItem.search)
+
+                // Index section
+                Section {
+                    NavigationSidebarRow(item: .drives)
+                        .tag(NavigationItem.drives)
+                    NavigationSidebarRow(item: .files)
+                        .tag(NavigationItem.files)
+                    NavigationSidebarRow(item: .duplicates)
+                        .tag(NavigationItem.duplicates)
+                } header: {
+                    Text("Index")
+                        .font(.system(size: 11))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(DesignSystem.Colors.secondaryText)
                 }
+
+                // Spacer to push Settings to bottom
+                Spacer()
+                    .listRowBackground(Color.clear)
+
+                // Settings at bottom (no section)
+                NavigationSidebarRow(item: .settings)
+                    .tag(NavigationItem.settings)
             }
             .listStyle(.sidebar)
         }

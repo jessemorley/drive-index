@@ -54,7 +54,7 @@ struct SettingsWindowView: View {
                 }
 
                 // Search bar on the right
-                ToolbarItem(placement: .automatic) {
+                ToolbarItem(placement: .primaryAction) {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.secondary)
