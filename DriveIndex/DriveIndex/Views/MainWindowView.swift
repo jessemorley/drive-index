@@ -74,7 +74,6 @@ struct MainWindowView: View {
                             .foregroundColor(.secondary)
                         TextField("Search files", text: $appSearchState.searchText)
                             .textFieldStyle(.plain)
-                            .frame(maxWidth: 400)
                             .focused($isSearchFieldFocused)
                             .onSubmit {
                                 if !appSearchState.searchText.isEmpty {
@@ -86,7 +85,7 @@ struct MainWindowView: View {
                     .padding(.vertical, 6)
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(8)
-                    .frame(width: 450)
+                    .frame(minWidth: 200, idealWidth: 450, maxWidth: 450)
                 }
 
                 // Inspector toggle button
