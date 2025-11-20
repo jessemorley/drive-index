@@ -136,6 +136,7 @@ struct FileDisplayItem: Identifiable {
 
 struct FilesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
+    @Environment(AppSearchState.self) private var appSearchState
 
     @State private var files: [FileDisplayItem] = []
     @State private var searchResults: [FileDisplayItem] = []
@@ -145,7 +146,6 @@ struct FilesView: View {
     @State private var errorMessage: String?
     @State private var sortColumn: FileSortColumn = .dateAdded
     @State private var sortDirection: SortDirection = .descending
-    @State private var searchText = ""
     @State private var selectedDriveFilter: String? = nil
     @State private var hoveredFileID: Int64?
     @State private var loadedCount = 0
@@ -154,6 +154,11 @@ struct FilesView: View {
     private let batchSize = 100
     private let loadMoreThreshold = 20 // Load more when within 20 items of the end
     private let searchManager = SearchManager()
+
+    // Use shared search text from AppSearchState
+    private var searchText: String {
+        appSearchState.searchText
+    }
 
     var body: some View {
         NavigationStack {
@@ -173,7 +178,6 @@ struct FilesView: View {
             }
             .navigationTitle("Files")
             .navigationSubtitle(subtitle)
-            .searchable(text: $searchText, placement: .toolbar, prompt: "Search files")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "files-toolbar") {
                 ToolbarItem(id: "filter", placement: .automatic) {
@@ -195,7 +199,7 @@ struct FilesView: View {
         .task {
             await loadInitialFiles()
         }
-        .onChange(of: searchText) { oldValue, newValue in
+        .onChange(of: appSearchState.searchText) { oldValue, newValue in
             Task {
                 await performSearch(newValue)
             }
@@ -723,7 +727,11 @@ struct FileRow: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
-        .background(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHovered ? DesignSystem.Colors.cardBackgroundHover : Color.clear)
+                .padding(.horizontal, 4)
+        )
         .contentShape(Rectangle())
     }
 

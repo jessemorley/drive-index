@@ -38,6 +38,16 @@ struct DriveIndexApp: App {
                     )
                 }
             }
+
+            // Add Settings menu item with standard keyboard shortcut
+            CommandGroup(after: .appInfo) {
+                Button("Settings...") {
+                    appDelegate.showSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+
+                Divider()
+            }
         }
     }
 }

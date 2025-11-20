@@ -2,7 +2,7 @@
 //  MainWindowView.swift
 //  DriveIndex
 //
-//  Main application window with macOS System Settings-style navigation
+//  Main application window view
 //
 
 import SwiftUI
@@ -13,6 +13,8 @@ struct MainWindowView: View {
 
     @State private var selectedItem: NavigationItem? = .drives
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var appSearchState = AppSearchState()
+    @FocusState private var isSearchFieldFocused: Bool
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -24,19 +26,42 @@ struct MainWindowView: View {
                     max: DesignSystem.Sidebar.maxWidth
                 )
         } detail: {
-            // Detail view with overlay
-            ZStack(alignment: .bottom) {
-                Group {
-                    if let selectedItem = selectedItem {
-                        detailView(for: selectedItem)
-                    } else {
-                        Text("Select an item from the sidebar")
-                            .secondaryText()
-                    }
+            // Detail view - no ZStack wrapper to preserve toolbar transparency
+            Group {
+                if let selectedItem = selectedItem {
+                    detailView(for: selectedItem)
+                        .environment(appSearchState)
+                } else {
+                    Text("Select an item from the sidebar")
+                        .secondaryText()
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                // Indexing progress overlay at bottom of detail area (shows pending changes, active indexing, or completion)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toolbar {
+                // Centered search bar
+                ToolbarItem(placement: .principal) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search files", text: $appSearchState.searchText)
+                            .textFieldStyle(.plain)
+                            .frame(maxWidth: 400)
+                            .focused($isSearchFieldFocused)
+                            .onSubmit {
+                                if !appSearchState.searchText.isEmpty {
+                                    selectedItem = .search
+                                }
+                            }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(8)
+                    .frame(width: 450)
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                // Indexing progress overlay using safeAreaInset instead of ZStack
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
                     Group {
                         if let pending = indexManager.pendingChanges {
@@ -52,42 +77,52 @@ struct MainWindowView: View {
                         }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .zIndex(100)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: indexManager.isIndexing)
             .animation(.easeInOut(duration: 0.2), value: indexManager.isHashing)
             .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)  // Constrain ZStack to detail area bounds
-            .clipped()  // Prevent content from extending outside bounds
         }
         .navigationSplitViewStyle(.balanced)
+        .onChange(of: appSearchState.searchText) { oldValue, newValue in
+            // Automatically switch to Search view when user types in search
+            if !newValue.isEmpty && selectedItem != .search {
+                selectedItem = .search
+            }
+        }
+        .onChange(of: selectedItem) { oldValue, newValue in
+            // Focus search bar when Search is selected
+            if newValue == .search {
+                isSearchFieldFocused = true
+            }
+            // Open Settings window when Settings is selected
+            if newValue == .settings {
+                NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
+                // Revert selection back to previous item
+                selectedItem = oldValue ?? .drives
+            }
+        }
     }
 
     @ViewBuilder
     private func detailView(for item: NavigationItem) -> some View {
         switch item {
+        case .search:
+            SearchView()
+                .environmentObject(driveMonitor)
         case .drives:
             DrivesView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-        case .files:
-            FilesView()
         case .duplicates:
             DuplicatesView()
-        case .appearance:
-            AppearanceView()
-        case .shortcut:
-            ShortcutView()
-        case .indexing:
+        case .indexingTest:
             IndexingView()
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-        case .advanced:
-            AdvancedView()
-                .environmentObject(driveMonitor)
-        case .raycast:
-            RaycastView()
+        case .settings:
+            // Settings window is opened via notification, this should never be reached
+            EmptyView()
         }
     }
 }
@@ -327,8 +362,6 @@ struct ActiveHashingOverlay: View {
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
     }
 }
-
-// MARK: - Preview
 
 #Preview {
     MainWindowView()

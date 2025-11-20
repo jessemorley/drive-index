@@ -34,12 +34,6 @@ struct DuplicatesView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let stats = stats {
-                    summarySection(stats: stats)
-                }
-
-                Divider()
-
                 Group {
                     if isLoading {
                         loadingView
@@ -53,9 +47,7 @@ struct DuplicatesView: View {
                 }
             }
             .navigationTitle("Duplicates")
-            .navigationSubtitle("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s")")
             .toolbarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .windowToolbar)
             .toolbar(id: "duplicates-toolbar") {
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Menu {
@@ -90,46 +82,6 @@ struct DuplicatesView: View {
         }
         .task {
             await loadDuplicates()
-        }
-    }
-
-    // MARK: - Summary Section
-
-    private func summarySection(stats: DuplicateStats) -> some View {
-        HStack(spacing: DesignSystem.Spacing.xxxLarge) {
-            summaryItem(
-                label: "Total Duplicates",
-                value: "\(stats.totalDuplicates)"
-            )
-
-            summaryItem(
-                label: "Wasted Space",
-                value: stats.formattedWastedSpace,
-                valueColor: .red
-            )
-
-            summaryItem(
-                label: "Duplicate Groups",
-                value: "\(stats.groupCount)"
-            )
-
-            Spacer()
-        }
-        .padding(DesignSystem.Spacing.cardPadding)
-        .background(.thinMaterial)
-        .cornerRadius(DesignSystem.CornerRadius.card)
-        .padding(DesignSystem.Spacing.sectionPadding)
-    }
-
-    private func summaryItem(label: String, value: String, valueColor: Color? = nil) -> some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-            Text(label)
-                .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-
-            Text(value)
-                .font(DesignSystem.Typography.title2)
-                .foregroundColor(valueColor ?? DesignSystem.Colors.primaryText)
         }
     }
 

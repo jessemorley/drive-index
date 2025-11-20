@@ -21,21 +21,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// The floating panel for quick search (Spotlight-like)
     private var floatingPanel: FloatingPanel?
 
-    /// The main application window for browsing drives and settings
-    private var mainWindow: NSWindow?
+    /// The main application window for browsing drives
+    private var mainWindow: MainWindow?
+
+    /// The settings window (opened via DriveIndex > Settings menu)
+    private var settingsWindow: SettingsWindow?
 
     /// Managers - create our own instances since DriveIndexApp's @StateObject can't be easily shared
     private let driveMonitor = DriveMonitor()
     private let indexManager = IndexManager()
-
-    /// Track if this is the first launch
-    private var hasLaunchedBefore: Bool {
-        get { UserDefaults.standard.bool(forKey: "hasLaunchedBefore") }
-        set { UserDefaults.standard.set(newValue, forKey: "hasLaunchedBefore") }
-    }
-
-    /// Track if main window has been closed at least once
-    private var mainWindowHasBeenClosed = false
 
     /// Combine cancellables for observing IndexManager state
     private var cancellables = Set<AnyCancellable>()
@@ -43,7 +37,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Application Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Start with regular activation policy for initial launch
+        // Keep app in regular mode (always show dock icon)
         NSApp.setActivationPolicy(.regular)
 
         // Apply saved theme preference
@@ -66,13 +60,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil
         )
 
-        // Show main window on first launch only
-        if !hasLaunchedBefore {
-            hasLaunchedBefore = true
-            // Delay slightly to avoid layout recursion
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.showMainWindow()
-            }
+        // Listen for settings window open requests
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(showSettingsWindow),
+            name: .openSettingsWindow,
+            object: nil
+        )
+
+        // Always show main window on launch
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.showMainWindow()
         }
     }
 
@@ -277,7 +275,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard let button = statusItem?.button else { return }
         
         let menu = NSMenu()
-        
+
         menu.addItem(NSMenuItem(title: "Quick Search", action: #selector(togglePanel), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
@@ -346,11 +344,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Main Window Management
 
-    /// Open the main settings window (called from ContentView settings button)
+    /// Open the main window (content browser)
     func showMainWindow() {
-        // Switch back to regular activation policy to show dock icon
-        NSApp.setActivationPolicy(.regular)
-        
         // Create window if it doesn't exist
         if mainWindow == nil {
             createMainWindow()
@@ -362,34 +357,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Show and activate the window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        window.show()
+    }
+
+    /// Open the settings window
+    @objc func showSettingsWindow() {
+        // Create window if it doesn't exist
+        if settingsWindow == nil {
+            createSettingsWindow()
+        }
+
+        guard let window = settingsWindow else {
+            print("Failed to create settings window")
+            return
+        }
+
+        // Show and activate the window
+        window.show()
     }
 
     /// Create the main window with MainWindowView
     private func createMainWindow() {
-        // Create window with appropriate size for settings-style layout
+        // Create window with appropriate size for content browser
         let windowRect = NSRect(x: 0, y: 0, width: 900, height: 600)
-        let window = NSWindow(
-            contentRect: windowRect,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
+        let window = MainWindow(contentRect: windowRect)
 
-        // Configure window
-        window.title = "DriveIndex"
-        window.titlebarAppearsTransparent = false
-        window.toolbarStyle = .unified
-        window.center()
-        window.setFrameAutosaveName("MainWindow")
+        // Set delegate
         window.delegate = self
-        
-        // Important: After first close, prevent the window from being released
-        window.isReleasedWhenClosed = false
-
-        // Set minimum window size
-        window.minSize = NSSize(width: 800, height: 500)
 
         // Create MainWindowView with managers
         let mainWindowView = MainWindowView()
@@ -400,6 +394,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: mainWindowView)
 
         mainWindow = window
+    }
+
+    /// Create the settings window with SettingsWindowView
+    private func createSettingsWindow() {
+        // Create settings window with appropriate size
+        let windowRect = NSRect(x: 0, y: 0, width: 700, height: 500)
+        let window = SettingsWindow(contentRect: windowRect)
+
+        // Create SettingsWindowView with managers
+        let settingsView = SettingsWindowView()
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
+
+        // Host SwiftUI view in the window
+        window.contentView = NSHostingView(rootView: settingsView)
+
+        settingsWindow = window
     }
 
     // MARK: - NSWindowDelegate
@@ -414,29 +425,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Called when window will close
     func windowWillClose(_ notification: Notification) {
-        // Clean up if needed
+        // Clean up if needed (kept minimal as windows are reusable)
         if notification.object as? FloatingPanel === floatingPanel {
             // Floating panel is closing, no additional cleanup needed
-        } else if notification.object as? NSWindow === mainWindow {
-            // Main window is closing for the first time
-            mainWindowHasBeenClosed = true
-            
-            // After main window closes, switch to accessory mode (menu bar only, no dock icon)
-            NSApp.setActivationPolicy(.accessory)
         }
     }
 
-    /// Prevent main window from closing, just hide it
+    /// Allow windows to close normally
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if sender === mainWindow {
-            // After first close, just hide the window instead of destroying it
-            if mainWindowHasBeenClosed {
-                mainWindow?.orderOut(nil)
-                return false
-            }
-            // First close - allow it to actually close so we can transition to accessory mode
-            return true
-        }
+        // All windows can close normally
         return true
     }
 }
@@ -458,4 +455,7 @@ extension Notification.Name {
 
     /// Posted when ContentView wants to open the main window
     static let openMainWindow = Notification.Name("openMainWindow")
+
+    /// Posted when a view wants to open the settings window
+    static let openSettingsWindow = Notification.Name("openSettingsWindow")
 }

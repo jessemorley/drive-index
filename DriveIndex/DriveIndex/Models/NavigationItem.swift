@@ -2,7 +2,7 @@
 //  NavigationItem.swift
 //  DriveIndex
 //
-//  Created for macOS System Settings-style navigation
+//  Navigation items for main app window (content-focused)
 //
 
 import SwiftUI
@@ -10,68 +10,73 @@ import SwiftUI
 // MARK: - Navigation Item
 
 enum NavigationItem: String, Identifiable, CaseIterable {
+    // Search section (top)
+    case search
+
     // Index section
     case drives
-    case files
     case duplicates
+    case indexingTest  // Temporary test
 
-    // Settings section
-    case appearance
-    case shortcut
-    case indexing
-    case advanced
-
-    // Other section
-    case raycast
+    // Settings section (bottom)
+    case settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .search: return "Search"
         case .drives: return "Drives"
-        case .files: return "Files"
         case .duplicates: return "Duplicates"
-        case .appearance: return "Appearance"
-        case .shortcut: return "Shortcut"
-        case .indexing: return "Indexing"
-        case .advanced: return "Advanced"
-        case .raycast: return "Raycast"
+        case .indexingTest: return "Indexing Test"
+        case .settings: return "Settings"
         }
     }
 
     var icon: String {
         switch self {
+        case .search: return "magnifyingglass"
         case .drives: return "externaldrive"
-        case .files: return "clock"
         case .duplicates: return "doc.on.doc"
-        case .appearance: return "paintbrush"
-        case .shortcut: return "command"
-        case .indexing: return "doc.text"
-        case .advanced: return "gearshape"
-        case .raycast: return "sparkles"
+        case .indexingTest: return "gearshape.fill"
+        case .settings: return "gearshape"
         }
     }
 
     var section: NavigationSection {
         switch self {
-        case .drives, .files, .duplicates:
+        case .search:
+            return .search
+        case .drives, .duplicates, .indexingTest:
             return .index
-        case .appearance, .shortcut, .indexing, .advanced:
-            return .settings
-        case .raycast:
-            return .other
+        case .settings:
+            return .preferences
         }
     }
 }
 
 // MARK: - Navigation Section
 
-enum NavigationSection: String, CaseIterable, Identifiable {
-    case index = "Index"
-    case settings = "Settings"
-    case other = "Other"
+enum NavigationSection: CaseIterable, Identifiable {
+    case search
+    case index
+    case preferences
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .search: return "search"
+        case .index: return "index"
+        case .preferences: return "preferences"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .search: return "" // No header for search
+        case .index: return "Index"
+        case .preferences: return "" // No header for settings
+        }
+    }
 
     var items: [NavigationItem] {
         NavigationItem.allCases.filter { $0.section == self }

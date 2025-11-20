@@ -2,7 +2,7 @@
 //  NavigationSidebar.swift
 //  DriveIndex
 //
-//  macOS System Settings-style sidebar with collapsible sections
+//  Sidebar navigation for main app window content sections
 //
 
 import SwiftUI
@@ -25,23 +25,43 @@ struct NavigationSidebar: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
 
-            // Navigation list
+            // Navigation list (main content)
             List(selection: $selection) {
-                ForEach(NavigationSection.allCases) { section in
-                    Section {
-                        ForEach(section.items) { item in
-                            NavigationSidebarRow(item: item)
-                                .tag(item)
-                        }
-                    } header: {
-                        Text(section.rawValue)
-                            .font(.system(size: 11))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                    }
+                // Search (no section)
+                NavigationSidebarRow(item: .search)
+                    .tag(NavigationItem.search)
+
+                // Index section
+                Section {
+                    NavigationSidebarRow(item: .drives)
+                        .tag(NavigationItem.drives)
+                    NavigationSidebarRow(item: .duplicates)
+                        .tag(NavigationItem.duplicates)
+                } header: {
+                    Text("Index")
+                        .font(.system(size: 11))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(DesignSystem.Colors.secondaryText)
                 }
             }
             .listStyle(.sidebar)
+
+            // Settings pinned to bottom
+            Divider()
+
+            Button(action: {
+                selection = .settings
+            }) {
+                HStack {
+                    NavigationSidebarRow(item: .settings)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(selection == .settings ? Color.accentColor.opacity(0.15) : Color.clear)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 12)
         }
         .navigationTitle("DriveIndex")
     }
