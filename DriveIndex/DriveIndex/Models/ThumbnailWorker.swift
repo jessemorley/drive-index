@@ -39,8 +39,9 @@ actor ThumbnailWorker {
     private var drivePathCache: [String: String] = [:]
 
     // Configuration
-    static let BATCH_SIZE = 100    // Process in smaller batches
+    static let BATCH_SIZE = 50     // Small batches to allow frequent memory cleanup
     static let PARALLEL_TASKS = 1  // Serial processing to avoid IOSurface memory pressure
+    static let DELAY_BETWEEN_FILES_NS: UInt64 = 20_000_000  // 20ms delay between files
 
     /// Start generating thumbnails for media files
     func generateThumbnails(
@@ -124,6 +125,9 @@ actor ThumbnailWorker {
                     // Collect results from this chunk
                     for await success in group {
                         filesProcessed += 1
+
+                        // Small delay after each file to allow memory cleanup
+                        try? await Task.sleep(nanoseconds: Self.DELAY_BETWEEN_FILES_NS)
 
                         // Report progress every 10 files or at the end
                         if filesProcessed % 10 == 0 || filesProcessed == totalFiles {

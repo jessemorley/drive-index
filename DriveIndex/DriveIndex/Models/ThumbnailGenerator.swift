@@ -134,21 +134,31 @@ actor ThumbnailGenerator {
     // MARK: - Video Thumbnail Generation
 
     private func generateVideoThumbnail(for url: URL) async throws -> NSImage {
-        let asset = AVAsset(url: url)
-        let imageGenerator = AVAssetImageGenerator(asset: asset)
-        imageGenerator.appliesPreferredTrackTransform = true
-        imageGenerator.maximumSize = CGSize(width: thumbnailSize, height: thumbnailSize)
+        return try await withCheckedThrowingContinuation { continuation in
+            Task {
+                // Use autoreleasepool to ensure VTPixelTransferSession and IOSurface objects are released
+                autoreleasepool {
+                    let asset = AVAsset(url: url)
+                    let imageGenerator = AVAssetImageGenerator(asset: asset)
+                    imageGenerator.appliesPreferredTrackTransform = true
+                    imageGenerator.maximumSize = CGSize(width: self.thumbnailSize, height: self.thumbnailSize)
 
-        // Generate thumbnail at 1 second, or at 0 if video is shorter
-        let duration = try await asset.load(.duration)
-        let time = min(CMTime(seconds: 1, preferredTimescale: 60), duration)
+                    Task {
+                        do {
+                            // Generate thumbnail at 1 second, or at 0 if video is shorter
+                            let duration = try await asset.load(.duration)
+                            let time = min(CMTime(seconds: 1, preferredTimescale: 60), duration)
 
-        do {
-            let (cgImage, _) = try await imageGenerator.image(at: time)
-            let size = NSSize(width: cgImage.width, height: cgImage.height)
-            return NSImage(cgImage: cgImage, size: size)
-        } catch {
-            throw ThumbnailError.generationFailed("Failed to generate video thumbnail: \(error.localizedDescription)")
+                            let (cgImage, _) = try await imageGenerator.image(at: time)
+                            let size = NSSize(width: cgImage.width, height: cgImage.height)
+                            let image = NSImage(cgImage: cgImage, size: size)
+                            continuation.resume(returning: image)
+                        } catch {
+                            continuation.resume(throwing: ThumbnailError.generationFailed("Failed to generate video thumbnail: \(error.localizedDescription)"))
+                        }
+                    }
+                }
+            }
         }
     }
 
