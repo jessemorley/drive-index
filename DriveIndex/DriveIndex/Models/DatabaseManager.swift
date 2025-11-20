@@ -683,7 +683,7 @@ actor DatabaseManager {
 
     /// Get recently added files across all drives
     /// Returns files ordered by ID (most recent first) up to specified limit
-    func getRecentFiles(limit: Int = 1000) throws -> [FileEntry] {
+    func getRecentFiles(limit: Int = 1000, offset: Int = 0) throws -> [FileEntry] {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -696,7 +696,7 @@ actor DatabaseManager {
             FROM files
             WHERE is_directory = 0
             ORDER BY id DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
         """
 
         guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -704,6 +704,7 @@ actor DatabaseManager {
         }
 
         sqlite3_bind_int(stmt, 1, Int32(limit))
+        sqlite3_bind_int(stmt, 2, Int32(offset))
 
         var results: [FileEntry] = []
 

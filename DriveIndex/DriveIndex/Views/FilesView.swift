@@ -96,23 +96,21 @@ struct FilesView: View {
 
     @State private var files: [FileDisplayItem] = []
     @State private var isLoading = true
+    @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var sortOption: FileSortOption = .dateAdded
     @State private var searchText = ""
     @State private var selectedDriveFilter: String? = nil
-    @State private var displayLimit = 1000
     @State private var hoveredFileID: Int64?
+    @State private var loadedCount = 0
+    @State private var hasMoreFiles = true
 
-    private let maxInitialLoad = 1000
+    private let batchSize = 100
+    private let loadMoreThreshold = 20 // Load more when within 20 items of the end
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Search bar
-                searchBar
-
-                Divider()
-
                 // Main content
                 Group {
                     if isLoading {
@@ -128,6 +126,7 @@ struct FilesView: View {
             }
             .navigationTitle("Files")
             .navigationSubtitle(subtitle)
+            .searchable(text: $searchText, placement: .toolbar, prompt: "Search files")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "files-toolbar") {
                 ToolbarItem(id: "filter", placement: .automatic) {
@@ -141,7 +140,7 @@ struct FilesView: View {
                 ToolbarItem(id: "refresh", placement: .automatic) {
                     Button(action: {
                         Task {
-                            await loadFiles()
+                            await refreshFiles()
                         }
                     }) {
                         Label("Refresh", systemImage: "arrow.clockwise")
@@ -151,7 +150,7 @@ struct FilesView: View {
             }
         }
         .task {
-            await loadFiles()
+            await loadInitialFiles()
         }
     }
 
@@ -160,37 +159,13 @@ struct FilesView: View {
     private var subtitle: String {
         let count = filteredAndSearchedFiles.count
         if searchText.isEmpty {
+            if hasMoreFiles && !isLoading {
+                return "\(count)+ file\(count == 1 ? "" : "s")"
+            }
             return "\(count) file\(count == 1 ? "" : "s")"
         } else {
             return "\(count) result\(count == 1 ? "" : "s")"
         }
-    }
-
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        HStack(spacing: DesignSystem.Spacing.medium) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .font(.system(size: 14))
-
-            TextField("Search files...", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(DesignSystem.Typography.body)
-
-            if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, DesignSystem.Spacing.medium)
-        .padding(.vertical, DesignSystem.Spacing.small)
-        .background(DesignSystem.Colors.cardBackgroundDefault)
-        .cornerRadius(DesignSystem.CornerRadius.small)
-        .padding(DesignSystem.Spacing.cardPadding)
     }
 
     // MARK: - Files Table View
@@ -205,7 +180,7 @@ struct FilesView: View {
             // File rows
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(sortedFiles) { file in
+                    ForEach(Array(sortedFiles.enumerated()), id: \.element.id) { index, file in
                         FileRow(
                             file: file,
                             isHovered: hoveredFileID == file.id
@@ -217,6 +192,14 @@ struct FilesView: View {
                         .onHover { isHovering in
                             hoveredFileID = isHovering ? file.id : nil
                         }
+                        .onAppear {
+                            // Load more when approaching the end
+                            if shouldLoadMore(currentIndex: index) {
+                                Task {
+                                    await loadMoreFiles()
+                                }
+                            }
+                        }
 
                         if file.id != sortedFiles.last?.id {
                             Divider()
@@ -224,13 +207,36 @@ struct FilesView: View {
                         }
                     }
 
-                    // Show more button if there are more files
-                    if filteredAndSearchedFiles.count >= displayLimit {
-                        showMoreButton
+                    // Loading indicator at bottom
+                    if isLoadingMore {
+                        HStack(spacing: DesignSystem.Spacing.small) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading more files...")
+                                .font(DesignSystem.Typography.caption)
+                                .foregroundColor(DesignSystem.Colors.secondaryText)
+                        }
+                        .padding(.vertical, DesignSystem.Spacing.large)
                     }
                 }
             }
         }
+    }
+
+    // MARK: - Should Load More
+
+    private func shouldLoadMore(currentIndex: Int) -> Bool {
+        // Only load more if:
+        // 1. Not currently loading
+        // 2. We have more files to load
+        // 3. We're within threshold of the end
+        // 4. Search is empty (don't auto-load during search)
+        guard !isLoadingMore && hasMoreFiles && searchText.isEmpty else {
+            return false
+        }
+
+        let itemsFromEnd = sortedFiles.count - currentIndex
+        return itemsFromEnd <= loadMoreThreshold
     }
 
     // MARK: - Table Header
@@ -275,25 +281,6 @@ struct FilesView: View {
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.small)
         .background(DesignSystem.Colors.cardBackgroundDefault)
-    }
-
-    // MARK: - Show More Button
-
-    private var showMoreButton: some View {
-        Button(action: {
-            withAnimation {
-                displayLimit += 1000
-            }
-        }) {
-            HStack(spacing: DesignSystem.Spacing.small) {
-                Image(systemName: "arrow.down.circle")
-                Text("Show More Files")
-            }
-            .font(DesignSystem.Typography.body)
-            .foregroundColor(DesignSystem.Colors.accent)
-            .padding(.vertical, DesignSystem.Spacing.large)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - State Views
@@ -405,42 +392,83 @@ struct FilesView: View {
 
     // MARK: - Data Loading
 
-    private func loadFiles() async {
+    private func loadInitialFiles() async {
         isLoading = true
         errorMessage = nil
+        loadedCount = 0
+        hasMoreFiles = true
 
         do {
-            // Load files from database
-            let entries = try await DatabaseManager.shared.getRecentFiles(limit: maxInitialLoad)
+            // Load initial batch
+            let entries = try await DatabaseManager.shared.getRecentFiles(limit: batchSize, offset: 0)
 
             // Convert to display items
-            var displayItems: [FileDisplayItem] = []
-
-            for entry in entries {
-                // Find the drive for this file
-                let drive = driveMonitor.drives.first(where: { $0.id == entry.driveUUID })
-                let driveName = drive?.name ?? "Unknown"
-                let isConnected = drive?.isConnected ?? false
-
-                displayItems.append(FileDisplayItem(
-                    id: entry.id ?? 0,
-                    name: entry.name,
-                    relativePath: entry.relativePath,
-                    size: entry.size,
-                    driveUUID: entry.driveUUID,
-                    driveName: driveName,
-                    modifiedAt: entry.modifiedAt,
-                    createdAt: entry.createdAt,
-                    isConnected: isConnected
-                ))
-            }
+            let displayItems = convertToDisplayItems(entries)
 
             files = displayItems
+            loadedCount = entries.count
+            hasMoreFiles = entries.count == batchSize
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func loadMoreFiles() async {
+        guard !isLoadingMore && hasMoreFiles else { return }
+
+        isLoadingMore = true
+
+        do {
+            // Load next batch using offset
+            let entries = try await DatabaseManager.shared.getRecentFiles(limit: batchSize, offset: loadedCount)
+
+            if !entries.isEmpty {
+                let newDisplayItems = convertToDisplayItems(entries)
+                files.append(contentsOf: newDisplayItems)
+                loadedCount += entries.count
+                hasMoreFiles = entries.count == batchSize
+            } else {
+                hasMoreFiles = false
+            }
+        } catch {
+            print("Error loading more files: \(error.localizedDescription)")
+            hasMoreFiles = false
+        }
+
+        isLoadingMore = false
+    }
+
+    private func refreshFiles() async {
+        // Reset and reload
+        files = []
+        await loadInitialFiles()
+    }
+
+    private func convertToDisplayItems(_ entries: [FileEntry]) -> [FileDisplayItem] {
+        var displayItems: [FileDisplayItem] = []
+
+        for entry in entries {
+            // Find the drive for this file
+            let drive = driveMonitor.drives.first(where: { $0.id == entry.driveUUID })
+            let driveName = drive?.name ?? "Unknown"
+            let isConnected = drive?.isConnected ?? false
+
+            displayItems.append(FileDisplayItem(
+                id: entry.id ?? 0,
+                name: entry.name,
+                relativePath: entry.relativePath,
+                size: entry.size,
+                driveUUID: entry.driveUUID,
+                driveName: driveName,
+                modifiedAt: entry.modifiedAt,
+                createdAt: entry.createdAt,
+                isConnected: isConnected
+            ))
+        }
+
+        return displayItems
     }
 
     // MARK: - Filtering and Sorting
@@ -466,9 +494,7 @@ struct FilesView: View {
     }
 
     private var sortedFiles: [FileDisplayItem] {
-        let filtered = Array(filteredAndSearchedFiles.prefix(displayLimit))
-
-        return filtered.sorted { lhs, rhs in
+        return filteredAndSearchedFiles.sorted { lhs, rhs in
             switch sortOption {
             case .dateAdded:
                 // Higher ID = more recent
