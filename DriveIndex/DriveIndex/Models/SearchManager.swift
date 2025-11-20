@@ -17,6 +17,7 @@ struct SearchResult: Identifiable, Hashable {
     let driveName: String
     var isConnected: Bool
     let duplicateCount: Int?
+    let isDirectory: Bool
 }
 
 actor SearchManager {
@@ -61,7 +62,8 @@ actor SearchManager {
             f.drive_uuid,
             d.name as drive_name,
             (SELECT COUNT(*) FROM files f2
-             WHERE f2.name = f.name AND f2.size = f.size AND f2.is_directory = 0) as dup_count
+             WHERE f2.name = f.name AND f2.size = f.size AND f2.is_directory = 0) as dup_count,
+            f.is_directory
         FROM files_fts
         JOIN files f ON f.id = files_fts.rowid
         JOIN drives d ON d.uuid = f.drive_uuid
@@ -81,6 +83,7 @@ actor SearchManager {
                 let driveUUID = String(cString: sqlite3_column_text(stmt, 4))
                 let driveName = String(cString: sqlite3_column_text(stmt, 5))
                 let dupCount = Int(sqlite3_column_int(stmt, 6))
+                let isDirectory = sqlite3_column_int(stmt, 7) != 0
 
                 let isConnected = isDriveMounted(driveName)
 
@@ -92,7 +95,8 @@ actor SearchManager {
                     driveUUID: driveUUID,
                     driveName: driveName,
                     isConnected: isConnected,
-                    duplicateCount: dupCount > 1 ? dupCount : nil
+                    duplicateCount: dupCount > 1 ? dupCount : nil,
+                    isDirectory: isDirectory
                 ))
             }
 

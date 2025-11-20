@@ -44,8 +44,14 @@ struct FileDisplayItem: Identifiable {
     let modifiedAt: Date?
     let createdAt: Date?
     let isConnected: Bool
+    let isDirectory: Bool
 
     var kind: String {
+        // Folders are always "Folder"
+        if isDirectory {
+            return "Folder"
+        }
+
         let ext = (name as NSString).pathExtension.lowercased()
 
         // Common file type mappings
@@ -474,7 +480,8 @@ struct FilesView: View {
                     driveName: result.driveName,
                     modifiedAt: nil, // SearchResult doesn't include dates
                     createdAt: nil,
-                    isConnected: result.isConnected
+                    isConnected: result.isConnected,
+                    isDirectory: result.isDirectory
                 )
             }
         } catch {
@@ -559,7 +566,8 @@ struct FilesView: View {
                 driveName: driveName,
                 modifiedAt: entry.modifiedAt,
                 createdAt: entry.createdAt,
-                isConnected: isConnected
+                isConnected: isConnected,
+                isDirectory: entry.isDirectory
             ))
         }
 
@@ -691,53 +699,60 @@ struct FileRow: View {
     }
 
     private var fileIcon: some View {
-        let ext = (file.name as NSString).pathExtension.lowercased()
         let iconName: String
         let iconColor: Color
 
-        switch ext {
-        case "pdf":
-            iconName = "doc.fill"
-            iconColor = .red
-        case "doc", "docx":
-            iconName = "doc.text.fill"
+        // Show folder icon for directories
+        if file.isDirectory {
+            iconName = "folder.fill"
             iconColor = .blue
-        case "xls", "xlsx":
-            iconName = "tablecells.fill"
-            iconColor = .green
-        case "ppt", "pptx":
-            iconName = "square.fill.text.grid.1x2"
-            iconColor = .orange
-        case "txt", "rtf":
-            iconName = "doc.plaintext.fill"
-            iconColor = .gray
-        case "jpg", "jpeg", "png", "gif", "svg":
-            iconName = "photo.fill"
-            iconColor = .purple
-        case "mp4", "mov":
-            iconName = "video.fill"
-            iconColor = .pink
-        case "mp3", "m4a", "wav":
-            iconName = "music.note"
-            iconColor = .orange
-        case "zip", "tar", "gz":
-            iconName = "doc.zipper"
-            iconColor = .gray
-        case "dmg":
-            iconName = "externaldrive.fill"
-            iconColor = .gray
-        case "app":
-            iconName = "app.fill"
-            iconColor = .blue
-        case "swift":
-            iconName = "chevron.left.forwardslash.chevron.right"
-            iconColor = .orange
-        case "py", "js", "html", "css":
-            iconName = "chevron.left.forwardslash.chevron.right"
-            iconColor = .green
-        default:
-            iconName = "doc.fill"
-            iconColor = .blue
+        } else {
+            let ext = (file.name as NSString).pathExtension.lowercased()
+
+            switch ext {
+            case "pdf":
+                iconName = "doc.fill"
+                iconColor = .red
+            case "doc", "docx":
+                iconName = "doc.text.fill"
+                iconColor = .blue
+            case "xls", "xlsx":
+                iconName = "tablecells.fill"
+                iconColor = .green
+            case "ppt", "pptx":
+                iconName = "square.fill.text.grid.1x2"
+                iconColor = .orange
+            case "txt", "rtf":
+                iconName = "doc.plaintext.fill"
+                iconColor = .gray
+            case "jpg", "jpeg", "png", "gif", "svg":
+                iconName = "photo.fill"
+                iconColor = .purple
+            case "mp4", "mov":
+                iconName = "video.fill"
+                iconColor = .pink
+            case "mp3", "m4a", "wav":
+                iconName = "music.note"
+                iconColor = .orange
+            case "zip", "tar", "gz":
+                iconName = "doc.zipper"
+                iconColor = .gray
+            case "dmg":
+                iconName = "externaldrive.fill"
+                iconColor = .gray
+            case "app":
+                iconName = "app.fill"
+                iconColor = .blue
+            case "swift":
+                iconName = "chevron.left.forwardslash.chevron.right"
+                iconColor = .orange
+            case "py", "js", "html", "css":
+                iconName = "chevron.left.forwardslash.chevron.right"
+                iconColor = .green
+            default:
+                iconName = "doc.fill"
+                iconColor = .blue
+            }
         }
 
         return Image(systemName: iconName)
