@@ -150,7 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 statusColor = .systemOrange
             }
         } else if isHashing {
-            // Analyzing/hashing - purple
+            // Analysing/hashing - purple
             statusColor = .systemPurple
         } else if pendingChanges != nil {
             // Changes detected - blue

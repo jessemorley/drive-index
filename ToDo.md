@@ -4,8 +4,7 @@
 
 ### High
 
-- [ ] Drive visual tweaks
-    - 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
+- [ ] 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
 - [x] Enable PRAGMA optimise when file change counter reaches 50
 - [x] **Feature:** Duplicate file detection/summary
@@ -16,11 +15,10 @@
 
 ### Medium
 
-- [ ] Keyboard navigation. (Pressing down from search highlights first result. Can move through and press enter to open in finder. Maybe an indication of what the action is going to be?)
+- [ ] Keyboard navigation from search
 - [ ] Settings window appear on top
 - [x] MacOS-style storage visualisation
 - [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
-- [ ] Plan at 
   
 ### Low
 
@@ -32,7 +30,6 @@
 - [ ] **Feature:** Browse drives/file tree interface
 - [ ] **Feature:** Sparkle updates
 - [ ] **Feature:** Cloud sync with CloudKit
-
 
 ## Bugs
 

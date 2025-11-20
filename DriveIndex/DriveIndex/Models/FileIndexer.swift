@@ -480,7 +480,7 @@ actor FileIndexer {
         let totalChanges = newCount + modifiedCount + deletedCount
         let summary: String
         if totalChanges == 0 {
-            summary = "Scan complete: no changes detected"
+            summary = "Scan complete. No changes detected."
         } else {
             var parts: [String] = []
             if newCount > 0 {
@@ -495,7 +495,7 @@ actor FileIndexer {
                 let fileWord = deletedCount == 1 ? "file" : "files"
                 parts.append("\(deletedCount) \(fileWord) deleted")
             }
-            summary = "Scan complete. " + parts.joined(separator: ", ") + "."
+            summary = "Scan complete. " + parts.joined(separator: ", " + ".")
         }
 
         onProgress(IndexProgress(

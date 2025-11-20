@@ -282,13 +282,13 @@ struct ActiveHashingOverlay: View {
                     .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
                     .onAppear { isAnimating = true }
 
-                Text("ANALYZING")
+                Text("ANALYSING")
                     .font(AppTypography.statusText)
                     .foregroundColor(.purple)
             }
 
             if let progress = indexManager.hashProgress {
-                Text("\(formatFileCount(progress.filesHashed))/\(formatFileCount(progress.totalFiles)) files")
+                Text("Computing file hashes")
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
                     .frame(minWidth: 120, alignment: .leading)

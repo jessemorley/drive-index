@@ -129,7 +129,7 @@ struct DuplicatesView: View {
             ProgressView()
                 .controlSize(.large)
 
-            Text("Analyzing files for duplicates...")
+            Text("Analysing files for duplicates...")
                 .font(DesignSystem.Typography.subheadline)
                 .foregroundColor(DesignSystem.Colors.secondaryText)
         }

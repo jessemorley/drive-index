@@ -21,7 +21,7 @@ struct StorageVisualizationView: View {
                     Spacer()
                     ProgressView()
                         .controlSize(.small)
-                    Text("Analyzing storage...")
+                    Text("Analysing storage...")
                         .font(AppTypography.capacityInfo)
                         .foregroundColor(.secondary)
                     Spacer()
