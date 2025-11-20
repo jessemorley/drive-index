@@ -51,7 +51,8 @@ struct MainWindowView: View {
                             .secondaryText()
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
 
                 // Inspector panel
                 if appSearchState.showInspector, let selectedFile = appSearchState.selectedFile {
@@ -61,6 +62,7 @@ struct MainWindowView: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: appSearchState.showInspector)
             .toolbar {
                 // Centered search bar
