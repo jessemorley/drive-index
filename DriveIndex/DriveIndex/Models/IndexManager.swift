@@ -172,6 +172,11 @@ class IndexManager: ObservableObject {
                                     await self?.startHashComputation()
                                 }
 
+                                // Start thumbnail generation (independent of hash computation)
+                                Task {
+                                    await self?.startThumbnailGeneration()
+                                }
+
                                 // Notify drive monitor to reload
                                 NotificationCenter.default.post(
                                     name: .driveIndexingComplete,
@@ -275,11 +280,6 @@ class IndexManager: ObservableObject {
                                     name: .hashComputationComplete,
                                     object: nil
                                 )
-
-                                // Start thumbnail generation after hash computation
-                                Task {
-                                    await self?.startThumbnailGeneration()
-                                }
                             }
                         }
                     }

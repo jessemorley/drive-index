@@ -39,7 +39,8 @@ actor ThumbnailGenerator {
         if isImageFile(ext) {
             return try await generateImageThumbnail(for: fileURL)
         } else if isVideoFile(ext) {
-            return try await generateVideoThumbnail(for: fileURL)
+            // Skip video thumbnails for now due to memory pressure issues
+            throw ThumbnailError.unsupportedFileType
         } else if isPDFFile(ext) {
             return try await generateQuickLookThumbnail(for: fileURL)
         } else {
