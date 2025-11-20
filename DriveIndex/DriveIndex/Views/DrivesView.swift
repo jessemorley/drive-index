@@ -134,41 +134,78 @@ struct DriveCard: View {
     let drive: DriveInfo
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
-    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Card.spacing) {
-            // Icon and name
-            HStack(spacing: 10) {
-                DesignSystem.icon("externaldrive.fill", size: 32)
-                    .foregroundStyle(.blue)
+        VStack(alignment: .leading, spacing: Spacing.medium) {
+            // Top row: Status dot + Drive name + Capacity badge
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(drive.isConnected ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(drive.name)
-                        .font(DesignSystem.Typography.headline)
-                        .lineLimit(1)
+                Text(drive.name)
+                    .font(.callout)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
 
-                    Text("\(drive.formattedTotal)")
-                        .secondaryText()
+                if drive.totalCapacity > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text(drive.formattedTotal)
+                            .font(AppTypography.capacityInfo)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+                    .fixedSize()
+                }
+            }
+
+            // Capacity bar
+            if drive.totalCapacity > 0 {
+                CapacityBar(
+                    used: drive.usedCapacity,
+                    total: drive.totalCapacity,
+                    percentage: drive.usedPercentage,
+                    isConnected: drive.isConnected,
+                    height: 5
+                )
+            }
+
+            // Info row: Capacity + file count
+            HStack(spacing: Spacing.medium) {
+                if drive.totalCapacity > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                if drive.fileCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "doc.text")
+                            .font(.caption2)
+                        Text("\(drive.fileCount.formatted()) files")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(.secondary)
                 }
 
                 Spacer()
             }
 
-            // Capacity bar
-            CapacityBar(
-                used: drive.usedCapacity,
-                total: drive.totalCapacity,
-                percentage: drive.usedPercentage,
-                isConnected: drive.isConnected,
-                height: 6
-            )
-
-            // Usage text
-            Text("\(drive.formattedUsed) used")
-                .secondaryText()
-
-            DesignSystem.divider()
+            // Last scanned (underneath capacity/files info)
+            Text("Last scanned: \(drive.formattedLastScan)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
 
             // Action buttons
             HStack(spacing: DesignSystem.Spacing.medium) {
@@ -192,12 +229,13 @@ struct DriveCard: View {
                 .buttonStyle(.bordered)
             }
         }
-        .card(isHovered: isHovered)
-        .onHover { hovering in
-            withAnimation(DesignSystem.Animation.quick) {
-                isHovered = hovering
-            }
-        }
+        .padding(Spacing.medium)
+        .background(drive.backgroundColor)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(drive.borderColor ?? Color.clear, lineWidth: 1)
+        )
     }
 
     private func scanDrive(_ drive: DriveInfo) {
