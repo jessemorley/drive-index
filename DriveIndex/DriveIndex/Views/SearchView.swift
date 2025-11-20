@@ -37,7 +37,6 @@ struct SearchView: View {
             }
         }
         .navigationTitle("Search")
-        .navigationSubtitle(subtitle)
         .toolbarTitleDisplayMode(.inline)
         .toolbar(id: "search-toolbar") {
             ToolbarItem(id: "filter", placement: .automatic) {
@@ -52,17 +51,6 @@ struct SearchView: View {
     }
 
     // MARK: - Computed Properties
-
-    private var subtitle: String {
-        if searchText.isEmpty {
-            return ""
-        } else if isSearching {
-            return "Searching..."
-        } else {
-            let count = filteredResults.count
-            return "\(count) result\(count == 1 ? "" : "s")"
-        }
-    }
 
     private var filteredResults: [FileDisplayItem] {
         guard let driveId = selectedDriveFilter else {
@@ -137,79 +125,28 @@ struct SearchView: View {
     // MARK: - Search Results View
 
     private var searchResultsView: some View {
-        VStack(spacing: 0) {
-            // Table header
-            tableHeader
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(filteredResults, id: \.id) { file in
+                    FileRow(
+                        file: file,
+                        isHovered: hoveredFileID == file.id
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        revealInFinder(file)
+                    }
+                    .onHover { isHovering in
+                        hoveredFileID = isHovering ? file.id : nil
+                    }
 
-            Divider()
-
-            // File rows
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filteredResults, id: \.id) { file in
-                        FileRow(
-                            file: file,
-                            isHovered: hoveredFileID == file.id
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            revealInFinder(file)
-                        }
-                        .onHover { isHovering in
-                            hoveredFileID = isHovering ? file.id : nil
-                        }
-
-                        if file.id != filteredResults.last?.id {
-                            Divider()
-                                .padding(.leading, DesignSystem.Spacing.cardPadding)
-                        }
+                    if file.id != filteredResults.last?.id {
+                        Divider()
+                            .padding(.leading, DesignSystem.Spacing.cardPadding)
                     }
                 }
             }
         }
-    }
-
-    // MARK: - Table Header
-
-    private var tableHeader: some View {
-        HStack(spacing: DesignSystem.Spacing.medium) {
-            // Name column (flexible)
-            Text("Name")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Size column (fixed width)
-            Text("Size")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 80, alignment: .trailing)
-
-            // Kind column (fixed width)
-            Text("Kind")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 140, alignment: .leading)
-
-            // Drive column (fixed width)
-            Text("Drive")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 120, alignment: .leading)
-
-            // Date Added column (fixed width)
-            Text("Date Added")
-                .font(DesignSystem.Typography.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 140, alignment: .leading)
-        }
-        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
-        .padding(.vertical, DesignSystem.Spacing.small)
     }
 
     // MARK: - Toolbar Items

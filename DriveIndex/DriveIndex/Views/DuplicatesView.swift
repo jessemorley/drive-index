@@ -53,9 +53,7 @@ struct DuplicatesView: View {
                 }
             }
             .navigationTitle("Duplicates")
-            .navigationSubtitle("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s")")
             .toolbarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .windowToolbar)
             .toolbar(id: "duplicates-toolbar") {
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Menu {

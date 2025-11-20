@@ -61,7 +61,6 @@ struct DrivesView: View {
                 }
             }
             .navigationTitle("Drives")
-            .navigationSubtitle("\(sortedDrives.count) drive\(sortedDrives.count == 1 ? "" : "s")")
             .toolbar(id: "drives-toolbar") {
                 ToolbarItem(id: "view-mode", placement: .automatic) {
                     Picker("View", selection: $viewMode) {

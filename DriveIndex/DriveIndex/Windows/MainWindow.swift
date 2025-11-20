@@ -40,7 +40,7 @@ class MainWindow: NSWindow {
     private func configureWindow() {
         // Window properties
         title = "DriveIndex"
-        titlebarAppearsTransparent = false
+        titlebarAppearsTransparent = true
 
         // Enable unified toolbar style
         toolbarStyle = .unified
