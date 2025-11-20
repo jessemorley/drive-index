@@ -11,6 +11,7 @@ struct DriveDetailView: View {
     let drive: DriveInfo
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
+    @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirmation = false
 
     var body: some View {
@@ -60,6 +61,10 @@ struct DriveDetailView: View {
                 Task {
                     do {
                         try await driveMonitor.deleteDrive(drive.id)
+                        // Navigate back after successful deletion
+                        await MainActor.run {
+                            dismiss()
+                        }
                     } catch {
                         print("Error deleting drive: \(error)")
                     }
