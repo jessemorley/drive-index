@@ -33,6 +33,7 @@
 
 ## Bugs
 
+- [ ] Storage breakdown doesn't show for disconnected drives
 - [ ] Database location button sizing
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to

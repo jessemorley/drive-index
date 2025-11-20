@@ -34,7 +34,6 @@ enum AppTheme: String, CaseIterable, Identifiable {
 struct AppearanceView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .auto
     @AppStorage("showDockIcon") private var showDockIcon: Bool = true
-    @State private var hasUnsavedChanges: Bool = false
 
     var body: some View {
         ScrollView {
@@ -53,8 +52,8 @@ struct AppearanceView: View {
                             }
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: appTheme) { _, _ in
-                            hasUnsavedChanges = true
+                        .onChange(of: appTheme) { _, newValue in
+                            applyTheme(newValue)
                         }
 
                         Text("Auto mode follows your system appearance settings")
@@ -76,7 +75,6 @@ struct AppearanceView: View {
                         }
                         .toggleStyle(.switch)
                         .onChange(of: showDockIcon) { _, newValue in
-                            hasUnsavedChanges = true
                             updateDockIconVisibility(newValue)
                         }
 
@@ -100,7 +98,7 @@ struct AppearanceView: View {
                             .font(DesignSystem.Typography.caption)
                             .fontWeight(.semibold)
 
-                        Text("Changes to theme apply immediately. Dock icon changes take full effect after restarting the app.")
+                        Text("Theme changes apply immediately. Dock icon changes take full effect after restarting the app.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
@@ -113,15 +111,6 @@ struct AppearanceView: View {
             .padding(.vertical, DesignSystem.Spacing.large)
         }
         .navigationTitle("Appearance")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Save") {
-                    saveSettings()
-                }
-                .disabled(!hasUnsavedChanges)
-                .keyboardShortcut("s", modifiers: .command)
-            }
-        }
     }
 
     private func updateDockIconVisibility(_ show: Bool) {
@@ -132,14 +121,21 @@ struct AppearanceView: View {
         }
     }
 
-    private func saveSettings() {
-        // Settings are automatically saved via @AppStorage
-        // Apply theme change
-        if let windowScene = NSApplication.shared.windows.first {
-            windowScene.appearance = appTheme.colorScheme.map { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) } ?? nil
+    private func applyTheme(_ theme: AppTheme) {
+        // Apply appearance at app level (affects all windows)
+        let appearance: NSAppearance?
+        switch theme.colorScheme {
+        case .light:
+            appearance = NSAppearance(named: .aqua)
+        case .dark:
+            appearance = NSAppearance(named: .darkAqua)
+        case nil:
+            appearance = nil  // Auto - follow system
+        @unknown default:
+            appearance = nil
         }
 
-        hasUnsavedChanges = false
+        NSApp.appearance = appearance
     }
 }
 

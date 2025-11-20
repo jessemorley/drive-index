@@ -46,6 +46,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Start with regular activation policy for initial launch
         NSApp.setActivationPolicy(.regular)
 
+        // Apply saved theme preference
+        applySavedTheme()
+
         // Set up status bar item
         setupStatusItem()
 
@@ -81,6 +84,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func handleOpenMainWindow() {
         showMainWindow()
+    }
+
+    // MARK: - Theme Management
+
+    private func applySavedTheme() {
+        // Read saved theme preference from UserDefaults (same key as @AppStorage)
+        let themeRawValue = UserDefaults.standard.string(forKey: "appTheme") ?? "Auto"
+        guard let theme = AppTheme(rawValue: themeRawValue) else { return }
+
+        // Apply appearance to the app
+        let appearance: NSAppearance?
+        switch theme.colorScheme {
+        case .light:
+            appearance = NSAppearance(named: .aqua)
+        case .dark:
+            appearance = NSAppearance(named: .darkAqua)
+        case nil:
+            appearance = nil  // Auto - follow system
+        @unknown default:
+            appearance = nil
+        }
+
+        // Set app-level appearance (will apply to all windows)
+        NSApp.appearance = appearance
     }
 
     // MARK: - Status Item Setup
