@@ -741,6 +741,8 @@ struct FileRow: View {
                 .lineLimit(1)
                 .frame(width: 140, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
         .background(
