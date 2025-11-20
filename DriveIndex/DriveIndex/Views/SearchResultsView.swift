@@ -160,7 +160,8 @@ struct SearchResultRow: View {
                 driveName: "My Drive",
                 isConnected: true,
                 duplicateCount: 3,
-                isDirectory: false
+                isDirectory: false,
+                modifiedAt: Date()
             ),
             SearchResult(
                 id: 2,
@@ -171,7 +172,8 @@ struct SearchResultRow: View {
                 driveName: "Backup",
                 isConnected: false,
                 duplicateCount: nil,
-                isDirectory: false
+                isDirectory: false,
+                modifiedAt: Date()
             ),
         ],
         previousResults: [],

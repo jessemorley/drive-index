@@ -154,7 +154,7 @@ actor ThumbnailCache {
 
         // Calculate how much we need to free
         let targetSize = maxCacheSize * 8 / 10 // Evict to 80% of max
-        var sizeToFree = currentSize - targetSize
+        let sizeToFree = currentSize - targetSize
 
         print("📦 Thumbnail cache size (\(formatBytes(currentSize))) exceeds limit (\(formatBytes(maxCacheSize)))")
         print("🗑️ Evicting oldest thumbnails...")

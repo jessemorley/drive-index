@@ -88,7 +88,7 @@ actor ThumbnailGenerator {
 
     // MARK: - File Type Detection
 
-    private func isImageFile(_ ext: String) -> Bool {
+    nonisolated private func isImageFile(_ ext: String) -> Bool {
         let imageExtensions: Set<String> = [
             "jpg", "jpeg", "png", "gif", "heic", "heif", "tiff", "tif", "bmp", "webp",
             // RAW formats (CR3 handled separately to track it specifically in logs)
@@ -97,12 +97,12 @@ actor ThumbnailGenerator {
         return imageExtensions.contains(ext)
     }
 
-    private func isVideoFile(_ ext: String) -> Bool {
+    nonisolated private func isVideoFile(_ ext: String) -> Bool {
         let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "avi"]
         return videoExtensions.contains(ext)
     }
 
-    private func isPDFFile(_ ext: String) -> Bool {
+    nonisolated private func isPDFFile(_ ext: String) -> Bool {
         return ext == "pdf"
     }
 
@@ -163,14 +163,14 @@ actor ThumbnailGenerator {
         }
     }
 
-    private func isRawFile(_ ext: String) -> Bool {
+    nonisolated private func isRawFile(_ ext: String) -> Bool {
         let rawExtensions: Set<String> = [
             "nef", "cr2", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw"
         ]
         return rawExtensions.contains(ext)
     }
 
-    private func isCR3File(_ ext: String) -> Bool {
+    nonisolated private func isCR3File(_ ext: String) -> Bool {
         return ext == "cr3"
     }
 
