@@ -305,6 +305,21 @@ actor DatabaseManager {
         // Migrate files table to add hash columns if they don't exist
         try migrateAddHashColumns()
 
+        // Thumbnails table for media file previews
+        try execute("""
+            CREATE TABLE IF NOT EXISTS thumbnails (
+                file_id INTEGER PRIMARY KEY,
+                thumbnail_path TEXT NOT NULL,
+                generated_at INTEGER NOT NULL,
+                file_size INTEGER,
+                FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+            )
+        """)
+
+        // Index for tracking cache size
+        try execute("CREATE INDEX IF NOT EXISTS idx_thumbnails_size ON thumbnails(file_size)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_thumbnails_generated ON thumbnails(generated_at)")
+
         // Settings table
         try execute("""
             CREATE TABLE IF NOT EXISTS settings (
@@ -1384,6 +1399,138 @@ actor DatabaseManager {
         }
 
         return files
+    }
+
+    // MARK: - Thumbnail Operations
+
+    /// Save thumbnail metadata to database
+    func saveThumbnail(fileID: Int64, thumbnailPath: String, fileSize: Int64) throws {
+        let insertSQL = """
+            INSERT OR REPLACE INTO thumbnails (file_id, thumbnail_path, generated_at, file_size)
+            VALUES (?, ?, ?, ?)
+        """
+
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        guard sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, fileID)
+        sqlite3_bind_text(stmt, 2, (thumbnailPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 3, Int64(Date().timeIntervalSince1970))
+        sqlite3_bind_int64(stmt, 4, fileSize)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    /// Get thumbnail path for a file
+    func getThumbnailPath(for fileID: Int64) throws -> String? {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT thumbnail_path FROM thumbnails WHERE file_id = ?"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, fileID)
+
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            return String(cString: sqlite3_column_text(stmt, 0))
+        }
+
+        return nil
+    }
+
+    /// Get total cache size
+    func getThumbnailCacheSize() throws -> Int64 {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT COALESCE(SUM(file_size), 0) FROM thumbnails"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return 0
+        }
+
+        return sqlite3_column_int64(stmt, 0)
+    }
+
+    /// Get oldest thumbnails for LRU eviction
+    func getOldestThumbnails(limit: Int) throws -> [(fileID: Int64, path: String, size: Int64)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT file_id, thumbnail_path, file_size
+            FROM thumbnails
+            ORDER BY generated_at ASC
+            LIMIT ?
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+
+        var thumbnails: [(Int64, String, Int64)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let fileID = sqlite3_column_int64(stmt, 0)
+            let path = String(cString: sqlite3_column_text(stmt, 1))
+            let size = sqlite3_column_int64(stmt, 2)
+            thumbnails.append((fileID, path, size))
+        }
+
+        return thumbnails
+    }
+
+    /// Delete thumbnail record from database
+    func deleteThumbnail(fileID: Int64) throws {
+        let deleteSQL = "DELETE FROM thumbnails WHERE file_id = ?"
+
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, fileID)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
     }
 
     // MARK: - Database Optimization
