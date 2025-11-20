@@ -22,11 +22,15 @@ class IndexManager: ObservableObject {
     @Published var pendingChanges: PendingChanges?
     @Published var hashProgress: HashProgress?
     @Published var isHashing: Bool = false
+    @Published var thumbnailProgress: ThumbnailProgress?
+    @Published var isGeneratingThumbnails: Bool = false
 
     private let fileIndexer = FileIndexer()
     private let hashWorker = HashWorker()
+    private let thumbnailWorker = ThumbnailWorker()
     private var indexingTask: Task<Void, Never>?
     private var hashingTask: Task<Void, Never>?
+    private var thumbnailTask: Task<Void, Never>?
 
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
@@ -264,6 +268,11 @@ class IndexManager: ObservableObject {
                                     name: .hashComputationComplete,
                                     object: nil
                                 )
+
+                                // Start thumbnail generation after hash computation
+                                Task {
+                                    await self?.startThumbnailGeneration()
+                                }
                             }
                         }
                     }
@@ -289,6 +298,69 @@ class IndexManager: ObservableObject {
         hashingTask = nil
         isHashing = false
         hashProgress = nil
+    }
+
+    func startThumbnailGeneration() async {
+        // Cancel existing thumbnail generation if any
+        thumbnailTask?.cancel()
+
+        do {
+            // Check if there are media files without thumbnails
+            let count = try await DatabaseManager.shared.getMediaFilesWithoutThumbnailsCount()
+            guard count > 0 else {
+                print("✅ No media files need thumbnails")
+                return
+            }
+
+            print("🖼️ Starting background thumbnail generation for \(count) media files")
+
+            isGeneratingThumbnails = true
+            thumbnailProgress = nil
+
+            thumbnailTask = Task {
+                do {
+                    try await thumbnailWorker.generateThumbnails() { [weak self] progress in
+                        Task { @MainActor in
+                            self?.thumbnailProgress = progress
+
+                            if progress.isComplete {
+                                // Show summary for 2 seconds before clearing
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                    self?.isGeneratingThumbnails = false
+                                    self?.thumbnailProgress = nil
+                                }
+
+                                // Notify that thumbnail generation is complete
+                                NotificationCenter.default.post(
+                                    name: .thumbnailGenerationComplete,
+                                    object: nil
+                                )
+                            }
+                        }
+                    }
+                } catch {
+                    print("Error generating thumbnails: \(error)")
+                    Task { @MainActor in
+                        self.isGeneratingThumbnails = false
+                        self.thumbnailProgress = nil
+                    }
+                }
+            }
+        } catch {
+            print("Error starting thumbnail generation: \(error)")
+            isGeneratingThumbnails = false
+        }
+    }
+
+    func cancelThumbnailGeneration() {
+        Task {
+            await thumbnailWorker.cancel()
+        }
+        thumbnailTask?.cancel()
+        thumbnailTask = nil
+        isGeneratingThumbnails = false
+        thumbnailProgress = nil
     }
 
     func getExcludedDirectories() async -> [String] {
@@ -359,4 +431,5 @@ extension Notification.Name {
     static let driveIndexingComplete = Notification.Name("driveIndexingComplete")
     static let changesDetected = Notification.Name("changesDetected")
     static let hashComputationComplete = Notification.Name("hashComputationComplete")
+    static let thumbnailGenerationComplete = Notification.Name("thumbnailGenerationComplete")
 }

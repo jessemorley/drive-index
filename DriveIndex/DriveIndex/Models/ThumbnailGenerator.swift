@@ -100,18 +100,23 @@ actor ThumbnailGenerator {
                 }
 
                 guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create image source"))
+                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create image source for \(url.lastPathComponent)"))
                     return
                 }
 
+                // For RAW files, try to extract embedded thumbnail first (faster)
                 let options: [CFString: Any] = [
                     kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize
+                    kCGImageSourceCreateThumbnailFromImageIfAbsent: true,  // Create from full image if no embedded thumbnail
+                    kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize,
+                    kCGImageSourceShouldCache: false  // Don't cache, we're saving to disk
                 ]
 
                 guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
-                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create thumbnail"))
+                    // Log more detail about failure
+                    let type = CGImageSourceGetType(imageSource)
+                    let typeString = type.map { String($0 as String) } ?? "unknown"
+                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create thumbnail for \(url.lastPathComponent) (type: \(typeString))"))
                     return
                 }
 

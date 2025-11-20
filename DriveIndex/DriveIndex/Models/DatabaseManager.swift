@@ -1533,6 +1533,93 @@ actor DatabaseManager {
         }
     }
 
+    /// Get media files without thumbnails
+    func getMediaFilesWithoutThumbnails(limit: Int) throws -> [(id: Int64, driveUUID: String, relativePath: String, name: String)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT f.id, f.drive_uuid, f.relative_path, f.name
+            FROM files f
+            LEFT JOIN thumbnails t ON f.id = t.file_id
+            WHERE t.file_id IS NULL
+            AND f.is_directory = 0
+            AND (
+                LOWER(f.name) LIKE '%.jpg' OR LOWER(f.name) LIKE '%.jpeg' OR LOWER(f.name) LIKE '%.png' OR
+                LOWER(f.name) LIKE '%.gif' OR LOWER(f.name) LIKE '%.heic' OR LOWER(f.name) LIKE '%.heif' OR
+                LOWER(f.name) LIKE '%.tiff' OR LOWER(f.name) LIKE '%.tif' OR LOWER(f.name) LIKE '%.bmp' OR
+                LOWER(f.name) LIKE '%.webp' OR LOWER(f.name) LIKE '%.nef' OR LOWER(f.name) LIKE '%.cr2' OR
+                LOWER(f.name) LIKE '%.cr3' OR LOWER(f.name) LIKE '%.arw' OR LOWER(f.name) LIKE '%.dng' OR
+                LOWER(f.name) LIKE '%.raf' OR LOWER(f.name) LIKE '%.orf' OR LOWER(f.name) LIKE '%.rw2' OR
+                LOWER(f.name) LIKE '%.pef' OR LOWER(f.name) LIKE '%.srw' OR LOWER(f.name) LIKE '%.raw' OR
+                LOWER(f.name) LIKE '%.mp4' OR LOWER(f.name) LIKE '%.mov' OR LOWER(f.name) LIKE '%.m4v' OR
+                LOWER(f.name) LIKE '%.avi' OR LOWER(f.name) LIKE '%.pdf'
+            )
+            LIMIT ?
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+
+        var files: [(Int64, String, String, String)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 1))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 2))
+            let name = String(cString: sqlite3_column_text(stmt, 3))
+            files.append((id, driveUUID, relativePath, name))
+        }
+
+        return files
+    }
+
+    /// Get count of media files without thumbnails
+    func getMediaFilesWithoutThumbnailsCount() throws -> Int {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT COUNT(*)
+            FROM files f
+            LEFT JOIN thumbnails t ON f.id = t.file_id
+            WHERE t.file_id IS NULL
+            AND f.is_directory = 0
+            AND (
+                LOWER(f.name) LIKE '%.jpg' OR LOWER(f.name) LIKE '%.jpeg' OR LOWER(f.name) LIKE '%.png' OR
+                LOWER(f.name) LIKE '%.gif' OR LOWER(f.name) LIKE '%.heic' OR LOWER(f.name) LIKE '%.heif' OR
+                LOWER(f.name) LIKE '%.tiff' OR LOWER(f.name) LIKE '%.tif' OR LOWER(f.name) LIKE '%.bmp' OR
+                LOWER(f.name) LIKE '%.webp' OR LOWER(f.name) LIKE '%.nef' OR LOWER(f.name) LIKE '%.cr2' OR
+                LOWER(f.name) LIKE '%.cr3' OR LOWER(f.name) LIKE '%.arw' OR LOWER(f.name) LIKE '%.dng' OR
+                LOWER(f.name) LIKE '%.raf' OR LOWER(f.name) LIKE '%.orf' OR LOWER(f.name) LIKE '%.rw2' OR
+                LOWER(f.name) LIKE '%.pef' OR LOWER(f.name) LIKE '%.srw' OR LOWER(f.name) LIKE '%.raw' OR
+                LOWER(f.name) LIKE '%.mp4' OR LOWER(f.name) LIKE '%.mov' OR LOWER(f.name) LIKE '%.m4v' OR
+                LOWER(f.name) LIKE '%.avi' OR LOWER(f.name) LIKE '%.pdf'
+            )
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            return 0
+        }
+
+        return Int(sqlite3_column_int(stmt, 0))
+    }
+
     // MARK: - Database Optimization
 
     /// Run PRAGMA optimize to update query statistics and merge FTS5 segments

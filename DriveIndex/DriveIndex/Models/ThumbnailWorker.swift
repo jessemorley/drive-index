@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum ThumbnailGenerationError: Error {
+    case driveNotFound
+    case fileNotFound
+}
+
 struct ThumbnailProgress {
     let filesProcessed: Int
     let totalFiles: Int
@@ -150,27 +155,9 @@ actor ThumbnailWorker {
     // MARK: - Private Methods
 
     private func getMediaFilesWithoutThumbnails() async throws -> [(id: Int64, driveUUID: String, relativePath: String)] {
-        // Query for media files that don't have thumbnails yet
-        // This is a simplified version - in production you'd want to be more selective
-        let mediaExtensions = [
-            "jpg", "jpeg", "png", "gif", "heic", "heif", "tiff", "tif", "bmp", "webp",
-            "nef", "cr2", "cr3", "arw", "dng", "raf", "orf", "rw2", "pef", "srw", "raw",
-            "mp4", "mov", "m4v", "avi",
-            "pdf"
-        ]
-
-        // This would ideally be a database query, but for now we'll use a simpler approach
-        // In production, add a SQL query to DatabaseManager that does:
-        // SELECT f.id, f.drive_uuid, f.relative_path
-        // FROM files f
-        // LEFT JOIN thumbnails t ON f.id = t.file_id
-        // WHERE t.file_id IS NULL
-        // AND f.is_directory = 0
-        // AND (extension check)
-        // LIMIT 10000
-
-        // For now, return empty array - will be populated by actual DB query
-        return []
+        // Get media files that don't have thumbnails
+        let files = try await database.getMediaFilesWithoutThumbnails(limit: 10000)
+        return files.map { ($0.id, $0.driveUUID, $0.relativePath) }
     }
 
     private func getFileURL(driveUUID: String, relativePath: String) async throws -> URL {
@@ -179,19 +166,14 @@ actor ThumbnailWorker {
             return URL(fileURLWithPath: cachedPath).appendingPathComponent(relativePath)
         }
 
-        // Get from database (this assumes there's a method to get drive info)
-        // For now, construct path using /Volumes
-        let driveName = try await getDriveName(for: driveUUID)
-        let drivePath = "/Volumes/\(driveName)"
+        // Get from database
+        guard let driveMetadata = try await database.getDriveMetadata(driveUUID) else {
+            throw ThumbnailGenerationError.driveNotFound
+        }
 
+        let drivePath = "/Volumes/\(driveMetadata.name)"
         drivePathCache[driveUUID] = drivePath
         return URL(fileURLWithPath: drivePath).appendingPathComponent(relativePath)
-    }
-
-    private func getDriveName(for uuid: String) async throws -> String {
-        // This would query the database for the drive name
-        // For now, simplified implementation
-        return "Unknown"
     }
 
     private func incrementSuccess() {

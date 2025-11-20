@@ -100,7 +100,7 @@ struct MainWindowView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // Indexing progress overlay using safeAreaInset instead of ZStack
-                if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
+                if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing || indexManager.isGeneratingThumbnails {
                     Group {
                         if let pending = indexManager.pendingChanges {
                             PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount)
@@ -112,6 +112,9 @@ struct MainWindowView: View {
                         } else if indexManager.isHashing {
                             ActiveHashingOverlay()
                                 .environmentObject(indexManager)
+                        } else if indexManager.isGeneratingThumbnails {
+                            ActiveThumbnailGenerationOverlay()
+                                .environmentObject(indexManager)
                         }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -119,6 +122,7 @@ struct MainWindowView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: indexManager.isIndexing)
             .animation(.easeInOut(duration: 0.2), value: indexManager.isHashing)
+            .animation(.easeInOut(duration: 0.2), value: indexManager.isGeneratingThumbnails)
             .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
@@ -418,6 +422,66 @@ struct ActiveHashingOverlay: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, Spacing.Container.horizontalPadding)
+        .padding(.bottom, Spacing.medium)
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+    }
+}
+
+struct ActiveThumbnailGenerationOverlay: View {
+    @EnvironmentObject var indexManager: IndexManager
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: Spacing.medium) {
+            HStack(spacing: Spacing.xSmall) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 6, height: 6)
+                    .opacity(isAnimating ? 1.0 : 0.5)
+                    .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
+                    .onAppear { isAnimating = true }
+
+                Text("GENERATING THUMBNAILS")
+                    .font(AppTypography.statusText)
+                    .foregroundColor(.blue)
+            }
+
+            if let progress = indexManager.thumbnailProgress {
+                Text("\(progress.filesProcessed) of \(progress.totalFiles)")
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+                    .frame(minWidth: 120, alignment: .leading)
+
+                Text(String(format: "%.0f%%", progress.percentage))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Generating thumbnails for media files")
+                    .font(.system(.caption, design: .monospaced))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            // Cancel button
+            Button(action: {
+                indexManager.cancelThumbnailGeneration()
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .imageScale(.medium)
+            }
+            .buttonStyle(.plain)
+            .help("Cancel thumbnail generation")
+        }
+        .padding(Spacing.medium)
+        .background(Color.blue.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal, Spacing.Container.horizontalPadding)
         .padding(.bottom, Spacing.medium)
