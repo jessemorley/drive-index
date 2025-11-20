@@ -91,7 +91,7 @@ struct SearchResultRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.medium) {
             // File icon
-            Image(systemName: "doc.fill")
+            Image(systemName: result.isDirectory ? "folder.fill" : "doc.fill")
                 .font(.title3)
                 .foregroundStyle(.blue)
                 .frame(width: 24)
@@ -159,7 +159,8 @@ struct SearchResultRow: View {
                 driveUUID: "123",
                 driveName: "My Drive",
                 isConnected: true,
-                duplicateCount: 3
+                duplicateCount: 3,
+                isDirectory: false
             ),
             SearchResult(
                 id: 2,
@@ -169,7 +170,8 @@ struct SearchResultRow: View {
                 driveUUID: "456",
                 driveName: "Backup",
                 isConnected: false,
-                duplicateCount: nil
+                duplicateCount: nil,
+                isDirectory: false
             ),
         ],
         previousResults: [],
