@@ -67,24 +67,15 @@ struct MainWindowView: View {
             .toolbar {
                 // Centered search bar
                 ToolbarItem(placement: .principal) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search files", text: $appSearchState.searchText)
-                            .textFieldStyle(.plain)
-                            .frame(maxWidth: 400)
-                            .focused($isSearchFieldFocused)
-                            .onSubmit {
-                                if !appSearchState.searchText.isEmpty {
-                                    selectedItem = .search
-                                }
+                    TextField("Search files", text: $appSearchState.searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 450, height: 28)
+                        .focused($isSearchFieldFocused)
+                        .onSubmit {
+                            if !appSearchState.searchText.isEmpty {
+                                selectedItem = .search
                             }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
-                    .frame(width: 450)
+                        }
                 }
 
                 // Inspector toggle button

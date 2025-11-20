@@ -55,17 +55,9 @@ struct SettingsWindowView: View {
 
                 // Search bar on the right
                 ToolbarItem(placement: .primaryAction) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search settings", text: $searchText)
-                            .textFieldStyle(.plain)
-                            .frame(width: 200)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
+                    TextField("Search settings", text: $searchText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 200)
                 }
             }
         }

@@ -35,15 +35,31 @@ actor ThumbnailGenerator {
 
         let ext = fileURL.pathExtension.lowercased()
 
+        // Get file size for logging
+        let fileSize = try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int64
+        let fileSizeMB = fileSize.map { Double($0) / 1_048_576.0 } ?? 0
+
+        print("📸 Processing: \(fileURL.lastPathComponent) (.\(ext), \(String(format: "%.1f", fileSizeMB))MB)")
+
         // Determine file type and use appropriate generator
         if isImageFile(ext) {
-            return try await generateImageThumbnail(for: fileURL)
+            let startTime = Date()
+            let result = try await generateImageThumbnail(for: fileURL)
+            let duration = Date().timeIntervalSince(startTime)
+            print("✅ Generated thumbnail in \(String(format: "%.2f", duration))s: \(fileURL.lastPathComponent)")
+            return result
         } else if isVideoFile(ext) {
             // Skip video thumbnails for now due to memory pressure issues
+            print("⏭️ Skipping video: \(fileURL.lastPathComponent)")
             throw ThumbnailError.unsupportedFileType
         } else if isPDFFile(ext) {
-            return try await generateQuickLookThumbnail(for: fileURL)
+            let startTime = Date()
+            let result = try await generateQuickLookThumbnail(for: fileURL)
+            let duration = Date().timeIntervalSince(startTime)
+            print("✅ Generated PDF thumbnail in \(String(format: "%.2f", duration))s: \(fileURL.lastPathComponent)")
+            return result
         } else {
+            print("❌ Unsupported type: \(fileURL.lastPathComponent)")
             throw ThumbnailError.unsupportedFileType
         }
     }
@@ -109,6 +125,10 @@ actor ThumbnailGenerator {
 
                     let ext = url.pathExtension.lowercased()
                     let isRawFile = self.isRawFile(ext)
+
+                    if isRawFile {
+                        print("  🎞️ RAW file detected - using embedded thumbnail only")
+                    }
 
                     // For RAW files: ONLY use embedded thumbnails to avoid memory pressure from decoding full RAW
                     // For regular images (JPEG, PNG, etc.): Allow fallback to full image decoding (they're small)
