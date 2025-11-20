@@ -40,7 +40,7 @@ actor ThumbnailWorker {
 
     // Configuration
     static let BATCH_SIZE = 100    // Process in smaller batches
-    static let PARALLEL_TASKS = 2  // Conservative parallelism to avoid IOSurface memory pressure
+    static let PARALLEL_TASKS = 1  // Serial processing to avoid IOSurface memory pressure
 
     /// Start generating thumbnails for media files
     func generateThumbnails(
@@ -139,8 +139,8 @@ actor ThumbnailWorker {
                 }
             }
 
-            // Small delay between batches to allow memory cleanup
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            // Delay between batches to allow IOSurface and other resources to be released
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
         }
 
         let duration = Date().timeIntervalSince(overallStartTime)

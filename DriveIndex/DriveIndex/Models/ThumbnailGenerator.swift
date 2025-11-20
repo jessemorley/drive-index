@@ -94,36 +94,39 @@ actor ThumbnailGenerator {
     private func generateImageThumbnail(for url: URL) async throws -> NSImage {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self = self else {
-                    continuation.resume(throwing: ThumbnailError.generationFailed("Generator deallocated"))
-                    return
+                // Use autoreleasepool to ensure IOSurface and other temporary objects are released immediately
+                autoreleasepool {
+                    guard let self = self else {
+                        continuation.resume(throwing: ThumbnailError.generationFailed("Generator deallocated"))
+                        return
+                    }
+
+                    guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+                        continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create image source for \(url.lastPathComponent)"))
+                        return
+                    }
+
+                    // For RAW files, try to extract embedded thumbnail first (faster)
+                    let options: [CFString: Any] = [
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceCreateThumbnailFromImageIfAbsent: true,  // Create from full image if no embedded thumbnail
+                        kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize,
+                        kCGImageSourceShouldCache: false  // Don't cache, we're saving to disk
+                    ]
+
+                    guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
+                        // Log more detail about failure
+                        let type = CGImageSourceGetType(imageSource)
+                        let typeString = type.map { String($0 as String) } ?? "unknown"
+                        continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create thumbnail for \(url.lastPathComponent) (type: \(typeString))"))
+                        return
+                    }
+
+                    let size = NSSize(width: cgImage.width, height: cgImage.height)
+                    let image = NSImage(cgImage: cgImage, size: size)
+
+                    continuation.resume(returning: image)
                 }
-
-                guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create image source for \(url.lastPathComponent)"))
-                    return
-                }
-
-                // For RAW files, try to extract embedded thumbnail first (faster)
-                let options: [CFString: Any] = [
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceCreateThumbnailFromImageIfAbsent: true,  // Create from full image if no embedded thumbnail
-                    kCGImageSourceThumbnailMaxPixelSize: self.thumbnailSize,
-                    kCGImageSourceShouldCache: false  // Don't cache, we're saving to disk
-                ]
-
-                guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
-                    // Log more detail about failure
-                    let type = CGImageSourceGetType(imageSource)
-                    let typeString = type.map { String($0 as String) } ?? "unknown"
-                    continuation.resume(throwing: ThumbnailError.generationFailed("Failed to create thumbnail for \(url.lastPathComponent) (type: \(typeString))"))
-                    return
-                }
-
-                let size = NSSize(width: cgImage.width, height: cgImage.height)
-                let image = NSImage(cgImage: cgImage, size: size)
-
-                continuation.resume(returning: image)
             }
         }
     }
