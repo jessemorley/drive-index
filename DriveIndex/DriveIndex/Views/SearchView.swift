@@ -146,6 +146,14 @@ struct SearchView: View {
                         hoveredFileID = isHovering ? file.id : nil
                     }
                     .contextMenu {
+                        Button("Quick Look") {
+                            Task { @MainActor in
+                                QuickLookHelper.shared.showPreview(for: file)
+                            }
+                        }
+
+                        Divider()
+
                         Button("Show in Finder") {
                             revealInFinder(file)
                         }
@@ -160,6 +168,16 @@ struct SearchView: View {
                     }
                 }
             }
+        }
+        .onKeyPress(.space) { press in
+            // Spacebar to toggle QuickLook
+            if let selectedFile = appSearchState.selectedFile {
+                Task { @MainActor in
+                    QuickLookHelper.shared.togglePreview(for: selectedFile)
+                }
+                return .handled
+            }
+            return .ignored
         }
     }
 
