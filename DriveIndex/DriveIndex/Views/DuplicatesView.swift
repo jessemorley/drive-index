@@ -371,26 +371,19 @@ struct DuplicatesView: View {
                     let isHovered = hoveredFileId == file.id
                     let isOtherFileSelected = selectedFile != nil && !isSelected
 
-                    VStack(spacing: 0) {
-                        DuplicateFileRow(
-                            file: file,
-                            driveStates: driveStates,
-                            drives: driveMonitor.drives,
-                            isHovered: isSelected || isHovered
-                        )
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if isSelected {
-                                    selectedFile = nil
-                                } else {
-                                    selectedFile = file
-                                }
+                    DuplicateFileRow(
+                        file: file,
+                        driveStates: driveStates,
+                        drives: driveMonitor.drives,
+                        isHovered: isSelected || isHovered
+                    )
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if isSelected {
+                                selectedFile = nil
+                            } else {
+                                selectedFile = file
                             }
-                        }
-
-                        if file.id != displayedFiles.last?.id {
-                            Divider()
-                                .padding(.leading, DesignSystem.Spacing.cardPadding)
                         }
                     }
                     .background(
@@ -992,15 +985,20 @@ struct DuplicateFileRow: View {
                 .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 140, alignment: .trailing)
         }
-        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.large)
-        .background(Color.clear)
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
+                .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(
                     isHovered ? Color.primary.opacity(0.2) : Color.clear,
                     lineWidth: 1
                 )
+                .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         )
         .contentShape(Rectangle())
     }
