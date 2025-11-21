@@ -734,7 +734,7 @@ struct DriveGridCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
-            // Top row: Status dot + Drive name + Capacity badge
+            // Top row: Status dot + Drive name + Capacity badge + Backup toggle
             HStack(spacing: 6) {
                 Circle()
                     .fill(drive.isConnected ? Color.green : Color.gray)
@@ -762,27 +762,10 @@ struct DriveGridCard: View {
                     )
                     .fixedSize()
                 }
-            }
-
-            // Info row: Capacity + file count
-            HStack(spacing: Spacing.medium) {
-                if drive.totalCapacity > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "externaldrive")
-                            .font(.caption2)
-                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
-                            .font(AppTypography.technicalData)
-                    }
-                    .foregroundColor(secondaryTextColor)
-                }
 
                 Spacer()
-            }
 
-            // Toggle switch
-            HStack {
-                Spacer()
-
+                // Backup toggle
                 HStack(spacing: 4) {
                     Toggle("", isOn: Binding(
                         get: { isBackup },
@@ -797,6 +780,21 @@ struct DriveGridCard: View {
                         .fontWeight(.medium)
                         .foregroundColor(secondaryTextColor)
                 }
+            }
+
+            // Info row: Capacity
+            HStack(spacing: Spacing.medium) {
+                if drive.totalCapacity > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(secondaryTextColor)
+                }
+
+                Spacer()
             }
 
             // File paths for selected file
