@@ -268,14 +268,14 @@ struct DuplicatesView: View {
                 }
                 .padding(.horizontal, DesignSystem.Spacing.medium)
                 .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                )
             }
             .menuStyle(.borderlessButton)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(4)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-            )
             .fixedSize()
 
             Spacer(minLength: 8)
@@ -402,15 +402,7 @@ struct DuplicatesView: View {
                     .opacity(isOtherFileSelected && !isHovered ? 0.65 : 1.0)
                     .animation(.easeInOut(duration: 0.2), value: isOtherFileSelected)
                     .onHover { isHovering in
-                        if isHovering {
-                            // Instant on hover in
-                            hoveredFileId = file.id
-                        } else {
-                            // Animated on hover out
-                            withAnimation(.easeInOut(duration: 0.1)) {
-                                hoveredFileId = nil
-                            }
-                        }
+                        hoveredFileId = isHovering ? file.id : nil
                     }
                     .onAppear {
                         // Load more when approaching the end
