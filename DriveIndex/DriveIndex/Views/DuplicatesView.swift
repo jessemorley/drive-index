@@ -225,21 +225,29 @@ struct DuplicatesView: View {
             }
 
             // Drive Grid
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 140, maximum: 200), spacing: DesignSystem.Card.gridSpacing)
-            ], spacing: DesignSystem.Card.gridSpacing) {
-                ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
-                    DriveGridCard(
-                        drive: drive,
-                        isBackup: driveStates[drive.id] ?? false,
-                        highlightStatus: getHighlightStatus(driveId: drive.id),
-                        onToggleBackup: {
-                            driveStates[drive.id] = !(driveStates[drive.id] ?? false)
-                            saveDriveStates()
+            GeometryReader { geometry in
+                let columns = calculateColumns(
+                    availableWidth: geometry.size.width,
+                    driveCount: driveMonitor.drives.filter { $0.isIndexed }.count
+                )
+
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing), count: columns), spacing: DesignSystem.Card.gridSpacing) {
+                        ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
+                            DriveGridCard(
+                                drive: drive,
+                                isBackup: driveStates[drive.id] ?? false,
+                                highlightStatus: getHighlightStatus(driveId: drive.id),
+                                onToggleBackup: {
+                                    driveStates[drive.id] = !(driveStates[drive.id] ?? false)
+                                    saveDriveStates()
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
+            .frame(height: calculateGridHeight(driveCount: driveMonitor.drives.filter { $0.isIndexed }.count))
         }
         .padding(DesignSystem.Spacing.sectionPadding)
     }
@@ -483,6 +491,44 @@ struct DuplicatesView: View {
     }
 
     // MARK: - Logic
+
+    private func calculateColumns(availableWidth: CGFloat, driveCount: Int) -> Int {
+        // Special case: only one drive indexed
+        if driveCount == 1 {
+            return 1
+        }
+
+        // Account for padding
+        let effectiveWidth = availableWidth - (DesignSystem.Spacing.sectionPadding * 2)
+
+        // Define breakpoints for column counts
+        // Assuming minimum card width of ~140px plus spacing
+        let minCardWidth: CGFloat = 140
+        let spacing = DesignSystem.Card.gridSpacing
+
+        // Calculate maximum columns that could fit
+        let maxPossibleColumns = Int((effectiveWidth + spacing) / (minCardWidth + spacing))
+
+        // Apply breakpoint logic
+        if maxPossibleColumns >= 6 {
+            return 6 // Max width breakpoint
+        } else if maxPossibleColumns >= 4 {
+            return 4 // Mid point breakpoint
+        } else {
+            return 2 // Min width breakpoint
+        }
+    }
+
+    private func calculateGridHeight(driveCount: Int) -> CGFloat {
+        // Estimate height per card (includes padding, content, and spacing)
+        let estimatedCardHeight: CGFloat = 120
+
+        // Calculate how many rows we'll need based on max columns (6)
+        // This ensures we have enough height even at maximum column count
+        let rows = ceil(Double(driveCount) / 6.0)
+
+        return CGFloat(rows) * estimatedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(rows - 1)
+    }
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
         guard let fileId = hoveredFileId,
