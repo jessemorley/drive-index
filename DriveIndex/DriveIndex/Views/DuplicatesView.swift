@@ -174,21 +174,24 @@ struct DuplicatesView: View {
 
             Divider()
 
-            // Toolbar
-            toolbarSection
-
-            Divider()
-
-            // Column Headers (fixed)
-            fileListHeader
-
-            Divider()
-
-            // File List
+            // File List with safe area inset
             if filteredFiles.isEmpty {
                 emptyStateView
             } else {
                 fileListSection
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        VStack(spacing: 0) {
+                            // Toolbar
+                            toolbarSection
+
+                            Divider()
+
+                            // Column Headers (fixed)
+                            fileListHeader
+
+                            Divider()
+                        }
+                    }
             }
         }
     }
