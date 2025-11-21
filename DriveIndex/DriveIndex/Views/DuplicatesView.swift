@@ -384,15 +384,19 @@ struct DuplicatesView: View {
 
                 // File rows
                 ForEach(Array(displayedFiles.enumerated()), id: \.element.id) { index, file in
+                    let isSelected = selectedFile?.id == file.id
+                    let isHovered = hoveredFileId == file.id
+                    let isOtherFileSelected = selectedFile != nil && !isSelected
+
                     VStack(spacing: 0) {
                         DuplicateFileRow(
                             file: file,
                             driveStates: driveStates,
                             drives: driveMonitor.drives,
-                            isHovered: hoveredFileId == file.id || selectedFile?.id == file.id
+                            isHovered: isSelected || isHovered
                         )
                         .onTapGesture {
-                            if selectedFile?.id == file.id {
+                            if isSelected {
                                 selectedFile = nil
                             } else {
                                 selectedFile = file
@@ -404,13 +408,17 @@ struct DuplicatesView: View {
                                 .padding(.leading, DesignSystem.Spacing.cardPadding)
                         }
                     }
-                    .opacity(selectedFile != nil && selectedFile?.id != file.id ? 0.4 : 1.0)
+                    .background(
+                        // Show mild hover background when hovering non-selected file while another is selected
+                        isOtherFileSelected && isHovered
+                            ? Color.secondary.opacity(0.05)
+                            : Color.clear
+                    )
+                    .opacity(isOtherFileSelected && !isHovered ? 0.4 : 1.0)
                     .animation(.easeInOut(duration: 0.2), value: selectedFile?.id)
+                    .animation(.easeInOut(duration: 0.15), value: isHovered)
                     .onHover { isHovering in
-                        // Only update hover if no file is selected
-                        if selectedFile == nil {
-                            hoveredFileId = isHovering ? file.id : nil
-                        }
+                        hoveredFileId = isHovering ? file.id : nil
                     }
                     .onAppear {
                         // Load more when approaching the end
