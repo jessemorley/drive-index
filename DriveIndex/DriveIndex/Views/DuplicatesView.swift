@@ -98,6 +98,7 @@ struct DuplicatesView: View {
     @State private var sortOption: DuplicateSortOption = .size
     @State private var showBackedUp = true
     @State private var showDuplicates = true
+    @State private var gridColumns = 2
 
     private let batchSize = 50
     private let loadMoreThreshold = 10
@@ -226,9 +227,10 @@ struct DuplicatesView: View {
 
             // Drive Grid
             GeometryReader { geometry in
+                let driveCount = driveMonitor.drives.filter { $0.isIndexed }.count
                 let columns = calculateColumns(
                     availableWidth: geometry.size.width,
-                    driveCount: driveMonitor.drives.filter { $0.isIndexed }.count
+                    driveCount: driveCount
                 )
 
                 ScrollView {
@@ -246,8 +248,14 @@ struct DuplicatesView: View {
                         }
                     }
                 }
+                .onChange(of: columns) { _, newValue in
+                    gridColumns = newValue
+                }
+                .onAppear {
+                    gridColumns = columns
+                }
             }
-            .frame(height: calculateGridHeight(driveCount: driveMonitor.drives.filter { $0.isIndexed }.count))
+            .frame(height: calculateGridHeight(driveCount: driveMonitor.drives.filter { $0.isIndexed }.count, columns: gridColumns))
         }
         .padding(DesignSystem.Spacing.sectionPadding)
     }
@@ -509,25 +517,30 @@ struct DuplicatesView: View {
         // Calculate maximum columns that could fit
         let maxPossibleColumns = Int((effectiveWidth + spacing) / (minCardWidth + spacing))
 
-        // Apply breakpoint logic
+        // Determine breakpoint based on available width
+        let breakpoint: Int
         if maxPossibleColumns >= 6 {
-            return 6 // Max width breakpoint
+            breakpoint = 6 // Max width breakpoint
         } else if maxPossibleColumns >= 4 {
-            return 4 // Mid point breakpoint
+            breakpoint = 4 // Mid point breakpoint
         } else {
-            return 2 // Min width breakpoint
+            breakpoint = 2 // Min width breakpoint
         }
+
+        // Return the minimum of breakpoint and actual drive count
+        // This ensures drives fill the width when there are fewer than the breakpoint allows
+        return min(breakpoint, driveCount)
     }
 
-    private func calculateGridHeight(driveCount: Int) -> CGFloat {
+    private func calculateGridHeight(driveCount: Int, columns: Int) -> CGFloat {
         // Estimate height per card (includes padding, content, and spacing)
         let estimatedCardHeight: CGFloat = 120
 
-        // Calculate how many rows we'll need based on max columns (6)
-        // This ensures we have enough height even at maximum column count
-        let rows = ceil(Double(driveCount) / 6.0)
+        // Calculate how many rows we'll need based on actual columns
+        guard columns > 0 else { return estimatedCardHeight }
+        let rows = ceil(Double(driveCount) / Double(columns))
 
-        return CGFloat(rows) * estimatedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(rows - 1)
+        return CGFloat(rows) * estimatedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(max(0, rows - 1))
     }
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
