@@ -92,15 +92,20 @@ struct DuplicatesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @Environment(AppSearchState.self) private var appSearchState
 
-    @State private var files: [MultiDriveFile] = []
+    @State private var allFiles: [MultiDriveFile] = [] // All files from database
+    @State private var displayedFiles: [MultiDriveFile] = [] // Currently displayed files
     @AppStorage("duplicates.driveBackupStates") private var driveBackupStatesData: Data = Data()
     @State private var driveStates: [String: Bool] = [:] // driveId -> isBackup
     @State private var isLoading = true
+    @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var hoveredFileId: String?
     @State private var sortOption: DuplicateSortOption = .size
     @State private var showBackedUp = true
     @State private var showDuplicates = true
+
+    private let batchSize = 50
+    private let loadMoreThreshold = 10
 
     private var searchText: String {
         appSearchState.searchText
@@ -135,6 +140,15 @@ struct DuplicatesView: View {
         .task {
             loadDriveStates()
             await loadFiles()
+        }
+        .onChange(of: showBackedUp) { _, _ in
+            resetDisplayedFiles()
+        }
+        .onChange(of: showDuplicates) { _, _ in
+            resetDisplayedFiles()
+        }
+        .onChange(of: sortOption) { _, _ in
+            resetDisplayedFiles()
         }
     }
 
@@ -292,7 +306,7 @@ struct DuplicatesView: View {
             Spacer()
 
             // Search info
-            Text("\(filteredFiles.count) of \(files.count) files")
+            Text("\(filteredFiles.count) file\(filteredFiles.count == 1 ? "" : "s")")
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 180, alignment: .trailing)
@@ -354,7 +368,7 @@ struct DuplicatesView: View {
                 Divider()
 
                 // File rows
-                ForEach(sortedFiles) { file in
+                ForEach(Array(displayedFiles.enumerated()), id: \.element.id) { index, file in
                     DuplicateFileRow(
                         file: file,
                         driveStates: driveStates,
@@ -367,11 +381,29 @@ struct DuplicatesView: View {
                     .onTapGesture {
                         revealFirstLocation(file)
                     }
+                    .onAppear {
+                        // Load more when approaching the end
+                        if shouldLoadMore(currentIndex: index) {
+                            loadMoreFiles()
+                        }
+                    }
 
-                    if file.id != sortedFiles.last?.id {
+                    if file.id != displayedFiles.last?.id {
                         Divider()
                             .padding(.leading, DesignSystem.Spacing.cardPadding)
                     }
+                }
+
+                // Loading indicator at bottom
+                if isLoadingMore {
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading more files...")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    }
+                    .padding(.vertical, DesignSystem.Spacing.large)
                 }
             }
         }
@@ -461,7 +493,7 @@ struct DuplicatesView: View {
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
         guard let fileId = hoveredFileId,
-              let file = files.first(where: { $0.id == fileId }) else {
+              let file = allFiles.first(where: { $0.id == fileId }) else {
             return .none
         }
 
@@ -491,7 +523,7 @@ struct DuplicatesView: View {
     }
 
     private var filteredFiles: [MultiDriveFile] {
-        files.filter { file in
+        allFiles.filter { file in
             // Get backup and source drives for this file
             let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
             let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
@@ -528,6 +560,41 @@ struct DuplicatesView: View {
                 return lhs.locations.count > rhs.locations.count
             }
         }
+    }
+
+    // MARK: - Lazy Loading
+
+    private func shouldLoadMore(currentIndex: Int) -> Bool {
+        guard !isLoadingMore else { return false }
+
+        let itemsFromEnd = displayedFiles.count - currentIndex
+        let hasMore = displayedFiles.count < sortedFiles.count
+
+        return itemsFromEnd <= loadMoreThreshold && hasMore
+    }
+
+    private func loadMoreFiles() {
+        guard !isLoadingMore else { return }
+
+        isLoadingMore = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            let currentCount = displayedFiles.count
+            let totalCount = sortedFiles.count
+            let nextBatch = min(batchSize, totalCount - currentCount)
+
+            if nextBatch > 0 {
+                let newFiles = Array(sortedFiles[currentCount..<(currentCount + nextBatch)])
+                displayedFiles.append(contentsOf: newFiles)
+            }
+
+            isLoadingMore = false
+        }
+    }
+
+    private func resetDisplayedFiles() {
+        let initialBatch = min(batchSize, sortedFiles.count)
+        displayedFiles = Array(sortedFiles.prefix(initialBatch))
     }
 
     // MARK: - Data Loading
@@ -567,7 +634,8 @@ struct DuplicatesView: View {
                 ))
             }
 
-            files = multiDriveFiles
+            allFiles = multiDriveFiles
+            resetDisplayedFiles()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -660,7 +728,10 @@ struct DriveGridCard: View {
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
                 .stroke(borderColor, lineWidth: highlightStatus == .none ? 0.5 : 1.5)
         )
-        .opacity(highlightStatus == .dimmed ? 0.5 : 1.0)
+        .shadow(color: shadowColor, radius: shadowRadius)
+        .scaleEffect(highlightStatus == .dimmed ? 0.95 : 1.0)
+        .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: highlightStatus)
     }
 
     private var iconColor: Color {
@@ -688,6 +759,19 @@ struct DriveGridCard: View {
         case .sourceSafe: return Color.secondary.opacity(0.5)
         default: return DesignSystem.Colors.border
         }
+    }
+
+    private var shadowColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.3)
+        case .safe: return Color.green.opacity(0.3)
+        case .sourceSafe: return Color.secondary.opacity(0.3)
+        default: return Color.clear
+        }
+    }
+
+    private var shadowRadius: CGFloat {
+        highlightStatus == .none || highlightStatus == .dimmed ? 0 : 8
     }
 }
 
