@@ -213,7 +213,7 @@ struct DriveCard: View {
                 Button(action: {
                     revealInFinder(drive)
                 }) {
-                    Label("Reveal", systemImage: "folder")
+                    Label("Reveal", systemImage: drive.isConnected ? "folder" : "externaldrive.badge.xmark")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
