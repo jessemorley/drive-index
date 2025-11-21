@@ -100,6 +100,7 @@ struct DuplicatesView: View {
     @State private var showBackedUp = true
     @State private var showDuplicates = true
     @State private var gridColumns = 2
+    @State private var availableWidth: CGFloat = 0
 
     private let batchSize = 50
     private let loadMoreThreshold = 10
@@ -227,38 +228,41 @@ struct DuplicatesView: View {
             }
 
             // Drive Grid
-            GeometryReader { geometry in
-                let driveCount = driveMonitor.drives.filter { $0.isIndexed }.count
-                let columns = calculateColumns(
-                    availableWidth: geometry.size.width,
-                    driveCount: driveCount
-                )
+            let driveCount = driveMonitor.drives.filter { $0.isIndexed }.count
+            let columns = calculateColumns(
+                availableWidth: availableWidth,
+                driveCount: driveCount
+            )
 
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing), count: columns), spacing: DesignSystem.Card.gridSpacing) {
-                        ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
-                            DriveGridCard(
-                                drive: drive,
-                                isBackup: driveStates[drive.id] ?? false,
-                                highlightStatus: getHighlightStatus(driveId: drive.id),
-                                selectedFile: selectedFile,
-                                driveMonitor: driveMonitor,
-                                onToggleBackup: {
-                                    driveStates[drive.id] = !(driveStates[drive.id] ?? false)
-                                    saveDriveStates()
-                                }
-                            )
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing), count: columns), spacing: DesignSystem.Card.gridSpacing) {
+                ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
+                    DriveGridCard(
+                        drive: drive,
+                        isBackup: driveStates[drive.id] ?? false,
+                        highlightStatus: getHighlightStatus(driveId: drive.id),
+                        selectedFile: selectedFile,
+                        driveMonitor: driveMonitor,
+                        onToggleBackup: {
+                            driveStates[drive.id] = !(driveStates[drive.id] ?? false)
+                            saveDriveStates()
                         }
-                    }
-                }
-                .onChange(of: columns) { _, newValue in
-                    gridColumns = newValue
-                }
-                .onAppear {
-                    gridColumns = columns
+                    )
                 }
             }
-            .frame(height: calculateGridHeight(driveCount: driveMonitor.drives.filter { $0.isIndexed }.count, columns: gridColumns))
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            availableWidth = geometry.size.width
+                        }
+                        .onChange(of: geometry.size.width) { _, newWidth in
+                            availableWidth = newWidth
+                        }
+                }
+            )
+            .onChange(of: columns) { _, newValue in
+                gridColumns = newValue
+            }
         }
         .padding(DesignSystem.Spacing.sectionPadding)
     }
@@ -791,8 +795,31 @@ struct DriveGridCard: View {
                 Spacer()
             }
 
+            // Toggle switch
+            HStack {
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Toggle("", isOn: Binding(
+                        get: { isBackup },
+                        set: { _ in onToggleBackup() }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+
+                    Text("Backup")
+                        .font(.system(size: 10))
+                        .fontWeight(.medium)
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+
             // File paths for selected file
             if !filePathsForSelectedFile.isEmpty {
+                Divider()
+                    .padding(.vertical, 2)
+
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(filePathsForSelectedFile) { location in
                         Button(action: {
@@ -818,26 +845,6 @@ struct DriveGridCard: View {
                 .padding(6)
                 .background(Color.secondary.opacity(0.08))
                 .cornerRadius(6)
-            }
-
-            // Toggle switch
-            HStack {
-                Spacer()
-
-                HStack(spacing: 4) {
-                    Toggle("", isOn: Binding(
-                        get: { isBackup },
-                        set: { _ in onToggleBackup() }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-
-                    Text("Backup")
-                        .font(.system(size: 10))
-                        .fontWeight(.medium)
-                        .foregroundColor(secondaryTextColor)
-                }
             }
         }
         .padding(Spacing.medium)
