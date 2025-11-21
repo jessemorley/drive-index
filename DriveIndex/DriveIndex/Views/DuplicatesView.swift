@@ -260,9 +260,16 @@ struct DuplicatesView: View {
                     }
                 }
             } label: {
-                Label(sortOption.rawValue, systemImage: "arrow.up.arrow.down")
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .font(.system(size: 10))
+                    Text(sortOption.rawValue)
+                        .font(.system(size: 11))
+                }
+                .padding(.horizontal, DesignSystem.Spacing.medium)
+                .padding(.vertical, 6)
             }
-            .menuStyle(.button)
+            .menuStyle(.borderlessButton)
             .fixedSize()
 
             Spacer(minLength: 8)
