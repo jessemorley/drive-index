@@ -844,7 +844,7 @@ struct DriveGridCard: View {
 
     private var backgroundGradient: LinearGradient {
         let startPoint = UnitPoint(x: 0, y: 0) // Top-left
-        let endPoint = UnitPoint(x: 0.85, y: 0.85) // Towards bottom-right at ~150°
+        let endPoint = UnitPoint(x: 0.25, y: 0.95) // Towards bottom at 165°
 
         switch highlightStatus {
         case .warning:
