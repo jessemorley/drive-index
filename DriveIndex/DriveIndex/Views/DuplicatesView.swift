@@ -829,7 +829,7 @@ struct DriveGridCard: View {
             }
         }
         .padding(Spacing.medium)
-        .background(backgroundColor)
+        .background(backgroundGradient)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -842,14 +842,44 @@ struct DriveGridCard: View {
         .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
-    private var backgroundColor: Color {
+    private var backgroundGradient: LinearGradient {
+        let startPoint = UnitPoint(x: 0, y: 0) // Top-left
+        let endPoint = UnitPoint(x: 0.85, y: 0.85) // Towards bottom-right at ~150°
+
         switch highlightStatus {
-        case .warning: return Color.orange.opacity(0.08)
-        case .safe: return Color.green.opacity(0.08)
-        case .sourceSafe: return Color.secondary.opacity(0.08)
+        case .warning:
+            return LinearGradient(
+                colors: [Color.orange.opacity(0.12), Color.orange.opacity(0.08)],
+                startPoint: startPoint,
+                endPoint: endPoint
+            )
+        case .safe:
+            return LinearGradient(
+                colors: [Color.green.opacity(0.12), Color.green.opacity(0.08)],
+                startPoint: startPoint,
+                endPoint: endPoint
+            )
+        case .sourceSafe:
+            return LinearGradient(
+                colors: [Color.secondary.opacity(0.12), Color.secondary.opacity(0.08)],
+                startPoint: startPoint,
+                endPoint: endPoint
+            )
         default:
             // Show subtle hover background when hovering
-            return isHovered ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.04)
+            if isHovered {
+                return LinearGradient(
+                    colors: [Color.secondary.opacity(0.08), Color.secondary.opacity(0.06)],
+                    startPoint: startPoint,
+                    endPoint: endPoint
+                )
+            } else {
+                return LinearGradient(
+                    colors: [Color.secondary.opacity(0.06), Color.secondary.opacity(0.04)],
+                    startPoint: startPoint,
+                    endPoint: endPoint
+                )
+            }
         }
     }
 
