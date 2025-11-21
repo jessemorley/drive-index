@@ -911,9 +911,9 @@ struct DuplicateFileRow: View {
             // File icon and name
             HStack(spacing: DesignSystem.Spacing.medium) {
                 Image(systemName: fileIcon)
-                    .font(.title3)
-                    .foregroundColor(isHovered ? .white : fileIconColor)
-                    .frame(width: 24)
+                    .font(.body)
+                    .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
+                    .frame(width: 20)
 
                 Text(file.name)
                     .font(DesignSystem.Typography.body)

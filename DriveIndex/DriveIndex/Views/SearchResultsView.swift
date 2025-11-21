@@ -92,9 +92,9 @@ struct SearchResultRow: View {
         HStack(alignment: .top, spacing: Spacing.medium) {
             // File icon
             Image(systemName: result.isDirectory ? "folder.fill" : "doc.fill")
-                .font(.title3)
-                .foregroundStyle(.blue)
-                .frame(width: 24)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
 
             // File info
             VStack(alignment: .leading, spacing: 2) {
