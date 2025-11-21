@@ -93,6 +93,7 @@ struct DuplicatesView: View {
     @Environment(AppSearchState.self) private var appSearchState
 
     @State private var files: [MultiDriveFile] = []
+    @AppStorage("duplicates.driveBackupStates") private var driveBackupStatesData: Data = Data()
     @State private var driveStates: [String: Bool] = [:] // driveId -> isBackup
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -132,7 +133,22 @@ struct DuplicatesView: View {
             }
         }
         .task {
+            loadDriveStates()
             await loadFiles()
+        }
+    }
+
+    // MARK: - Drive State Persistence
+
+    private func loadDriveStates() {
+        if let decoded = try? JSONDecoder().decode([String: Bool].self, from: driveBackupStatesData) {
+            driveStates = decoded
+        }
+    }
+
+    private func saveDriveStates() {
+        if let encoded = try? JSONEncoder().encode(driveStates) {
+            driveBackupStatesData = encoded
         }
     }
 
@@ -212,6 +228,7 @@ struct DuplicatesView: View {
                         highlightStatus: getHighlightStatus(driveId: drive.id),
                         onToggleBackup: {
                             driveStates[drive.id] = !(driveStates[drive.id] ?? false)
+                            saveDriveStates()
                         }
                     )
                 }
@@ -454,6 +471,14 @@ struct DuplicatesView: View {
         }
 
         let isBackup = driveStates[driveId] ?? false
+
+        // Check if this drive has multiple copies of the file
+        let copiesOnThisDrive = file.driveIds.filter { $0 == driveId }.count
+        if copiesOnThisDrive > 1 {
+            // Multiple copies on same drive = always a duplicate (orange)
+            return .warning
+        }
+
         let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
         let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
 
@@ -471,7 +496,8 @@ struct DuplicatesView: View {
             let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
             let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
 
-            let isBackedUp = !backupDrives.isEmpty
+            // File is only "backed up" if it exists on at least one backup drive AND at least one other drive
+            let isBackedUp = !backupDrives.isEmpty && !sourceDrives.isEmpty
             let hasRedundantSource = sourceDrives.count > 1
             let hasRedundantBackup = backupDrives.count > 1
             let isUnsafe = backupDrives.isEmpty
