@@ -184,8 +184,6 @@ struct DuplicatesView: View {
                             // Toolbar
                             toolbarSection
 
-                            Divider()
-
                             // Column Headers (fixed)
                             fileListHeader
 
@@ -988,20 +986,12 @@ struct DuplicateFileRow: View {
                 .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 140, alignment: .trailing)
         }
+        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
-        .padding(.horizontal, DesignSystem.Spacing.large)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
-                .padding(.horizontal, DesignSystem.Spacing.cardPadding)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    isHovered ? Color.primary.opacity(0.2) : Color.clear,
-                    lineWidth: 1
-                )
-                .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+            isHovered
+                ? DesignSystem.Colors.cardBackgroundHover
+                : Color.clear
         )
         .contentShape(Rectangle())
     }
