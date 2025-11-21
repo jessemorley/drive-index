@@ -76,9 +76,9 @@ struct DriveState: Identifiable {
 }
 
 enum DuplicateSortOption: String, CaseIterable {
-    case size = "Size"
-    case name = "Name"
-    case copies = "Copies"
+    case size = "Sort by Size"
+    case name = "Sort by Name"
+    case copies = "Sort by Copies"
 }
 
 // MARK: - Main View
@@ -268,6 +268,12 @@ struct DuplicatesView: View {
                 }
                 .padding(.horizontal, DesignSystem.Spacing.medium)
                 .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                )
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
