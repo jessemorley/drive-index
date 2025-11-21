@@ -249,6 +249,7 @@ struct DuplicatesView: View {
                     )
                 }
             }
+            .frame(minHeight: calculateMinGridHeight(driveCount: driveCount, columns: columns))
             .background(
                 GeometryReader { geometry in
                     Color.clear
@@ -403,6 +404,8 @@ struct DuplicatesView: View {
                                 .padding(.leading, DesignSystem.Spacing.cardPadding)
                         }
                     }
+                    .opacity(selectedFile != nil && selectedFile?.id != file.id ? 0.4 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: selectedFile?.id)
                     .onHover { isHovering in
                         // Only update hover if no file is selected
                         if selectedFile == nil {
@@ -546,15 +549,16 @@ struct DuplicatesView: View {
         return min(breakpoint, driveCount)
     }
 
-    private func calculateGridHeight(driveCount: Int, columns: Int) -> CGFloat {
-        // Estimate height per card (includes padding, content, and spacing)
-        let estimatedCardHeight: CGFloat = 120
+    private func calculateMinGridHeight(driveCount: Int, columns: Int) -> CGFloat {
+        // Estimate height per card when expanded with 2 file paths
+        // Base card: 120px + File paths section: ~80px = ~200px
+        let expandedCardHeight: CGFloat = 200
 
         // Calculate how many rows we'll need based on actual columns
-        guard columns > 0 else { return estimatedCardHeight }
+        guard columns > 0 else { return expandedCardHeight }
         let rows = ceil(Double(driveCount) / Double(columns))
 
-        return CGFloat(rows) * estimatedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(max(0, rows - 1))
+        return CGFloat(rows) * expandedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(max(0, rows - 1))
     }
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
