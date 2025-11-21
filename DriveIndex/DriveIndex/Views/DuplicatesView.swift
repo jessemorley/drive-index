@@ -181,7 +181,6 @@ struct DuplicatesView: View {
 
             // Column Headers (fixed)
             fileListHeader
-                .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
 
             Divider()
 
