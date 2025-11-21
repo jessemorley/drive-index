@@ -912,36 +912,32 @@ struct DuplicateFileRow: View {
             HStack(spacing: DesignSystem.Spacing.medium) {
                 Image(systemName: fileIcon)
                     .font(.title3)
-                    .foregroundColor(fileIconColor)
+                    .foregroundColor(isHovered ? .white : fileIconColor)
                     .frame(width: 24)
 
                 Text(file.name)
                     .font(DesignSystem.Typography.body)
                     .lineLimit(1)
-                    .foregroundColor(
-                        isHovered
-                            ? DesignSystem.Colors.accent
-                            : DesignSystem.Colors.primaryText
-                    )
+                    .foregroundColor(isHovered ? .white : DesignSystem.Colors.primaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Size
             Text(file.formattedSize)
                 .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
                 .frame(width: 100, alignment: .trailing)
 
             // Copies count
             Text("\(file.locations.count)")
-                .font(DesignSystem.Typography.body)
-                .foregroundColor(DesignSystem.Colors.primaryText)
+                .font(DesignSystem.Typography.caption)
+                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
                 .frame(width: 80, alignment: .center)
 
             // Date
             Text(file.formattedDate)
                 .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
                 .frame(width: 140, alignment: .trailing)
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
