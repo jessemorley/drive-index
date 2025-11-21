@@ -253,9 +253,9 @@ struct DuplicatesView: View {
                 Label(sortOption.rawValue, systemImage: "arrow.up.arrow.down")
             }
             .menuStyle(.button)
-            .frame(width: 180, alignment: .leading)
+            .fixedSize()
 
-            Spacer()
+            Spacer(minLength: 8)
 
             // Filter Toggles
             HStack(spacing: 2) {
@@ -283,14 +283,15 @@ struct DuplicatesView: View {
             .padding(2)
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(6)
+            .fixedSize()
 
-            Spacer()
+            Spacer(minLength: 8)
 
             // Search info
             Text("\(filteredFiles.count) file\(filteredFiles.count == 1 ? "" : "s")")
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.secondaryText)
-                .frame(width: 180, alignment: .trailing)
+                .fixedSize()
         }
         .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
