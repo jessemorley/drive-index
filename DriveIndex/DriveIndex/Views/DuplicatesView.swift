@@ -335,10 +335,8 @@ struct DuplicatesView: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                if isActive {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                }
+                Image(systemName: icon)
+                    .font(.system(size: 10))
                 Text(title)
                     .font(.system(size: 11))
             }
@@ -378,28 +376,30 @@ struct DuplicatesView: View {
 
                 // File rows
                 ForEach(Array(displayedFiles.enumerated()), id: \.element.id) { index, file in
-                    DuplicateFileRow(
-                        file: file,
-                        driveStates: driveStates,
-                        drives: driveMonitor.drives,
-                        isHovered: hoveredFileId == file.id
-                    )
+                    VStack(spacing: 0) {
+                        DuplicateFileRow(
+                            file: file,
+                            driveStates: driveStates,
+                            drives: driveMonitor.drives,
+                            isHovered: hoveredFileId == file.id
+                        )
+                        .onTapGesture {
+                            revealFirstLocation(file)
+                        }
+
+                        if file.id != displayedFiles.last?.id {
+                            Divider()
+                                .padding(.leading, DesignSystem.Spacing.cardPadding)
+                        }
+                    }
                     .onHover { isHovering in
                         hoveredFileId = isHovering ? file.id : nil
-                    }
-                    .onTapGesture {
-                        revealFirstLocation(file)
                     }
                     .onAppear {
                         // Load more when approaching the end
                         if shouldLoadMore(currentIndex: index) {
                             loadMoreFiles()
                         }
-                    }
-
-                    if file.id != displayedFiles.last?.id {
-                        Divider()
-                            .padding(.leading, DesignSystem.Spacing.cardPadding)
                     }
                 }
 
@@ -774,16 +774,6 @@ struct DriveGridCard: View {
                     .foregroundColor(secondaryTextColor)
                 }
 
-                if drive.fileCount > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "doc.text")
-                            .font(.caption2)
-                        Text("\(drive.fileCount.formatted()) files")
-                            .font(AppTypography.technicalData)
-                    }
-                    .foregroundColor(secondaryTextColor)
-                }
-
                 Spacer()
             }
 
@@ -824,7 +814,7 @@ struct DriveGridCard: View {
         case .warning: return Color.orange.opacity(0.08)
         case .safe: return Color.green.opacity(0.08)
         case .sourceSafe: return Color.secondary.opacity(0.08)
-        default: return DesignSystem.Colors.cardBackground
+        default: return Color.secondary.opacity(0.04)
         }
     }
 
