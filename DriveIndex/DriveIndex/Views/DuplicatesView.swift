@@ -318,7 +318,7 @@ struct DuplicatesView: View {
         }
         .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
-        .background(Color.secondary.opacity(0.03))
+        .background(.regularMaterial)
     }
 
     @ViewBuilder
@@ -440,7 +440,7 @@ struct DuplicatesView: View {
         .textCase(.uppercase)
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
         .padding(.vertical, DesignSystem.Spacing.small)
-        .background(Color.secondary.opacity(0.05))
+        .background(.regularMaterial)
     }
 
     // MARK: - State Views
@@ -985,8 +985,8 @@ struct DuplicateFileRow: View {
                 .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 140, alignment: .trailing)
         }
-        .padding(.vertical, DesignSystem.Spacing.large)
-        .padding(.horizontal, DesignSystem.Spacing.cardPadding)
+        .padding(.vertical, DesignSystem.Spacing.medium)
+        .padding(.horizontal, DesignSystem.Spacing.large)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(isHovered ? Color.secondary.opacity(0.1) : Color.clear)
