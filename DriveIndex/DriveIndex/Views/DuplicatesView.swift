@@ -83,7 +83,7 @@ enum DuplicateFilterMode {
 enum DuplicateSortOption: String, CaseIterable {
     case size = "Size"
     case name = "Name"
-    case locations = "Locations"
+    case copies = "Copies"
 }
 
 // MARK: - Main View
@@ -385,8 +385,8 @@ struct DuplicatesView: View {
             Text("Size")
                 .frame(width: 100, alignment: .trailing)
 
-            Text("Locations")
-                .frame(width: 150, alignment: .center)
+            Text("Copies")
+                .frame(width: 80, alignment: .center)
 
             Text("Date")
                 .frame(width: 140, alignment: .trailing)
@@ -524,7 +524,7 @@ struct DuplicatesView: View {
                 return lhs.size > rhs.size
             case .name:
                 return lhs.name.localizedCompare(rhs.name) == .orderedAscending
-            case .locations:
+            case .copies:
                 return lhs.locations.count > rhs.locations.count
             }
         }
@@ -660,10 +660,7 @@ struct DriveGridCard: View {
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
                 .stroke(borderColor, lineWidth: highlightStatus == .none ? 0.5 : 1.5)
         )
-        .shadow(color: shadowColor, radius: shadowRadius)
-        .scaleEffect(highlightStatus == .dimmed ? 0.95 : 1.0)
-        .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
-        .animation(.easeInOut(duration: 0.2), value: highlightStatus)
+        .opacity(highlightStatus == .dimmed ? 0.5 : 1.0)
     }
 
     private var iconColor: Color {
@@ -691,19 +688,6 @@ struct DriveGridCard: View {
         case .sourceSafe: return Color.secondary.opacity(0.5)
         default: return DesignSystem.Colors.border
         }
-    }
-
-    private var shadowColor: Color {
-        switch highlightStatus {
-        case .warning: return Color.orange.opacity(0.3)
-        case .safe: return Color.green.opacity(0.3)
-        case .sourceSafe: return Color.secondary.opacity(0.3)
-        default: return Color.clear
-        }
-    }
-
-    private var shadowRadius: CGFloat {
-        highlightStatus == .none || highlightStatus == .dimmed ? 0 : 8
     }
 }
 
@@ -741,23 +725,11 @@ struct DuplicateFileRow: View {
                 .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 100, alignment: .trailing)
 
-            // Location pills
-            HStack(spacing: 4) {
-                ForEach(file.driveIds, id: \.self) { driveId in
-                    LocationPill(
-                        driveId: driveId,
-                        driveName: drives.first(where: { $0.id == driveId })?.name ?? "Unknown",
-                        isBackup: driveStates[driveId] ?? false,
-                        isHighlighted: isHovered,
-                        isSingleSourceSafe: isSingleSourceSafe
-                    )
-                }
-
-                Text("\(file.locations.count)")
-                    .font(.system(size: 10))
-                    .foregroundColor(DesignSystem.Colors.tertiaryText)
-            }
-            .frame(width: 150, alignment: .center)
+            // Copies count
+            Text("\(file.locations.count)")
+                .font(DesignSystem.Typography.body)
+                .foregroundColor(DesignSystem.Colors.primaryText)
+                .frame(width: 80, alignment: .center)
 
             // Date
             Text(file.formattedDate)
@@ -792,60 +764,6 @@ struct DuplicateFileRow: View {
         case "audio": return .pink
         case "database": return .gray
         default: return .blue
-        }
-    }
-
-    private var isSingleSourceSafe: Bool {
-        let sourceDrives = file.driveIds.filter { !(driveStates[$0] ?? false) }
-        let backupDrives = file.driveIds.filter { driveStates[$0] ?? false }
-        return sourceDrives.count == 1 && backupDrives.count >= 1
-    }
-}
-
-// MARK: - Location Pill
-
-struct LocationPill: View {
-    let driveId: String
-    let driveName: String
-    let isBackup: Bool
-    let isHighlighted: Bool
-    let isSingleSourceSafe: Bool
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 2)
-            .fill(pillColor)
-            .frame(width: 6, height: 20)
-            .shadow(color: shadowColor, radius: isHighlighted ? 3 : 0)
-            .scaleEffect(x: 1.0, y: isHighlighted ? 1.1 : 1.0)
-            .help(driveName)
-            .animation(.easeInOut(duration: 0.2), value: isHighlighted)
-    }
-
-    private var pillColor: Color {
-        if !isHighlighted {
-            return Color.secondary.opacity(0.3)
-        }
-
-        if isBackup {
-            return .green
-        } else if isSingleSourceSafe {
-            return Color.secondary
-        } else {
-            return .orange
-        }
-    }
-
-    private var shadowColor: Color {
-        if !isHighlighted {
-            return Color.clear
-        }
-
-        if isBackup {
-            return Color.green.opacity(0.5)
-        } else if isSingleSourceSafe {
-            return Color.secondary.opacity(0.5)
-        } else {
-            return Color.orange.opacity(0.5)
         }
     }
 }
