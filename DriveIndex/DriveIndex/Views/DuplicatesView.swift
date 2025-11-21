@@ -230,11 +230,10 @@ struct DuplicatesView: View {
             }
 
             // Drive Grid
-            let columns = [
-                GridItem(.adaptive(minimum: 140, maximum: 180), spacing: DesignSystem.Spacing.medium)
-            ]
-
-            LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.medium) {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing),
+                GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing)
+            ], spacing: DesignSystem.Card.gridSpacing) {
                 ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
                     DriveGridCard(
                         drive: drive,
@@ -679,32 +678,73 @@ struct DriveGridCard: View {
     let onToggleBackup: () -> Void
 
     var body: some View {
-        VStack(alignment: .center, spacing: DesignSystem.Spacing.medium) {
-            // Icon
-            ZStack {
+        VStack(alignment: .leading, spacing: Spacing.medium) {
+            // Top row: Status dot + Drive name + Capacity badge
+            HStack(spacing: 6) {
                 Circle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 36, height: 36)
+                    .fill(drive.isConnected ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
 
-                Image(systemName: "externaldrive.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(iconColor)
-            }
-
-            // Drive name
-            VStack(spacing: 2) {
                 Text(drive.name)
-                    .font(.system(size: 11))
+                    .font(.callout)
                     .fontWeight(.medium)
                     .lineLimit(1)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
 
-                Text(drive.formattedTotal)
-                    .font(.system(size: 10))
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                if drive.totalCapacity > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text(drive.formattedTotal)
+                            .font(AppTypography.capacityInfo)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+                    .fixedSize()
+                }
             }
 
-            // Toggle
+            // Capacity bar
+            if drive.totalCapacity > 0 {
+                CapacityBar(
+                    used: drive.usedCapacity,
+                    total: drive.totalCapacity,
+                    percentage: drive.usedPercentage,
+                    isConnected: drive.isConnected,
+                    height: 5
+                )
+            }
+
+            // Info row: Capacity + file count
+            HStack(spacing: Spacing.medium) {
+                if drive.totalCapacity > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "externaldrive")
+                            .font(.caption2)
+                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                if drive.fileCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "doc.text")
+                            .font(.caption2)
+                        Text("\(drive.fileCount.formatted()) files")
+                            .font(AppTypography.technicalData)
+                    }
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            // Toggle switch
             HStack(spacing: 4) {
                 Toggle("", isOn: Binding(
                     get: { isBackup },
@@ -717,16 +757,15 @@ struct DriveGridCard: View {
                 Text(isBackup ? "Backup" : "Src")
                     .font(.system(size: 10))
                     .fontWeight(.medium)
-                    .foregroundColor(isBackup ? .green : DesignSystem.Colors.secondaryText)
+                    .foregroundColor(isBackup ? .green : .secondary)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(DesignSystem.Spacing.medium)
+        .padding(Spacing.medium)
         .background(backgroundColor)
-        .cornerRadius(DesignSystem.CornerRadius.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
-                .stroke(borderColor, lineWidth: highlightStatus == .none ? 0.5 : 1.5)
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(borderColor, lineWidth: highlightStatus == .none ? 1 : 1.5)
         )
         .shadow(color: shadowColor, radius: shadowRadius)
         .scaleEffect(highlightStatus == .dimmed ? 0.95 : 1.0)
@@ -734,21 +773,12 @@ struct DriveGridCard: View {
         .animation(.easeInOut(duration: 0.2), value: highlightStatus)
     }
 
-    private var iconColor: Color {
-        switch highlightStatus {
-        case .warning: return .orange
-        case .safe: return .green
-        case .sourceSafe: return Color.secondary
-        default: return .blue
-        }
-    }
-
     private var backgroundColor: Color {
         switch highlightStatus {
         case .warning: return Color.orange.opacity(0.08)
         case .safe: return Color.green.opacity(0.08)
         case .sourceSafe: return Color.secondary.opacity(0.08)
-        default: return DesignSystem.Colors.cardBackground
+        default: return drive.backgroundColor
         }
     }
 
@@ -757,7 +787,7 @@ struct DriveGridCard: View {
         case .warning: return Color.orange.opacity(0.5)
         case .safe: return Color.green.opacity(0.5)
         case .sourceSafe: return Color.secondary.opacity(0.5)
-        default: return DesignSystem.Colors.border
+        default: return drive.borderColor ?? Color.clear
         }
     }
 
