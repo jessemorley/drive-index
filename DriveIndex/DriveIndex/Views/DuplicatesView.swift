@@ -742,6 +742,7 @@ struct DriveGridCard: View {
                     .font(.callout)
                     .fontWeight(.medium)
                     .lineLimit(1)
+                    .foregroundColor(textColor)
 
                 if drive.totalCapacity > 0 {
                     HStack(spacing: 4) {
@@ -750,7 +751,7 @@ struct DriveGridCard: View {
                         Text(drive.formattedTotal)
                             .font(AppTypography.capacityInfo)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(secondaryTextColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .overlay(
@@ -770,7 +771,7 @@ struct DriveGridCard: View {
                         Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
                             .font(AppTypography.technicalData)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(secondaryTextColor)
                 }
 
                 if drive.fileCount > 0 {
@@ -780,7 +781,7 @@ struct DriveGridCard: View {
                         Text("\(drive.fileCount.formatted()) files")
                             .font(AppTypography.technicalData)
                     }
-                    .foregroundColor(.secondary)
+                    .foregroundColor(secondaryTextColor)
                 }
 
                 Spacer()
@@ -802,7 +803,7 @@ struct DriveGridCard: View {
                     Text("Backup")
                         .font(.system(size: 10))
                         .fontWeight(.medium)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(secondaryTextColor)
                 }
             }
         }
@@ -823,7 +824,7 @@ struct DriveGridCard: View {
         case .warning: return Color.orange.opacity(0.08)
         case .safe: return Color.green.opacity(0.08)
         case .sourceSafe: return Color.secondary.opacity(0.08)
-        default: return drive.backgroundColor
+        default: return DesignSystem.Colors.cardBackground
         }
     }
 
@@ -832,7 +833,25 @@ struct DriveGridCard: View {
         case .warning: return Color.orange.opacity(0.5)
         case .safe: return Color.green.opacity(0.5)
         case .sourceSafe: return Color.secondary.opacity(0.5)
-        default: return drive.borderColor ?? Color.clear
+        default: return DesignSystem.Colors.border
+        }
+    }
+
+    private var textColor: Color {
+        switch highlightStatus {
+        case .warning: return .orange
+        case .safe: return .green
+        case .sourceSafe: return Color.secondary
+        default: return DesignSystem.Colors.primaryText
+        }
+    }
+
+    private var secondaryTextColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.8)
+        case .safe: return Color.green.opacity(0.8)
+        case .sourceSafe: return Color.secondary.opacity(0.8)
+        default: return DesignSystem.Colors.secondaryText
         }
     }
 
