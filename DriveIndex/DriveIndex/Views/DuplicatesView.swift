@@ -822,7 +822,7 @@ struct DriveGridCard: View {
 
                                 Spacer()
 
-                                Image(systemName: "arrow.up.forward.circle")
+                                Image(systemName: drive.isConnected ? "arrow.up.forward.circle" : "externaldrive.badge.xmark")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
