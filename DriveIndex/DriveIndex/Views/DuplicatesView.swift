@@ -388,7 +388,7 @@ struct DuplicatesView: View {
                             file: file,
                             driveStates: driveStates,
                             drives: driveMonitor.drives,
-                            isHovered: hoveredFileId == file.id
+                            isHovered: hoveredFileId == file.id || selectedFile?.id == file.id
                         )
                         .onTapGesture {
                             if selectedFile?.id == file.id {
@@ -404,7 +404,10 @@ struct DuplicatesView: View {
                         }
                     }
                     .onHover { isHovering in
-                        hoveredFileId = isHovering ? file.id : nil
+                        // Only update hover if no file is selected
+                        if selectedFile == nil {
+                            hoveredFileId = isHovering ? file.id : nil
+                        }
                     }
                     .onAppear {
                         // Load more when approaching the end
@@ -555,7 +558,10 @@ struct DuplicatesView: View {
     }
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
-        guard let fileId = hoveredFileId,
+        // Use selected file if available, otherwise use hovered file
+        let activeFileId = selectedFile?.id ?? hoveredFileId
+
+        guard let fileId = activeFileId,
               let file = allFiles.first(where: { $0.id == fileId }) else {
             return .none
         }
@@ -826,14 +832,17 @@ struct DriveGridCard: View {
                             revealFileInFinder(location: location)
                         }) {
                             HStack(spacing: 4) {
-                                Image(systemName: "folder")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
                                 Text(location.relativePath)
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(.primary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
+
+                                Spacer()
+
+                                Image(systemName: "arrow.up.forward.circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
