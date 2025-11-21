@@ -191,42 +191,6 @@ struct DuplicatesView: View {
 
     private var driveGridSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            // Header
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Indexed Drives")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundColor(DesignSystem.Colors.primaryText)
-
-                    Text("Toggle 'Backup' to configure safety logic.")
-                        .font(.system(size: 11))
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                }
-
-                Spacer()
-
-                // Legend
-                HStack(spacing: DesignSystem.Spacing.large) {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 6, height: 6)
-                        Text("Duplicate")
-                            .font(.system(size: 11))
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text("Backup")
-                            .font(.system(size: 11))
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-                }
-            }
-
             // Drive Grid
             let driveCount = driveMonitor.drives.filter { $0.isIndexed }.count
             let columns = calculateColumns(
@@ -414,8 +378,8 @@ struct DuplicatesView: View {
                             ? Color.secondary.opacity(0.05)
                             : Color.clear
                     )
-                    .opacity(isOtherFileSelected && !isHovered ? 0.4 : 1.0)
-                    .animation(.easeInOut(duration: 0.2), value: selectedFile?.id)
+                    .opacity(isOtherFileSelected && !isHovered ? 0.65 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: isOtherFileSelected)
                     .animation(.easeInOut(duration: 0.15), value: isHovered)
                     .onHover { isHovering in
                         hoveredFileId = isHovering ? file.id : nil
