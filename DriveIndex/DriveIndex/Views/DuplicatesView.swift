@@ -360,10 +360,12 @@ struct DuplicatesView: View {
                             isHovered: isSelected || isHovered
                         )
                         .onTapGesture {
-                            if isSelected {
-                                selectedFile = nil
-                            } else {
-                                selectedFile = file
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if isSelected {
+                                    selectedFile = nil
+                                } else {
+                                    selectedFile = file
+                                }
                             }
                         }
 
@@ -801,6 +803,7 @@ struct DriveGridCard: View {
             if !filePathsForSelectedFile.isEmpty {
                 Divider()
                     .padding(.vertical, 2)
+                    .transition(.opacity)
 
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(filePathsForSelectedFile) { location in
@@ -830,6 +833,7 @@ struct DriveGridCard: View {
                 .padding(6)
                 .background(Color.secondary.opacity(0.08))
                 .cornerRadius(6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(Spacing.medium)
@@ -842,6 +846,7 @@ struct DriveGridCard: View {
         .shadow(color: shadowColor, radius: shadowRadius)
         .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: highlightStatus)
+        .animation(.easeInOut(duration: 0.2), value: selectedFile?.id)
     }
 
     private var backgroundColor: Color {
