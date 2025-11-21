@@ -964,40 +964,43 @@ struct DuplicateFileRow: View {
             HStack(spacing: DesignSystem.Spacing.medium) {
                 Image(systemName: fileIcon)
                     .font(.body)
-                    .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
                     .frame(width: 20)
 
                 Text(file.name)
                     .font(DesignSystem.Typography.body)
                     .lineLimit(1)
-                    .foregroundColor(isHovered ? .white : DesignSystem.Colors.primaryText)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Size
             Text(file.formattedSize)
                 .font(DesignSystem.Typography.caption)
-                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 100, alignment: .trailing)
 
             // Copies count
             Text("\(file.locations.count)")
                 .font(DesignSystem.Typography.caption)
-                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 80, alignment: .center)
 
             // Date
             Text(file.formattedDate)
                 .font(DesignSystem.Typography.caption)
-                .foregroundColor(isHovered ? .white : DesignSystem.Colors.secondaryText)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
                 .frame(width: 140, alignment: .trailing)
         }
         .padding(.horizontal, DesignSystem.Spacing.cardPadding)
-        .padding(.vertical, DesignSystem.Spacing.medium)
-        .background(
-            isHovered
-                ? DesignSystem.Colors.cardBackgroundHover
-                : Color.clear
+        .padding(.vertical, DesignSystem.Spacing.large)
+        .background(Color.clear)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    isHovered ? Color.primary.opacity(0.2) : Color.clear,
+                    lineWidth: 1
+                )
         )
         .contentShape(Rectangle())
     }
