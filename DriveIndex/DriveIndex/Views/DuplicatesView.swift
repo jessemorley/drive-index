@@ -734,7 +734,7 @@ struct DriveGridCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
-            // Top row: Status dot + Drive name + Capacity badge + Backup toggle
+            // Top row: Status dot + Drive name + Backup toggle
             HStack(spacing: 6) {
                 Circle()
                     .fill(drive.isConnected ? Color.green : Color.gray)
@@ -745,23 +745,6 @@ struct DriveGridCard: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .foregroundColor(textColor)
-
-                if drive.totalCapacity > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "externaldrive")
-                            .font(.caption2)
-                        Text(drive.formattedTotal)
-                            .font(AppTypography.capacityInfo)
-                    }
-                    .foregroundColor(secondaryTextColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .strokeBorder(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-                    .fixedSize()
-                }
 
                 Spacer()
 
@@ -782,19 +765,22 @@ struct DriveGridCard: View {
                 }
             }
 
-            // Info row: Capacity
-            HStack(spacing: Spacing.medium) {
-                if drive.totalCapacity > 0 {
-                    HStack(spacing: 3) {
-                        Image(systemName: "externaldrive")
-                            .font(.caption2)
-                        Text("\(drive.formattedUsed) / \(drive.formattedTotal)")
-                            .font(AppTypography.technicalData)
-                    }
-                    .foregroundColor(secondaryTextColor)
+            // Capacity badge below name
+            if drive.totalCapacity > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "externaldrive")
+                        .font(.caption2)
+                    Text(drive.formattedTotal)
+                        .font(AppTypography.capacityInfo)
                 }
-
-                Spacer()
+                .foregroundColor(secondaryTextColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(capacityBadgeOutlineColor, lineWidth: 1)
+                )
+                .fixedSize()
             }
 
             // File paths for selected file
@@ -880,6 +866,15 @@ struct DriveGridCard: View {
         case .safe: return Color.green.opacity(0.8)
         case .sourceSafe: return Color.secondary.opacity(0.8)
         default: return DesignSystem.Colors.secondaryText
+        }
+    }
+
+    private var capacityBadgeOutlineColor: Color {
+        switch highlightStatus {
+        case .warning: return Color.orange.opacity(0.4)
+        case .safe: return Color.green.opacity(0.4)
+        case .sourceSafe: return Color.secondary.opacity(0.4)
+        default: return Color.secondary.opacity(0.3)
         }
     }
 
