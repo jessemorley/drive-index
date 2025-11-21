@@ -95,6 +95,7 @@ struct DuplicatesView: View {
     @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var hoveredFileId: String?
+    @State private var selectedFile: MultiDriveFile?
     @State private var sortOption: DuplicateSortOption = .size
     @State private var showBackedUp = true
     @State private var showDuplicates = true
@@ -240,6 +241,8 @@ struct DuplicatesView: View {
                                 drive: drive,
                                 isBackup: driveStates[drive.id] ?? false,
                                 highlightStatus: getHighlightStatus(driveId: drive.id),
+                                selectedFile: selectedFile,
+                                driveMonitor: driveMonitor,
                                 onToggleBackup: {
                                     driveStates[drive.id] = !(driveStates[drive.id] ?? false)
                                     saveDriveStates()
@@ -384,7 +387,11 @@ struct DuplicatesView: View {
                             isHovered: hoveredFileId == file.id
                         )
                         .onTapGesture {
-                            revealFirstLocation(file)
+                            if selectedFile?.id == file.id {
+                                selectedFile = nil
+                            } else {
+                                selectedFile = file
+                            }
                         }
 
                         if file.id != displayedFiles.last?.id {
@@ -728,7 +735,14 @@ struct DriveGridCard: View {
     let drive: DriveInfo
     let isBackup: Bool
     let highlightStatus: DriveHighlightStatus
+    let selectedFile: MultiDriveFile?
+    let driveMonitor: DriveMonitor
     let onToggleBackup: () -> Void
+
+    private var filePathsForSelectedFile: [FileLocation] {
+        guard let file = selectedFile else { return [] }
+        return file.locations.filter { $0.driveId == drive.id }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
@@ -775,6 +789,35 @@ struct DriveGridCard: View {
                 }
 
                 Spacer()
+            }
+
+            // File paths for selected file
+            if !filePathsForSelectedFile.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(filePathsForSelectedFile) { location in
+                        Button(action: {
+                            revealFileInFinder(location: location)
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(location.relativePath)
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!drive.isConnected)
+                        .opacity(drive.isConnected ? 1.0 : 0.5)
+                    }
+                }
+                .padding(6)
+                .background(Color.secondary.opacity(0.08))
+                .cornerRadius(6)
             }
 
             // Toggle switch
@@ -856,6 +899,12 @@ struct DriveGridCard: View {
 
     private var shadowRadius: CGFloat {
         highlightStatus == .none || highlightStatus == .dimmed ? 0 : 8
+    }
+
+    private func revealFileInFinder(location: FileLocation) {
+        guard let driveURL = driveMonitor.getDriveURL(for: drive) else { return }
+        let fileURL = driveURL.appendingPathComponent(location.relativePath)
+        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
     }
 }
 
