@@ -178,6 +178,12 @@ struct DuplicatesView: View {
 
             Divider()
 
+            // Column Headers (fixed)
+            fileListHeader
+                .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
+
+            Divider()
+
             // File List
             if filteredFiles.isEmpty {
                 emptyStateView
@@ -342,11 +348,6 @@ struct DuplicatesView: View {
     private var fileListSection: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                // Header
-                fileListHeader
-
-                Divider()
-
                 // File rows
                 ForEach(Array(displayedFiles.enumerated()), id: \.element.id) { index, file in
                     let isSelected = selectedFile?.id == file.id
