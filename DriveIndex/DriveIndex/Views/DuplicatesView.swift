@@ -95,6 +95,7 @@ struct DuplicatesView: View {
     @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var hoveredFileId: String?
+    @State private var hoveredDriveId: String?
     @State private var selectedFile: MultiDriveFile?
     @State private var sortOption: DuplicateSortOption = .size
     @State private var showBackedUp = true
@@ -204,7 +205,7 @@ struct DuplicatesView: View {
                 driveCount: driveCount
             )
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Card.gridSpacing), count: columns), spacing: DesignSystem.Card.gridSpacing) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), spacing: 8) {
                 ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
                     DriveGridCard(
                         drive: drive,
@@ -212,11 +213,15 @@ struct DuplicatesView: View {
                         highlightStatus: getHighlightStatus(driveId: drive.id),
                         selectedFile: selectedFile,
                         driveMonitor: driveMonitor,
+                        isHovered: hoveredDriveId == drive.id,
                         onToggleBackup: {
                             driveStates[drive.id] = !(driveStates[drive.id] ?? false)
                             saveDriveStates()
                         }
                     )
+                    .onHover { isHovering in
+                        hoveredDriveId = isHovering ? drive.id : nil
+                    }
                 }
             }
             .frame(minHeight: calculateMinGridHeight(driveCount: driveCount, columns: columns))
@@ -505,7 +510,7 @@ struct DuplicatesView: View {
         // Define breakpoints for column counts
         // Assuming minimum card width of ~140px plus spacing
         let minCardWidth: CGFloat = 140
-        let spacing = DesignSystem.Card.gridSpacing
+        let spacing: CGFloat = 8
 
         // Calculate maximum columns that could fit
         let maxPossibleColumns = Int((effectiveWidth + spacing) / (minCardWidth + spacing))
@@ -534,7 +539,7 @@ struct DuplicatesView: View {
         guard columns > 0 else { return expandedCardHeight }
         let rows = ceil(Double(driveCount) / Double(columns))
 
-        return CGFloat(rows) * expandedCardHeight + DesignSystem.Card.gridSpacing * CGFloat(max(0, rows - 1))
+        return CGFloat(rows) * expandedCardHeight + 8 * CGFloat(max(0, rows - 1))
     }
 
     private func getHighlightStatus(driveId: String) -> DriveHighlightStatus {
@@ -727,6 +732,7 @@ struct DriveGridCard: View {
     let highlightStatus: DriveHighlightStatus
     let selectedFile: MultiDriveFile?
     let driveMonitor: DriveMonitor
+    let isHovered: Bool
     let onToggleBackup: () -> Void
 
     private var filePathsForSelectedFile: [FileLocation] {
@@ -833,6 +839,7 @@ struct DriveGridCard: View {
         .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: highlightStatus)
         .animation(.easeInOut(duration: 0.2), value: selectedFile?.id)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
     private var backgroundColor: Color {
@@ -840,7 +847,9 @@ struct DriveGridCard: View {
         case .warning: return Color.orange.opacity(0.08)
         case .safe: return Color.green.opacity(0.08)
         case .sourceSafe: return Color.secondary.opacity(0.08)
-        default: return Color.secondary.opacity(0.04)
+        default:
+            // Show subtle hover background when hovering
+            return isHovered ? Color.secondary.opacity(0.06) : Color.secondary.opacity(0.04)
         }
     }
 
