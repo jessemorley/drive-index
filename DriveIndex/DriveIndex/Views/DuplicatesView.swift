@@ -75,9 +75,12 @@ struct DriveState: Identifiable {
     let isConnected: Bool
 }
 
-enum DuplicateFilterMode {
-    case backedUp
-    case duplicates
+enum DuplicateFilterMode: String, CaseIterable, Identifiable {
+    case backedUp = "Backed Up"
+    case duplicates = "Duplicates"
+    case both = "Both"
+
+    var id: String { rawValue }
 }
 
 enum DuplicateSortOption: String, CaseIterable {
@@ -101,8 +104,7 @@ struct DuplicatesView: View {
     @State private var errorMessage: String?
     @State private var hoveredFileId: String?
     @State private var sortOption: DuplicateSortOption = .size
-    @State private var showBackedUp = true
-    @State private var showDuplicates = true
+    @State private var filterMode: DuplicateFilterMode = .both
 
     private let batchSize = 50
     private let loadMoreThreshold = 10
@@ -141,10 +143,7 @@ struct DuplicatesView: View {
             loadDriveStates()
             await loadFiles()
         }
-        .onChange(of: showBackedUp) { _, _ in
-            resetDisplayedFiles()
-        }
-        .onChange(of: showDuplicates) { _, _ in
+        .onChange(of: filterMode) { _, _ in
             resetDisplayedFiles()
         }
         .onChange(of: sortOption) { _, _ in
@@ -268,39 +267,22 @@ struct DuplicatesView: View {
                     }
                 }
             } label: {
-                Label("Sort by \(sortOption.rawValue)", systemImage: "arrow.up.arrow.down")
-                    .font(DesignSystem.Typography.caption)
+                Label(sortOption.rawValue, systemImage: "arrow.up.arrow.down")
             }
+            .menuStyle(.button)
             .frame(width: 180, alignment: .leading)
 
             Spacer()
 
-            // Filter Toggles
-            HStack(spacing: 2) {
-                filterToggle(
-                    title: "Backed Up",
-                    icon: "checkmark.circle",
-                    isActive: showBackedUp,
-                    color: .green
-                ) {
-                    showBackedUp.toggle()
-                }
-
-                Divider()
-                    .frame(height: 20)
-
-                filterToggle(
-                    title: "Duplicates",
-                    icon: "exclamationmark.triangle",
-                    isActive: showDuplicates,
-                    color: .orange
-                ) {
-                    showDuplicates.toggle()
+            // Filter Picker
+            Picker("Filter", selection: $filterMode) {
+                ForEach(DuplicateFilterMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
                 }
             }
-            .padding(2)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(6)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 300)
 
             Spacer()
 
@@ -313,47 +295,6 @@ struct DuplicatesView: View {
         .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
         .padding(.vertical, DesignSystem.Spacing.medium)
         .background(Color.secondary.opacity(0.03))
-    }
-
-    @ViewBuilder
-    private func filterToggle(
-        title: String,
-        icon: String,
-        isActive: Bool,
-        color: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if isActive {
-                    Image(systemName: icon)
-                        .font(.system(size: 10))
-                }
-                Text(title)
-                    .font(.system(size: 11))
-            }
-            .padding(.horizontal, DesignSystem.Spacing.medium)
-            .padding(.vertical, 6)
-            .background(
-                isActive
-                    ? color.opacity(0.15)
-                    : Color.clear
-            )
-            .foregroundColor(
-                isActive
-                    ? color
-                    : DesignSystem.Colors.secondaryText
-            )
-            .cornerRadius(4)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(
-                        isActive ? color.opacity(0.3) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - File List Section
@@ -533,18 +474,16 @@ struct DuplicatesView: View {
             let hasRedundantBackup = backupDrives.count > 1
             let isUnsafe = backupDrives.isEmpty
 
-            // Show if it matches "Backed Up" filter
-            if showBackedUp && isBackedUp {
+            let isDuplicate = hasRedundantSource || hasRedundantBackup || isUnsafe
+
+            switch filterMode {
+            case .backedUp:
+                return isBackedUp
+            case .duplicates:
+                return isDuplicate
+            case .both:
                 return true
             }
-
-            // Show if it matches "Duplicates" filter
-            // Duplicates include: multiple sources, multiple backups, or no backup at all
-            if showDuplicates && (hasRedundantSource || hasRedundantBackup || isUnsafe) {
-                return true
-            }
-
-            return false
         }
     }
 
@@ -745,19 +684,23 @@ struct DriveGridCard: View {
             }
 
             // Toggle switch
-            HStack(spacing: 4) {
-                Toggle("", isOn: Binding(
-                    get: { isBackup },
-                    set: { _ in onToggleBackup() }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+            HStack {
+                Spacer()
 
-                Text(isBackup ? "Backup" : "Src")
-                    .font(.system(size: 10))
-                    .fontWeight(.medium)
-                    .foregroundColor(isBackup ? .green : .secondary)
+                HStack(spacing: 4) {
+                    Toggle("", isOn: Binding(
+                        get: { isBackup },
+                        set: { _ in onToggleBackup() }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+
+                    Text("Backup")
+                        .font(.system(size: 10))
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding(Spacing.medium)
@@ -768,7 +711,6 @@ struct DriveGridCard: View {
                 .strokeBorder(borderColor, lineWidth: highlightStatus == .none ? 1 : 1.5)
         )
         .shadow(color: shadowColor, radius: shadowRadius)
-        .scaleEffect(highlightStatus == .dimmed ? 0.95 : 1.0)
         .opacity(highlightStatus == .dimmed ? 0.4 : 1.0)
         .animation(.easeInOut(duration: 0.2), value: highlightStatus)
     }
