@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+    - name: Show Xcode version
+      run: xcodebuild -version
+
+    - name: Build DriveIndex
+      run: |
+        xcodebuild clean build \
+          -project DriveIndex/DriveIndex.xcodeproj \
+          -scheme DriveIndex \
+          -configuration Debug \
+          -destination 'platform=macOS' \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Build status
+      run: echo "Build completed successfully ✓"

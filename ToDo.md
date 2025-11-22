@@ -6,18 +6,12 @@
 
 - [ ] 'Not Indexed' or 'Excluded' text next to capacity indicator (same style, but with orange text and outline) 
 - [ ] Copy Drives styling to floating window
-- [x] Enable PRAGMA optimise when file change counter reaches 50
 - [x] **Feature:** Duplicate file detection/summary
-- [x] Option to hide the dock icon
-- [x] Move About info to DriveIndex > About
 - [ ] Notification settings
-- [x] Menubar icon states
 
 ### Medium
 
 - [ ] Keyboard navigation from search
-- [ ] Settings window appear on top
-- [x] MacOS-style storage visualisation
 - [ ] File exclusion sets (e.g. Capture One: cot, cof, cos, etc.)
   
 ### Low
@@ -34,6 +28,7 @@
 ## Bugs
 
 - [ ] Storage breakdown doesn't show for disconnected drives
+- [ ] Settings window not obeying minimum width
 - [ ] Database location button sizing
 - [x] Drive window height doesn't match precisely
 - [x] Popup occassionally doesn't appear where last moved to

@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+    - name: Show Xcode version
+      run: xcodebuild -version
+
+    - name: Build and Archive DriveIndex
+      run: |
+        xcodebuild archive \
+          -project DriveIndex/DriveIndex.xcodeproj \
+          -scheme DriveIndex \
+          -configuration Release \
+          -archivePath ./build/DriveIndex.xcarchive \
+          CODE_SIGN_IDENTITY="-" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO
+
+    - name: Export Archive
+      run: |
+        xcodebuild -exportArchive \
+          -archivePath ./build/DriveIndex.xcarchive \
+          -exportPath ./build \
+          -exportOptionsPlist .github/workflows/export-options.plist
+
+    - name: Create ZIP archive
+      run: |
+        cd build
+        ditto -c -k --keepParent DriveIndex.app DriveIndex.zip
+        cd ..
+
+    - name: Get version from tag
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Create Release Notes
+      run: |
+        cat > release-notes.md << 'EOF'
+        ## DriveIndex ${{ steps.version.outputs.VERSION }}
+
+        ### Installation Instructions
+
+        1. Download `DriveIndex.zip` below
+        2. Unzip the file (usually automatic on macOS)
+        3. Move `DriveIndex.app` to your Applications folder
+        4. **First launch only**: Right-click `DriveIndex.app` and select "Open"
+        5. Click "Open" in the security dialog that appears
+        6. The app will now run normally for all future launches
+
+        ### Why the security dialog?
+
+        This is a test build signed with ad-hoc code signing. macOS shows a security warning for apps not signed with an Apple Developer ID. This is normal and safe - just use the right-click method on first launch.
+
+        ### What's New
+
+        See commit history for changes in this release.
+        EOF
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: release-notes.md
+        files: |
+          build/DriveIndex.zip
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Release created
+      run: echo "Release ${{ steps.version.outputs.VERSION }} created successfully ✓"
