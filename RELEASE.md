@@ -77,15 +77,21 @@ Installation Instructions:
 
 1. Download DriveIndex.zip from the release
 2. Unzip the file (usually automatic on macOS)
-3. Move DriveIndex.app to your Applications folder
-4. FIRST LAUNCH ONLY: Right-click DriveIndex.app and select "Open"
-5. Click "Open" in the security dialog
-6. The app will run normally for all future launches
+3. Remove quarantine attribute - Open Terminal and run:
+   xattr -cr ~/Downloads/DriveIndex.app
+   (Replace path if you downloaded elsewhere)
+4. Move DriveIndex.app to your Applications folder
+5. FIRST LAUNCH: Right-click DriveIndex.app and select "Open"
+6. Click "Open" in the security dialog
+7. The app will run normally for all future launches
 
-Why the security dialog?
-This is a test build with ad-hoc code signing. macOS requires
-the right-click method on first launch for apps not signed with
-an Apple Developer ID. This is normal and safe.
+Why these steps?
+This is an ad-hoc signed test build. macOS:
+- Adds a "quarantine" flag to downloaded files (causes "damaged" error)
+- Requires right-click to open unsigned apps on first launch
+
+The 'xattr -cr' command removes the quarantine flag. This is safe
+and standard for developer test builds.
 ```
 
 ## Version Numbering Guide
