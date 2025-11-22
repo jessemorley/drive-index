@@ -30,12 +30,10 @@ jobs:
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO
 
-    - name: Export Archive
+    - name: Extract .app from Archive
       run: |
-        xcodebuild -exportArchive \
-          -archivePath ./build/DriveIndex.xcarchive \
-          -exportPath ./build \
-          -exportOptionsPlist .github/workflows/export-options.plist
+        cp -R ./build/DriveIndex.xcarchive/Products/Applications/DriveIndex.app ./build/
+        ls -la ./build/DriveIndex.app
 
     - name: Create ZIP archive
       run: |
