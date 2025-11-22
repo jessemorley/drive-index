@@ -57,8 +57,8 @@ class IndexManager: ObservableObject {
                 let driveName = values.volumeName ?? "Unknown"
                 print("✅ IndexManager: Setting pendingChanges for \(driveName) (\(changeCount) changes)")
 
-                // Use MainActor.assumeIsolated since we're on main queue
-                MainActor.assumeIsolated {
+                // Update on main queue (observer is already on main queue)
+                DispatchQueue.main.async {
                     self.pendingChanges = PendingChanges(driveName: driveName, changeCount: changeCount)
                 }
             } catch {
