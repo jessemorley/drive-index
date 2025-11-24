@@ -136,13 +136,10 @@ struct FileDisplayItem: Identifiable {
 
 struct FilesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
-    @Environment(AppSearchState.self) private var appSearchState
 
     @State private var files: [FileDisplayItem] = []
-    @State private var searchResults: [FileDisplayItem] = []
     @State private var isLoading = true
     @State private var isLoadingMore = false
-    @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var sortColumn: FileSortColumn = .dateAdded
     @State private var sortDirection: SortDirection = .descending
@@ -153,12 +150,6 @@ struct FilesView: View {
 
     private let batchSize = 100
     private let loadMoreThreshold = 20 // Load more when within 20 items of the end
-    private let searchManager = SearchManager()
-
-    // Use shared search text from AppSearchState
-    private var searchText: String {
-        appSearchState.searchText
-    }
 
     var body: some View {
         NavigationStack {
@@ -169,7 +160,7 @@ struct FilesView: View {
                         loadingView
                     } else if let error = errorMessage {
                         errorView(error)
-                    } else if displayedFiles.isEmpty {
+                    } else if files.isEmpty {
                         emptyStateView
                     } else {
                         filesTableView
@@ -199,37 +190,16 @@ struct FilesView: View {
         .task {
             await loadInitialFiles()
         }
-        .onChange(of: appSearchState.searchText) { oldValue, newValue in
-            Task {
-                await performSearch(newValue)
-            }
-        }
     }
 
     // MARK: - Computed Properties
 
-    /// Files to display - either search results or lazy-loaded files
-    private var displayedFiles: [FileDisplayItem] {
-        if !searchText.isEmpty {
-            return searchResults
-        } else {
-            return files
-        }
-    }
-
     private var subtitle: String {
         let count = filteredFiles.count
-        if searchText.isEmpty {
-            if hasMoreFiles && !isLoading {
-                return "\(count)+ file\(count == 1 ? "" : "s")"
-            }
-            return "\(count) file\(count == 1 ? "" : "s")"
-        } else {
-            if isSearching {
-                return "Searching..."
-            }
-            return "\(count) result\(count == 1 ? "" : "s")"
+        if hasMoreFiles && !isLoading {
+            return "\(count)+ file\(count == 1 ? "" : "s")"
         }
+        return "\(count) file\(count == 1 ? "" : "s")"
     }
 
     // MARK: - Files Table View
@@ -271,8 +241,8 @@ struct FilesView: View {
                         }
                     }
 
-                    // Loading indicator at bottom (only for lazy loading, not search)
-                    if isLoadingMore && searchText.isEmpty {
+                    // Loading indicator at bottom
+                    if isLoadingMore {
                         HStack(spacing: DesignSystem.Spacing.small) {
                             ProgressView()
                                 .controlSize(.small)
@@ -294,8 +264,7 @@ struct FilesView: View {
         // 1. Not currently loading
         // 2. We have more files to load
         // 3. We're within threshold of the end
-        // 4. Search is empty (don't auto-load during search)
-        guard !isLoadingMore && hasMoreFiles && searchText.isEmpty else {
+        guard !isLoadingMore && hasMoreFiles else {
             return false
         }
 
@@ -364,7 +333,7 @@ struct FilesView: View {
         alignment: Alignment,
         width: CGFloat?
     ) -> some View {
-        let isActive = sortColumn == column && searchText.isEmpty
+        let isActive = sortColumn == column
 
         Button(action: {
             if sortColumn == column {
@@ -392,8 +361,7 @@ struct FilesView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(searchText.isEmpty ? "Sort by \(title.lowercased())" : "Sorting disabled during search")
-        .disabled(!searchText.isEmpty)
+        .help("Sort by \(title.lowercased())")
     }
 
     // MARK: - State Views
@@ -439,7 +407,7 @@ struct FilesView: View {
                     Text("No Files Found")
                         .font(DesignSystem.Typography.headline)
 
-                    Text(searchText.isEmpty ? "Index a drive to see recently added files" : "No files match your search")
+                    Text("Index a drive to see recently added files")
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.secondaryText)
                 }
@@ -482,42 +450,6 @@ struct FilesView: View {
             Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
         }
         .help("Filter by drive")
-    }
-
-    // MARK: - Search
-
-    private func performSearch(_ query: String) async {
-        guard !query.isEmpty else {
-            searchResults = []
-            isSearching = false
-            return
-        }
-
-        isSearching = true
-
-        do {
-            let results = try await searchManager.search(query)
-            // Convert SearchResult to FileDisplayItem
-            searchResults = results.map { result in
-                FileDisplayItem(
-                    id: result.id,
-                    name: result.name,
-                    relativePath: result.relativePath,
-                    size: result.size,
-                    driveUUID: result.driveUUID,
-                    driveName: result.driveName,
-                    modifiedAt: nil, // SearchResult doesn't include dates
-                    createdAt: nil,
-                    isConnected: result.isConnected,
-                    isDirectory: result.isDirectory
-                )
-            }
-        } catch {
-            print("Search error: \(error)")
-            searchResults = []
-        }
-
-        isSearching = false
     }
 
     // MARK: - Data Loading
@@ -605,7 +537,7 @@ struct FilesView: View {
     // MARK: - Filtering and Sorting
 
     private var filteredFiles: [FileDisplayItem] {
-        var results = displayedFiles
+        var results = files
 
         // Filter by drive if selected
         if let driveId = selectedDriveFilter {
@@ -616,12 +548,7 @@ struct FilesView: View {
     }
 
     private var sortedFiles: [FileDisplayItem] {
-        // When searching, preserve BM25 ranking order from FTS5
-        guard searchText.isEmpty else {
-            return filteredFiles
-        }
-
-        // Apply custom sorting when browsing
+        // Apply custom sorting
         return filteredFiles.sorted { lhs, rhs in
             let result: Bool
             switch sortColumn {

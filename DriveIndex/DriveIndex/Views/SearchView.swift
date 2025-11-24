@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SearchView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
-    @Environment(AppSearchState.self) private var appSearchState
+    @Binding var searchText: String
 
     @State private var searchResults: [FileDisplayItem] = []
     @State private var isSearching = false
@@ -17,11 +17,6 @@ struct SearchView: View {
     @State private var hoveredFileID: Int64?
 
     private let searchManager = SearchManager()
-
-    // Use shared search text from AppSearchState
-    private var searchText: String {
-        appSearchState.searchText
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +38,8 @@ struct SearchView: View {
                 filterMenu
             }
         }
-        .onChange(of: appSearchState.searchText) { oldValue, newValue in
+        .searchable(text: $searchText, placement: .automatic, prompt: "Search files")
+        .onChange(of: searchText) { oldValue, newValue in
             Task {
                 await performSearch(newValue)
             }
@@ -232,6 +228,6 @@ struct SearchView: View {
 }
 
 #Preview {
-    SearchView()
+    SearchView(searchText: .constant(""))
         .environmentObject(DriveMonitor())
 }

@@ -85,7 +85,6 @@ enum DuplicateSortOption: String, CaseIterable {
 
 struct DuplicatesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
-    @Environment(AppSearchState.self) private var appSearchState
 
     @State private var allFiles: [MultiDriveFile] = [] // All files from database
     @State private var displayedFiles: [MultiDriveFile] = [] // Currently displayed files
@@ -105,10 +104,6 @@ struct DuplicatesView: View {
 
     private let batchSize = 50
     private let loadMoreThreshold = 10
-
-    private var searchText: String {
-        appSearchState.searchText
-    }
 
     var body: some View {
         NavigationStack {

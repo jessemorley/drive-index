@@ -50,7 +50,6 @@
 		87000002 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000012 /* SearchView.swift */; };
 		87000003 /* SettingsNavigationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000013 /* SettingsNavigationSidebar.swift */; };
 		87000004 /* SettingsNavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000014 /* SettingsNavigationItem.swift */; };
-		87000005 /* AppSearchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000015 /* AppSearchState.swift */; };
 		87000006 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000016 /* MainWindow.swift */; };
 		87000007 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000017 /* MainWindowView.swift */; };
 /* End PBXBuildFile section */
@@ -102,7 +101,6 @@
 		87000012 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		87000013 /* SettingsNavigationSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNavigationSidebar.swift; sourceTree = "<group>"; };
 		87000014 /* SettingsNavigationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNavigationItem.swift; sourceTree = "<group>"; };
-		87000015 /* AppSearchState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSearchState.swift; sourceTree = "<group>"; };
 		87000016 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		87000017 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -180,7 +178,6 @@
 			children = (
 				863BF7F62ECE757C0014E923 /* HashWorker.swift */,
 				863168342EC999C3007B6201 /* NavigationItem.swift */,
-				87000015 /* AppSearchState.swift */,
 				87000014 /* SettingsNavigationItem.swift */,
 				8631682E2EC96F43007B6201 /* StorageAnalysis.swift */,
 				863168322EC96F65007B6201 /* StorageCache.swift */,
@@ -351,7 +348,6 @@
 				87000002 /* SearchView.swift in Sources */,
 				87000003 /* SettingsNavigationSidebar.swift in Sources */,
 				87000004 /* SettingsNavigationItem.swift in Sources */,
-				87000005 /* AppSearchState.swift in Sources */,
 				87000006 /* MainWindow.swift in Sources */,
 				87000007 /* MainWindowView.swift in Sources */,
 			);

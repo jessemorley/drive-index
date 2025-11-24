@@ -13,8 +13,7 @@ struct MainWindowView: View {
 
     @State private var selectedItem: NavigationItem? = .drives
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var appSearchState = AppSearchState()
-    @FocusState private var isSearchFieldFocused: Bool
+    @State private var searchText = ""
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -30,36 +29,12 @@ struct MainWindowView: View {
             Group {
                 if let selectedItem = selectedItem {
                     detailView(for: selectedItem)
-                        .environment(appSearchState)
                 } else {
                     Text("Select an item from the sidebar")
                         .secondaryText()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .toolbar {
-                // Centered search bar
-                ToolbarItem(placement: .principal) {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
-                        TextField("Search files", text: $appSearchState.searchText)
-                            .textFieldStyle(.plain)
-                            .frame(maxWidth: 400)
-                            .focused($isSearchFieldFocused)
-                            .onSubmit {
-                                if !appSearchState.searchText.isEmpty {
-                                    selectedItem = .search
-                                }
-                            }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(8)
-                    .frame(width: 450)
-                }
-            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 // Indexing progress overlay using safeAreaInset instead of ZStack
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
@@ -84,17 +59,14 @@ struct MainWindowView: View {
             .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
-        .onChange(of: appSearchState.searchText) { oldValue, newValue in
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search files")
+        .onChange(of: searchText) { oldValue, newValue in
             // Automatically switch to Search view when user types in search
             if !newValue.isEmpty && selectedItem != .search {
                 selectedItem = .search
             }
         }
         .onChange(of: selectedItem) { oldValue, newValue in
-            // Focus search bar when Search is selected
-            if newValue == .search {
-                isSearchFieldFocused = true
-            }
             // Open Settings window when Settings is selected
             if newValue == .settings {
                 NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
@@ -108,7 +80,7 @@ struct MainWindowView: View {
     private func detailView(for item: NavigationItem) -> some View {
         switch item {
         case .search:
-            SearchView()
+            SearchView(searchText: $searchText)
                 .environmentObject(driveMonitor)
         case .drives:
             DrivesView()
