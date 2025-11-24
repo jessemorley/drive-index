@@ -59,7 +59,6 @@ struct MainWindowView: View {
             .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search files")
         .onChange(of: searchText) { oldValue, newValue in
             // Automatically switch to Search view when user types in search
             if !newValue.isEmpty && selectedItem != .search {
