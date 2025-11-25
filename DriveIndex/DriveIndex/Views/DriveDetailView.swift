@@ -19,16 +19,10 @@ struct DriveDetailView: View {
                 // Drive header section
                 driveHeaderSection
 
-                // Capacity section
-                capacitySection
-
-                // Storage visualization
-                if drive.fileCount > 0 && drive.isConnected {
+                // Storage visualization (works for offline drives via database)
+                if drive.fileCount > 0 {
                     storageVisualizationSection
                 }
-
-                // Drive information section
-                driveInfoSection
 
                 // Action buttons section
                 if drive.isConnected {
@@ -74,23 +68,34 @@ struct DriveDetailView: View {
     // MARK: - Header Section
 
     private var driveHeaderSection: some View {
-        HStack(spacing: DesignSystem.Spacing.large) {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.large) {
             DesignSystem.icon("externaldrive.fill", size: 64)
                 .foregroundStyle(.blue)
 
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                HStack(spacing: DesignSystem.Spacing.small) {
-                    Circle()
-                        .fill(drive.isConnected ? Color.green : Color.gray)
-                        .frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
+                // Drive name and connection status
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        Circle()
+                            .fill(drive.isConnected ? Color.green : Color.gray)
+                            .frame(width: 10, height: 10)
 
-                    Text(drive.name)
-                        .font(DesignSystem.Typography.title)
+                        Text(drive.name)
+                            .font(DesignSystem.Typography.title)
+                    }
+
+                    Text(drive.isConnected ? "Connected" : "Disconnected")
+                        .secondaryText()
+                        .font(DesignSystem.Typography.callout)
                 }
 
-                Text(drive.isConnected ? "Connected" : "Disconnected")
-                    .secondaryText()
-                    .font(DesignSystem.Typography.callout)
+                // Information fields
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
+                    compactInfoRow(label: "Files Indexed", value: drive.fileCount > 0 ? "\(drive.fileCount.formatted()) files" : "Not indexed")
+                    compactInfoRow(label: "Last Scanned", value: drive.formattedLastScan)
+                    compactInfoRow(label: "UUID", value: drive.id)
+                }
+                .font(DesignSystem.Typography.caption)
             }
         }
         .padding(DesignSystem.Spacing.cardPadding)
@@ -103,37 +108,12 @@ struct DriveDetailView: View {
         )
     }
 
-    // MARK: - Capacity Section
-
-    private var capacitySection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Capacity")
-                .sectionHeader()
-
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                if drive.totalCapacity > 0 {
-                    CapacityBar(
-                        used: drive.usedCapacity,
-                        total: drive.totalCapacity,
-                        percentage: drive.usedPercentage,
-                        isConnected: drive.isConnected,
-                        height: 8
-                    )
-
-                    HStack {
-                        Text("\(drive.formattedUsed) used")
-                            .secondaryText()
-
-                        Spacer()
-
-                        Text("\(drive.formattedAvailable) available")
-                            .secondaryText()
-                    }
-                    .font(DesignSystem.Typography.callout)
-                }
-            }
-            .padding(DesignSystem.Spacing.cardPadding)
-            .card()
+    private func compactInfoRow(label: String, value: String) -> some View {
+        HStack(spacing: DesignSystem.Spacing.small) {
+            Text(label + ":")
+                .foregroundColor(.secondary)
+            Text(value)
+                .textSelection(.enabled)
         }
     }
 
@@ -146,49 +126,6 @@ struct DriveDetailView: View {
 
             StorageVisualizationView(drive: drive)
         }
-    }
-
-    // MARK: - Drive Info Section
-
-    private var driveInfoSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Information")
-                .sectionHeader()
-
-            VStack(spacing: 0) {
-                infoRow(label: "Files Indexed", value: drive.fileCount > 0 ? "\(drive.fileCount.formatted()) files" : "Not indexed")
-
-                DesignSystem.divider()
-
-                infoRow(label: "Last Scanned", value: drive.formattedLastScan)
-
-                DesignSystem.divider()
-
-                infoRow(label: "Path", value: drive.path)
-
-                DesignSystem.divider()
-
-                infoRow(label: "UUID", value: drive.id)
-            }
-            .padding(DesignSystem.Spacing.cardPadding)
-            .card()
-        }
-    }
-
-    private func infoRow(label: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
-            Text(label)
-                .font(DesignSystem.Typography.callout)
-                .foregroundColor(.secondary)
-                .frame(width: 120, alignment: .leading)
-
-            Text(value)
-                .font(DesignSystem.Typography.callout)
-                .textSelection(.enabled)
-
-            Spacer()
-        }
-        .padding(.vertical, DesignSystem.Spacing.medium)
     }
 
     // MARK: - Action Buttons Section
