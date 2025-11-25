@@ -18,7 +18,7 @@ struct MainWindowView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
-            NavigationSidebar(selection: $selectedItem)
+            NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
                 .navigationSplitViewColumnWidth(
                     min: DesignSystem.Sidebar.minWidth,
                     ideal: DesignSystem.Sidebar.width,
@@ -81,8 +81,12 @@ struct MainWindowView: View {
         case .search:
             SearchView(searchText: $searchText)
                 .environmentObject(driveMonitor)
+        case .drive(let driveInfo):
+            DriveDetailView(drive: driveInfo)
+                .environmentObject(driveMonitor)
+                .environmentObject(indexManager)
         case .drives:
-            DrivesView()
+            DrivesView(selectedItem: $selectedItem)
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
         case .duplicates:

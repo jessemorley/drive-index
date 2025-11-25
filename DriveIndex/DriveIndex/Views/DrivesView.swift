@@ -28,6 +28,7 @@ enum DriveSortOption: String, CaseIterable {
 struct DrivesView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
+    @Binding var selectedItem: NavigationItem?
 
     @State private var viewMode: DriveViewMode = .list
     @State private var sortOption: DriveSortOption = .name
@@ -94,6 +95,10 @@ struct DrivesView: View {
             }
             .navigationDestination(for: DriveInfo.self) { drive in
                 DriveDetailView(drive: drive)
+                    .onAppear {
+                        // Update sidebar selection when navigating to a drive
+                        selectedItem = .drive(drive)
+                    }
             }
         }
         .frame(minWidth: 600, minHeight: 400)
@@ -418,7 +423,7 @@ struct DriveDetailCard: View {
 // MARK: - Preview
 
 #Preview {
-    DrivesView()
+    DrivesView(selectedItem: .constant(.drives))
         .environmentObject(DriveMonitor())
         .environmentObject(IndexManager())
         .frame(width: 800, height: 600)

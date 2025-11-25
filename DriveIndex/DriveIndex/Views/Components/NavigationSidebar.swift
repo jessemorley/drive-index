@@ -9,22 +9,10 @@ import SwiftUI
 
 struct NavigationSidebar: View {
     @Binding var selection: NavigationItem?
+    @ObservedObject var driveMonitor: DriveMonitor
 
     var body: some View {
         VStack(spacing: 0) {
-            // DriveIndex header
-            HStack(spacing: 8) {
-                Image(systemName: "externaldrive")
-                    .font(.system(size: 20))
-                    .foregroundStyle(DesignSystem.Colors.primaryText)
-                Text("DriveIndex")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(DesignSystem.Colors.primaryText)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-
             // Navigation list (main content)
             List(selection: $selection) {
                 // Search (no section)
@@ -39,6 +27,19 @@ struct NavigationSidebar: View {
                         .tag(NavigationItem.duplicates)
                 } header: {
                     Text("Index")
+                        .font(.system(size: 11))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(DesignSystem.Colors.secondaryText)
+                }
+
+                // Drives section (dynamic)
+                Section {
+                    ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
+                        NavigationSidebarRow(item: .drive(drive))
+                            .tag(NavigationItem.drive(drive))
+                    }
+                } header: {
+                    Text("Drives")
                         .font(.system(size: 11))
                         .fontWeight(.semibold)
                         .foregroundStyle(DesignSystem.Colors.secondaryText)
@@ -73,13 +74,23 @@ struct NavigationSidebarRow: View {
     let item: NavigationItem
 
     var body: some View {
-        Label {
-            Text(item.title)
-                .font(DesignSystem.Typography.body)
-        } icon: {
-            Image(systemName: item.icon)
-                .font(.system(size: DesignSystem.Sidebar.iconSize, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
+        HStack(spacing: 8) {
+            Label {
+                Text(item.title)
+                    .font(DesignSystem.Typography.body)
+            } icon: {
+                Image(systemName: item.icon)
+                    .font(.system(size: DesignSystem.Sidebar.iconSize, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+            }
+
+            // Show connection status badge for drive items
+            if case .drive(let driveInfo) = item {
+                Spacer()
+                Circle()
+                    .fill(driveInfo.isConnected ? Color.green : Color.gray.opacity(0.5))
+                    .frame(width: 6, height: 6)
+            }
         }
     }
 }
@@ -87,6 +98,6 @@ struct NavigationSidebarRow: View {
 // MARK: - Preview
 
 #Preview {
-    NavigationSidebar(selection: .constant(.drives))
+    NavigationSidebar(selection: .constant(.drives), driveMonitor: DriveMonitor())
         .frame(width: 220)
 }

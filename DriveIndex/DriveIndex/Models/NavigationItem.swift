@@ -9,9 +9,12 @@ import SwiftUI
 
 // MARK: - Navigation Item
 
-enum NavigationItem: String, Identifiable, CaseIterable {
+enum NavigationItem: Identifiable, Hashable {
     // Search section (top)
     case search
+
+    // Drives section
+    case drive(DriveInfo)
 
     // Index section
     case drives
@@ -21,11 +24,21 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     // Settings section (bottom)
     case settings
 
-    var id: String { rawValue }
+    var id: String {
+        switch self {
+        case .search: return "search"
+        case .drive(let driveInfo): return "drive-\(driveInfo.id)"
+        case .drives: return "drives"
+        case .duplicates: return "duplicates"
+        case .indexingTest: return "indexingTest"
+        case .settings: return "settings"
+        }
+    }
 
     var title: String {
         switch self {
         case .search: return "Search"
+        case .drive(let driveInfo): return driveInfo.name
         case .drives: return "Drives"
         case .duplicates: return "Duplicates"
         case .indexingTest: return "Indexing Test"
@@ -36,6 +49,7 @@ enum NavigationItem: String, Identifiable, CaseIterable {
     var icon: String {
         switch self {
         case .search: return "magnifyingglass"
+        case .drive: return "externaldrive"
         case .drives: return "externaldrive"
         case .duplicates: return "doc.on.doc"
         case .indexingTest: return "gearshape.fill"
@@ -47,11 +61,18 @@ enum NavigationItem: String, Identifiable, CaseIterable {
         switch self {
         case .search:
             return .search
+        case .drive:
+            return .drives
         case .drives, .duplicates, .indexingTest:
             return .index
         case .settings:
             return .preferences
         }
+    }
+
+    // Static cases for iteration (excludes dynamic drive items)
+    static var staticCases: [NavigationItem] {
+        [.search, .drives, .duplicates, .indexingTest, .settings]
     }
 }
 
@@ -59,12 +80,14 @@ enum NavigationItem: String, Identifiable, CaseIterable {
 
 enum NavigationSection: CaseIterable, Identifiable {
     case search
+    case drives
     case index
     case preferences
 
     var id: String {
         switch self {
         case .search: return "search"
+        case .drives: return "drives"
         case .index: return "index"
         case .preferences: return "preferences"
         }
@@ -73,12 +96,13 @@ enum NavigationSection: CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .search: return "" // No header for search
+        case .drives: return "Drives"
         case .index: return "Index"
         case .preferences: return "" // No header for settings
         }
     }
 
-    var items: [NavigationItem] {
-        NavigationItem.allCases.filter { $0.section == self }
+    var staticItems: [NavigationItem] {
+        NavigationItem.staticCases.filter { $0.section == self }
     }
 }
