@@ -105,7 +105,7 @@ struct FileBrowserLevel: View {
                 if isLoadingChildren {
                     HStack {
                         ProgressView()
-                            .scaleEffect(0.7)
+                            .controlSize(.small)
                         Text("Loading...")
                             .font(DesignSystem.Typography.caption)
                             .foregroundColor(DesignSystem.Colors.secondaryText)
