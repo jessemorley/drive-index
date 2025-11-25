@@ -284,6 +284,7 @@ actor DatabaseManager {
         try execute("CREATE INDEX IF NOT EXISTS idx_files_drive ON files(drive_uuid)")
         try execute("CREATE INDEX IF NOT EXISTS idx_files_modified ON files(modified_at)")
         try execute("CREATE INDEX IF NOT EXISTS idx_files_name ON files(name)")
+        try execute("CREATE INDEX IF NOT EXISTS idx_files_path_lookup ON files(drive_uuid, relative_path)")
 
         // Drive metadata table
         try execute("""
@@ -705,6 +706,85 @@ actor DatabaseManager {
 
         sqlite3_bind_int(stmt, 1, Int32(limit))
         sqlite3_bind_int(stmt, 2, Int32(offset))
+
+        var results: [FileEntry] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 1))
+            let name = String(cString: sqlite3_column_text(stmt, 2))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 3))
+            let size = sqlite3_column_int64(stmt, 4)
+
+            var createdAt: Date?
+            if sqlite3_column_type(stmt, 5) != SQLITE_NULL {
+                createdAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 5)))
+            }
+
+            var modifiedAt: Date?
+            if sqlite3_column_type(stmt, 6) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 6)))
+            }
+
+            let isDirectory = sqlite3_column_int(stmt, 7) != 0
+
+            results.append(FileEntry(
+                id: id,
+                driveUUID: driveUUID,
+                name: name,
+                relativePath: relativePath,
+                size: size,
+                createdAt: createdAt,
+                modifiedAt: modifiedAt,
+                isDirectory: isDirectory
+            ))
+        }
+
+        return results
+    }
+
+    /// Get immediate children of a directory path (or root if parentPath is empty)
+    /// Returns files and directories ordered by type (directories first) then name
+    func getDirectoryChildren(driveUUID: String, parentPath: String) throws -> [FileEntry] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL: String
+        if parentPath.isEmpty {
+            // Root level: files with no slash in path
+            selectSQL = """
+                SELECT id, drive_uuid, name, relative_path, size, created_at, modified_at, is_directory
+                FROM files
+                WHERE drive_uuid = ?
+                AND relative_path NOT LIKE '%/%'
+                ORDER BY is_directory DESC, name ASC
+            """
+        } else {
+            // Nested level: immediate children only (not grandchildren)
+            selectSQL = """
+                SELECT id, drive_uuid, name, relative_path, size, created_at, modified_at, is_directory
+                FROM files
+                WHERE drive_uuid = ?
+                AND relative_path LIKE ? || '/%'
+                AND relative_path NOT LIKE ? || '/%/%'
+                ORDER BY is_directory DESC, name ASC
+            """
+        }
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, driveUUID, -1, SQLITE_TRANSIENT)
+
+        if !parentPath.isEmpty {
+            sqlite3_bind_text(stmt, 2, parentPath, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, parentPath, -1, SQLITE_TRANSIENT)
+        }
 
         var results: [FileEntry] = []
 

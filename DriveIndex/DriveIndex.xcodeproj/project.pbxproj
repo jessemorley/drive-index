@@ -48,6 +48,9 @@
 		86F76A982ECC2A2000039E10 /* DuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76A972ECC2A2000039E10 /* DuplicatesView.swift */; };
 		87000001 /* SettingsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000011 /* SettingsWindowView.swift */; };
 		87000002 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000012 /* SearchView.swift */; };
+		87000020 /* FileBrowserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000021 /* FileBrowserManager.swift */; };
+		87000022 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000023 /* FileBrowserView.swift */; };
+		87000024 /* FileTreeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000025 /* FileTreeRow.swift */; };
 		87000003 /* SettingsNavigationSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000013 /* SettingsNavigationSidebar.swift */; };
 		87000004 /* SettingsNavigationItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000014 /* SettingsNavigationItem.swift */; };
 		87000006 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000016 /* MainWindow.swift */; };
@@ -103,6 +106,9 @@
 		87000014 /* SettingsNavigationItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsNavigationItem.swift; sourceTree = "<group>"; };
 		87000016 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
 		87000017 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
+		87000021 /* FileBrowserManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserManager.swift; sourceTree = "<group>"; };
+		87000023 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
+		87000025 /* FileTreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,6 +157,7 @@
 		1A100003 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				87000023 /* FileBrowserView.swift */,
 				86F76A972ECC2A2000039E10 /* DuplicatesView.swift */,
 				863AC5242ECBF6F400F215E7 /* DriveDetailView.swift */,
 				86758BD22ECA78F100270DC6 /* TagInputView.swift */,
@@ -176,6 +183,7 @@
 		1A100004 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				87000021 /* FileBrowserManager.swift */,
 				863BF7F62ECE757C0014E923 /* HashWorker.swift */,
 				863168342EC999C3007B6201 /* NavigationItem.swift */,
 				87000014 /* SettingsNavigationItem.swift */,
@@ -216,6 +224,7 @@
 		86B531A92EC04858007DC54C /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				87000025 /* FileTreeRow.swift */,
 				863168322EC999A6007B6201 /* NavigationSidebar.swift */,
 				87000013 /* SettingsNavigationSidebar.swift */,
 				863168302EC96F54007B6201 /* StorageVisualizationView.swift */,
@@ -346,6 +355,9 @@
 				866227B92EC693D300B42819 /* AppDelegate.swift in Sources */,
 				87000001 /* SettingsWindowView.swift in Sources */,
 				87000002 /* SearchView.swift in Sources */,
+				87000020 /* FileBrowserManager.swift in Sources */,
+				87000022 /* FileBrowserView.swift in Sources */,
+				87000024 /* FileTreeRow.swift in Sources */,
 				87000003 /* SettingsNavigationSidebar.swift in Sources */,
 				87000004 /* SettingsNavigationItem.swift in Sources */,
 				87000006 /* MainWindow.swift in Sources */,

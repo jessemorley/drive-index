@@ -24,6 +24,11 @@ struct DriveDetailView: View {
                     storageVisualizationSection
                 }
 
+                // File browser (works for offline drives via database)
+                if drive.fileCount > 0 {
+                    FileBrowserView(drive: drive)
+                }
+
                 // Action buttons section
                 if drive.isConnected {
                     actionButtonsSection
