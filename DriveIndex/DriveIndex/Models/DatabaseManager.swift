@@ -779,11 +779,11 @@ actor DatabaseManager {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, driveUUID, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         if !parentPath.isEmpty {
-            sqlite3_bind_text(stmt, 2, parentPath, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, parentPath, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, (parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, (parentPath as NSString).utf8String, -1, SQLITE_TRANSIENT)
         }
 
         var results: [FileEntry] = []

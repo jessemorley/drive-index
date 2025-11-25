@@ -27,6 +27,7 @@ struct DriveDetailView: View {
                 // File browser (works for offline drives via database)
                 if drive.fileCount > 0 {
                     FileBrowserView(drive: drive)
+                        .id(drive.id)  // Force new view instance for each drive
                 }
 
                 // Action buttons section
