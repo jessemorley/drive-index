@@ -1,20 +1,20 @@
 //
-//  StorageCache.swift
+//  FileBrowserCache.swift
 //  DriveIndex
 //
-//  Created to cache storage analysis results for instant display
+//  Cache for file browser root items to eliminate loading flash when switching drives
 //
 
 import Foundation
 
-/// Thread-safe in-memory cache for storage analysis results
+/// Thread-safe in-memory cache for file browser root items
 @MainActor
-final class StorageCache {
-    static let shared = StorageCache()
+final class FileBrowserCache {
+    static let shared = FileBrowserCache()
 
-    /// Cache entry containing the breakdown and validation metadata
+    /// Cache entry containing root items and validation metadata
     private struct CacheEntry {
-        let breakdown: StorageBreakdown
+        let rootItems: [FileBrowserItem]
         let lastScanDate: Date?
         let cachedAt: Date
     }
@@ -24,12 +24,12 @@ final class StorageCache {
 
     private init() {}
 
-    /// Retrieves cached storage breakdown if valid
+    /// Retrieves cached root items if valid
     /// - Parameters:
     ///   - driveUUID: The UUID of the drive
     ///   - currentScanDate: The current last scan date from the database
-    /// - Returns: Cached StorageBreakdown if valid, nil otherwise
-    func get(driveUUID: String, currentScanDate: Date?) -> StorageBreakdown? {
+    /// - Returns: Cached root items if valid, nil otherwise
+    func get(driveUUID: String, currentScanDate: Date?) -> [FileBrowserItem]? {
         guard let entry = cache[driveUUID] else {
             return nil
         }
@@ -40,17 +40,17 @@ final class StorageCache {
             return nil
         }
 
-        return entry.breakdown
+        return entry.rootItems
     }
 
-    /// Stores a storage breakdown in the cache
+    /// Stores root items in the cache
     /// - Parameters:
     ///   - driveUUID: The UUID of the drive
-    ///   - breakdown: The storage breakdown to cache
+    ///   - rootItems: The root items to cache
     ///   - scanDate: The last scan date for validation
-    func set(driveUUID: String, breakdown: StorageBreakdown, scanDate: Date?) {
+    func set(driveUUID: String, rootItems: [FileBrowserItem], scanDate: Date?) {
         let entry = CacheEntry(
-            breakdown: breakdown,
+            rootItems: rootItems,
             lastScanDate: scanDate,
             cachedAt: Date()
         )

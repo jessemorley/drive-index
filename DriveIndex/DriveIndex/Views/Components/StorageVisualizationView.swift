@@ -14,6 +14,18 @@ struct StorageVisualizationView: View {
     @State private var isLoading = true
     @State private var error: Error?
 
+    init(drive: DriveInfo) {
+        self.drive = drive
+
+        // Populate state synchronously BEFORE first render
+        let cached = StorageCache.shared.get(
+            driveUUID: drive.id,
+            currentScanDate: drive.lastScanDate
+        )
+        _breakdown = State(initialValue: cached)
+        _isLoading = State(initialValue: cached == nil)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.medium) {
             if isLoading {
@@ -43,20 +55,12 @@ struct StorageVisualizationView: View {
     }
 
     private func loadBreakdown() async {
-        // Check cache first
-        let cachedBreakdown = await StorageCache.shared.get(
-            driveUUID: drive.id,
-            currentScanDate: drive.lastScanDate
-        )
-
-        if let cachedBreakdown = cachedBreakdown {
-            // Use cached data - instant display, no loading state
-            breakdown = cachedBreakdown
-            isLoading = false
+        // If we already have breakdown from cache init, don't reload
+        if breakdown != nil {
             return
         }
 
-        // Cache miss - perform analysis
+        // No cache hit during init - perform analysis
         isLoading = true
         error = nil
 
@@ -71,7 +75,7 @@ struct StorageVisualizationView: View {
             breakdown = newBreakdown
 
             // Cache the result for future use
-            await StorageCache.shared.set(
+            StorageCache.shared.set(
                 driveUUID: drive.id,
                 breakdown: newBreakdown,
                 scanDate: drive.lastScanDate

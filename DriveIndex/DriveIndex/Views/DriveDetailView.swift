@@ -131,6 +131,7 @@ struct DriveDetailView: View {
                 .sectionHeader()
 
             StorageVisualizationView(drive: drive)
+                .id(drive.id)
         }
     }
 

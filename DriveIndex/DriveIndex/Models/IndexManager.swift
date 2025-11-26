@@ -158,9 +158,10 @@ class IndexManager: ObservableObject {
                                     }
                                 }
 
-                                // Invalidate storage cache for this drive
-                                Task {
-                                    await StorageCache.shared.invalidate(driveUUID: uuid)
+                                // Invalidate caches for this drive
+                                await MainActor.run {
+                                    StorageCache.shared.invalidate(driveUUID: uuid)
+                                    FileBrowserCache.shared.invalidate(driveUUID: uuid)
                                 }
 
                                 // Start background hash computation

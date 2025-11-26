@@ -10,10 +10,22 @@ import SwiftUI
 struct FileBrowserView: View {
     let drive: DriveInfo
     private let browserManager = FileBrowserManager()
-    @State private var rootItems: [FileBrowserItem] = []
+    @State private var rootItems: [FileBrowserItem]? = nil
     @State private var expandedPaths: Set<String> = []
-    @State private var isLoading = true
+    @State private var isLoading = false
     @State private var error: String?
+
+    init(drive: DriveInfo) {
+        self.drive = drive
+
+        // Populate state synchronously BEFORE first render
+        // No await needed - FileBrowserCache is @MainActor
+        let cached = FileBrowserCache.shared.get(
+            driveUUID: drive.id,
+            currentScanDate: drive.lastScanDate
+        )
+        _rootItems = State(initialValue: cached)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
@@ -29,27 +41,29 @@ struct FileBrowserView: View {
                     .foregroundColor(.red)
                     .font(DesignSystem.Typography.caption)
                     .padding()
-            } else if rootItems.isEmpty {
-                Text("No files found")
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-                    .font(DesignSystem.Typography.body)
-                    .padding()
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(rootItems) { item in
-                            FileBrowserLevel(
-                                item: item,
-                                driveUUID: drive.id,
-                                depth: 0,
-                                expandedPaths: $expandedPaths,
-                                browserManager: browserManager
-                            )
+            } else if let rootItems = rootItems {
+                if rootItems.isEmpty {
+                    Text("No files found")
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                        .font(DesignSystem.Typography.body)
+                        .padding()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(rootItems) { item in
+                                FileBrowserLevel(
+                                    item: item,
+                                    driveUUID: drive.id,
+                                    depth: 0,
+                                    expandedPaths: $expandedPaths,
+                                    browserManager: browserManager
+                                )
+                            }
                         }
                     }
+                    .frame(maxHeight: 400)
+                    .card()
                 }
-                .frame(maxHeight: 400)
-                .card()
             }
         }
         .task {
@@ -58,11 +72,26 @@ struct FileBrowserView: View {
     }
 
     private func loadRootItems() async {
+        // If we already have items from cache init, don't reload
+        if rootItems != nil {
+            return
+        }
+
+        // No cache hit during init - load from database
         isLoading = true
         error = nil
 
         do {
-            rootItems = try await browserManager.getChildren(driveUUID: drive.id, parentPath: "")
+            let items = try await browserManager.getChildren(driveUUID: drive.id, parentPath: "")
+            rootItems = items
+
+            // Cache the result for future use
+            FileBrowserCache.shared.set(
+                driveUUID: drive.id,
+                rootItems: items,
+                scanDate: drive.lastScanDate
+            )
+
             isLoading = false
         } catch {
             self.error = error.localizedDescription
