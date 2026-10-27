@@ -2,8 +2,7 @@
 //  AppDelegate.swift
 //  DriveIndex
 //
-//  Manages the menu bar status item and floating panel lifecycle.
-//  Handles hotkey integration and window dismissal behavior.
+//  Manages the menu bar status item and app windows.
 //
 
 import AppKit
@@ -17,9 +16,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Status bar item (menu bar icon)
     private var statusItem: NSStatusItem?
-
-    /// The floating panel for quick search (Spotlight-like)
-    private var floatingPanel: FloatingPanel?
 
     /// The main application window for browsing drives
     private var mainWindow: MainWindow?
@@ -48,17 +44,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Observe IndexManager state for menubar icon updates
         observeIndexManagerState()
-
-        // Set up global hotkey
-        setupHotkey()
-
-        // Listen for main window open requests from ContentView
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleOpenMainWindow),
-            name: .openMainWindow,
-            object: nil
-        )
 
         // Listen for settings window open requests
         NotificationCenter.default.addObserver(
@@ -257,18 +242,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return compositeImage
     }
 
-    // MARK: - Hotkey Setup
-
-    private func setupHotkey() {
-        // Wire up hotkey manager to toggle floating panel (quick search)
-        HotkeyManager.shared.onHotkeyPressed = { [weak self] in
-            Task { @MainActor in
-                self?.togglePanel()
-            }
-        }
-    }
-
-    // MARK: - Floating Panel Management
+    // MARK: - Status Menu
 
     /// Status item clicked - show menu with options
     @objc private func statusItemClicked() {
@@ -276,7 +250,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         let menu = NSMenu()
 
-        menu.addItem(NSMenuItem(title: "Quick Search", action: #selector(togglePanel), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -284,62 +257,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem?.menu = menu
         button.performClick(nil)
         statusItem?.menu = nil
-    }
-
-    /// Toggle the floating panel visibility
-    @objc func togglePanel() {
-        if let panel = floatingPanel, panel.isVisible {
-            // Panel is visible, hide it
-            closePanel()
-        } else {
-            // Panel is hidden or doesn't exist, show it
-            showPanel()
-        }
-    }
-
-    /// Show the floating panel
-    private func showPanel() {
-        // Create panel if it doesn't exist
-        if floatingPanel == nil {
-            createPanel()
-        }
-
-        guard let panel = floatingPanel else {
-            print("Failed to create floating panel")
-            return
-        }
-
-        // Show the panel
-        panel.show(centerOnFirstShow: true)
-
-        // Post notification that search window appeared (for ContentView reset)
-        NotificationCenter.default.post(name: .searchWindowDidShow, object: nil)
-    }
-
-    /// Hide/close the floating panel
-    private func closePanel() {
-        floatingPanel?.hide()
-    }
-
-    /// Create the floating panel with ContentView
-    private func createPanel() {
-        // Create panel with fixed dimensions (matches current ContentView size)
-        let panelRect = NSRect(x: 0, y: 0, width: 550, height: 474)
-        let panel = FloatingPanel(contentRect: panelRect)
-
-        // Set delegate for window events
-        panel.delegate = self
-        panel.panelDelegate = self
-
-        // Create ContentView with managers
-        let contentView = ContentView()
-            .environmentObject(driveMonitor)
-            .environmentObject(indexManager)
-
-        // Host SwiftUI view in the panel
-        panel.contentView = NSHostingView(rootView: contentView)
-
-        floatingPanel = panel
     }
 
     // MARK: - Main Window Management
@@ -415,22 +332,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
-    /// Called when the window loses key focus (click outside)
-    func windowDidResignKey(_ notification: Notification) {
-        // Close floating panel when user clicks outside
-        if notification.object as? FloatingPanel === floatingPanel {
-            closePanel()
-        }
-    }
-
-    /// Called when window will close
-    func windowWillClose(_ notification: Notification) {
-        // Clean up if needed (kept minimal as windows are reusable)
-        if notification.object as? FloatingPanel === floatingPanel {
-            // Floating panel is closing, no additional cleanup needed
-        }
-    }
-
     /// Allow windows to close normally
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         // All windows can close normally
@@ -438,24 +339,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 }
 
-// MARK: - FloatingPanelDelegate
-
-extension AppDelegate: @MainActor FloatingPanelDelegate {
-    /// Called when ESC key is pressed in the panel
-    func floatingPanelShouldClose(_ panel: FloatingPanel) {
-        closePanel()
-    }
-}
-
 // MARK: - Notification Names
 
 extension Notification.Name {
-    /// Posted when the search window appears (for ContentView to reset state)
-    static let searchWindowDidShow = Notification.Name("searchWindowDidShow")
-
-    /// Posted when ContentView wants to open the main window
-    static let openMainWindow = Notification.Name("openMainWindow")
-
     /// Posted when a view wants to open the settings window
     static let openSettingsWindow = Notification.Name("openSettingsWindow")
 }

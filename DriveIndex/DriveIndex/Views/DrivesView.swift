@@ -420,6 +420,49 @@ struct DriveDetailCard: View {
     }
 }
 
+struct CapacityBar: View {
+    let used: Int64
+    let total: Int64
+    let percentage: Double
+    let isConnected: Bool
+    var height: CGFloat = 8
+
+    private var fillColor: Color {
+        // Use gray for disconnected drives
+        if !isConnected {
+            return .gray
+        }
+
+        if percentage >= 90 {
+            return .red
+        } else if percentage >= 75 {
+            return .orange
+        } else if percentage >= 50 {
+            return .yellow
+        } else {
+            return .green
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Background
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
+
+                // Fill
+                Rectangle()
+                    .fill(fillColor)
+                    .frame(width: geometry.size.width * (percentage / 100))
+                    .cornerRadius(4)
+            }
+        }
+        .frame(height: height)
+    }
+}
+
 // MARK: - Preview
 
 #Preview {

@@ -12,7 +12,6 @@ import SwiftUI
 enum SettingsNavigationItem: String, Identifiable, CaseIterable {
     // Settings section
     case appearance
-    case shortcuts
     case indexing
     case duplicates
     case advanced
@@ -25,7 +24,6 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
     var title: String {
         switch self {
         case .appearance: return "Appearance"
-        case .shortcuts: return "Shortcuts"
         case .indexing: return "Indexing"
         case .duplicates: return "Duplicates"
         case .advanced: return "Advanced"
@@ -36,7 +34,6 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
     var icon: String {
         switch self {
         case .appearance: return "paintbrush"
-        case .shortcuts: return "command"
         case .indexing: return "doc.text"
         case .duplicates: return "doc.on.doc"
         case .advanced: return "gearshape"
@@ -46,7 +43,7 @@ enum SettingsNavigationItem: String, Identifiable, CaseIterable {
 
     var section: SettingsNavigationSection {
         switch self {
-        case .appearance, .shortcuts, .indexing, .duplicates, .advanced:
+        case .appearance, .indexing, .duplicates, .advanced:
             return .settings
         case .raycast:
             return .integrations

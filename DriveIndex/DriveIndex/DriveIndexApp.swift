@@ -13,7 +13,7 @@ struct DriveIndexApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // Empty scene - all UI handled by AppDelegate's floating panel
+        // Empty scene - all UI handled by AppDelegate's windows
         // We need at least one scene for the app to run
         Settings {
             EmptyView()

@@ -67,8 +67,6 @@ struct SettingsWindowView: View {
         switch item {
         case .appearance:
             AppearanceView()
-        case .shortcuts:
-            ShortcutView()
         case .indexing:
             IndexingView()
                 .environmentObject(driveMonitor)
