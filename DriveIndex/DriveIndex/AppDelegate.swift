@@ -33,8 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     // MARK: - Application Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Keep app in regular mode (always show dock icon)
-        NSApp.setActivationPolicy(.regular)
+        // Starts as a menu bar app (LSUIElement); the Dock icon appears while a window is open
 
         // Apply saved theme preference
         applySavedTheme()
@@ -44,11 +43,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Observe IndexManager state for menubar icon updates
         observeIndexManagerState()
+    }
 
-        // Always show main window on launch
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.showMainWindow()
-        }
+    /// Opening the app again (Finder, Spotlight) shows the main window
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showMainWindow() }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -243,6 +243,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
 
         menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsWindow), keyEquivalent: ","))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         
@@ -266,6 +267,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Show and activate the window
+        NSApp.setActivationPolicy(.regular)
         window.show()
     }
 
@@ -282,6 +284,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         // Show and activate the window
+        NSApp.setActivationPolicy(.regular)
         window.show()
     }
 
@@ -339,8 +342,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if window === mainWindow { mainWindow = nil }
         if window === settingsWindow { settingsWindow = nil }
 
-        // Keep caches while another window still uses them
+        // Keep caches and the Dock icon while another window is open
         guard mainWindow == nil, settingsWindow == nil else { return }
+        NSApp.setActivationPolicy(.accessory)
         StorageCache.shared.invalidateAll()
         FileBrowserCache.shared.invalidateAll()
     }
