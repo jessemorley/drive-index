@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 
 struct IndexProgress {
     let filesProcessed: Int
@@ -385,6 +386,10 @@ actor FileIndexer {
         // Get base path for relative paths
         let basePath = driveURL.path
 
+        // Skipped folders are reported from the walk's thread while this loop runs: collect them
+        // under a lock and merge once the walk has finished
+        let skipped = OSAllocatedUnfairLock(initialState: (count: 0, paths: Set<String>()))
+
         // Walk directory tree (with directory caching or FSEvents optimization)
         let fileStream = walkDirectory(
             at: driveURL,
@@ -393,9 +398,9 @@ actor FileIndexer {
             cachedDirectories: existingDirectories,
             existingFiles: existingFiles,
             directoriesFromFSEvents: directoriesFromFSEvents,
-            onDirectorySkipped: { skippedDirectories += 1 },
+            onDirectorySkipped: { skipped.withLock { $0.count += 1 } },
             onFilesMarkedVisited: { paths in
-                visitedPaths.formUnion(paths)
+                skipped.withLock { $0.paths.formUnion(paths) }
             }
         )
 
@@ -461,6 +466,11 @@ actor FileIndexer {
 
         // A cancelled scan's stream ends early with nothing visited: never sweep it
         try Task.checkCancellation()
+
+        // The stream has finished, so the walk has made its last report
+        let skippedState = skipped.withLock { $0 }
+        skippedDirectories = skippedState.count
+        visitedPaths.formUnion(skippedState.paths)
 
         // Mark-and-sweep: find deleted files
         let deletedPaths = Set(existingFiles.keys).subtracting(visitedPaths)
