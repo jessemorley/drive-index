@@ -316,32 +316,26 @@ actor FileIndexer {
             var dirs = Set<String>()
 
             for path in paths {
-                // Convert absolute path to relative path
-                guard path.hasPrefix(basePath) else { continue }
+                // Each FSEvents path is the changed folder itself, e.g. "/Volumes/X/a/b/"
+                guard path == basePath || path.hasPrefix(basePath + "/") else { continue }
 
-                let relativePath = String(path.dropFirst(basePath.count + 1))
+                // Convert to relative folder path; "" = root directory
+                let folderPath = String(path.dropFirst(basePath.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                dirs.insert(folderPath)
 
-                // Extract parent directory path
-                if let lastSlash = relativePath.lastIndex(of: "/") {
-                    let parentPath = String(relativePath[..<lastSlash])
-                    dirs.insert(parentPath)
-
-                    // Add all ancestor paths
-                    var components = parentPath.split(separator: "/")
-                    while !components.isEmpty {
-                        components.removeLast()
-                        if !components.isEmpty {
-                            dirs.insert(components.joined(separator: "/"))
-                        }
+                // Add all ancestor paths so the walk can reach the folder
+                var components = folderPath.split(separator: "/")
+                while !components.isEmpty {
+                    components.removeLast()
+                    if !components.isEmpty {
+                        dirs.insert(components.joined(separator: "/"))
                     }
-                } else {
-                    // File in root directory - need to scan root
-                    dirs.insert("")  // Empty string = root directory
                 }
             }
 
             directoriesFromFSEvents = dirs
-            print("🎯 FSEvents: \(paths.count) changed files → scanning \(dirs.count) directories")
+            print("🎯 FSEvents: \(paths.count) changed folders → scanning \(dirs.count) directories")
         } else {
             directoriesFromFSEvents = nil
             // Show initial progress message during directory change detection
@@ -723,7 +717,9 @@ actor FileIndexer {
                     relativePath = fullPath
                 }
 
-                if !dirsToScan.contains(relativePath) {
+                // Folders not yet in the database (renamed or moved in) are walked fully:
+                // FSEvents only reports their parent
+                if !dirsToScan.contains(relativePath), existingFiles?[relativePath] != nil {
                     // This directory and all its ancestors are unchanged - skip it
                     enumerator.skipDescendants()
                     onDirectorySkipped?()

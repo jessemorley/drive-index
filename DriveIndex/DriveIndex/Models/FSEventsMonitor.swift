@@ -133,7 +133,8 @@ actor FSEventsMonitor {
 
         // Create FSEvents stream
         let pathsToWatch = [driveURL.path] as CFArray
-        let flags = UInt32(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+        // Folder-level events: paths are the changed folders, which is all the delta scan needs
+        let flags = UInt32(kFSEventStreamCreateFlagUseCFTypes)
 
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault,
@@ -389,28 +390,16 @@ private func fsEventsCallback(
     // Extract drive UUID from context
     let driveUUID = info.assumingMemoryBound(to: String.self).pointee
 
-    // Convert paths to Swift array
+    // Each path is a folder whose contents changed (folder-level events carry no item flags)
+    // ponytail: kFSEventStreamEventFlagMustScanSubDirs is treated as a change to that folder only;
+    // its subfolders catch up on the next mount scan. Handle the flag if coalesced events miss changes.
     let paths = unsafeBitCast(eventPaths, to: NSArray.self) as! [String]
 
-    // Filter for relevant events (created, modified, removed, renamed)
-    var relevantPaths: [String] = []
-    for i in 0..<numEvents {
-        let flags = eventFlags[i]
-        let isRelevant = (flags & UInt32(kFSEventStreamEventFlagItemCreated) != 0) ||
-                        (flags & UInt32(kFSEventStreamEventFlagItemModified) != 0) ||
-                        (flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0) ||
-                        (flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0)
-
-        if isRelevant {
-            relevantPaths.append(paths[i])
-        }
-    }
-
-    guard !relevantPaths.isEmpty else { return }
+    guard !paths.isEmpty else { return }
 
     // Forward events to actor (async)
     Task {
-        await FSEventsMonitor.shared.handleEvents(relevantPaths, for: driveUUID)
+        await FSEventsMonitor.shared.handleEvents(paths, for: driveUUID)
     }
 }
 
