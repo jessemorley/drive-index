@@ -311,6 +311,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let windowRect = NSRect(x: 0, y: 0, width: 700, height: 500)
         let window = SettingsWindow(contentRect: windowRect)
 
+        // Set delegate
+        window.delegate = self
+
         // Create SettingsWindowView with managers
         let settingsView = SettingsWindowView()
             .environmentObject(driveMonitor)
@@ -328,5 +331,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         // All windows can close normally
         return true
+    }
+
+    /// Release closed windows (and their SwiftUI view trees) so the app idles light
+    func windowWillClose(_ notification: Notification) {
+        let window = notification.object as? NSWindow
+        if window === mainWindow { mainWindow = nil }
+        if window === settingsWindow { settingsWindow = nil }
+
+        // Keep caches while another window still uses them
+        guard mainWindow == nil, settingsWindow == nil else { return }
+        StorageCache.shared.invalidateAll()
+        FileBrowserCache.shared.invalidateAll()
     }
 }
