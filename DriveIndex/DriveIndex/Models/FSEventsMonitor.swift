@@ -111,9 +111,6 @@ actor FSEventsMonitor {
         }
         print("🔍 Starting FSEvents monitoring for: \(driveURL.path) (UUID: \(driveUUID))")
 
-        // Stop existing monitoring if any
-        stopMonitoringSync(driveUUID: driveUUID)
-
         // Check if drive is excluded
         let isExcluded = try await database.isDriveExcluded(uuid: driveUUID)
         guard !isExcluded else {
@@ -126,13 +123,25 @@ actor FSEventsMonitor {
         guard stat(driveURL.path, &info) == 0 else {
             throw FSEventsError.streamCreationFailed
         }
-        let storeUUID = fseventsStoreUUID(device: info.st_dev)
+        let cursor = try await database.getFSEventsCursor(for: driveUUID)
+        var storeUUID = fseventsStoreUUID(device: info.st_dev)
+
+        // Right after a mount, fseventsd can take a few seconds to open the drive's event store
+        // (seen: 0.9–3.2s). Drives without .fseventsd (e.g. exFAT) have none to wait for. The mount
+        // scan reads its cursor after this returns, so it waits too.
+        let hasEventStore = FileManager.default.fileExists(atPath: driveURL.path + "/.fseventsd")
+        for _ in 0..<33 where storeUUID == nil && hasEventStore {
+            try await Task.sleep(nanoseconds: 300_000_000)
+            storeUUID = fseventsStoreUUID(device: info.st_dev)
+        }
 
         // Replay history only from a cursor saved for this same event store
-        let cursor = try await database.getFSEventsCursor(for: driveUUID)
         let replaying = storeUUID != nil && cursor?.storeUUID == storeUUID
         let sinceWhen = replaying ? cursor!.id : FSEventStreamEventId(kFSEventStreamEventIdSinceNow)
         print(replaying ? "📜 Replaying FSEvents history since \(sinceWhen)" : "📜 No usable FSEvents history")
+
+        // Stop existing monitoring if any (after the last await, so a concurrent start can't leak a stream)
+        stopMonitoringSync(driveUUID: driveUUID)
 
         // Context passed to the callback; released in stopMonitoringSync
         let context = Unmanaged.passRetained(StreamContext(
