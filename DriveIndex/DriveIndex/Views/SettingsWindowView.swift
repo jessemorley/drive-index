@@ -76,8 +76,6 @@ struct SettingsWindowView: View {
         case .advanced:
             AdvancedView()
                 .environmentObject(driveMonitor)
-        case .raycast:
-            RaycastView()
         }
     }
 

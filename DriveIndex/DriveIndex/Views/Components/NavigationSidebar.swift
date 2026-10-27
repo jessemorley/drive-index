@@ -12,58 +12,38 @@ struct NavigationSidebar: View {
     @ObservedObject var driveMonitor: DriveMonitor
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Navigation list (main content)
-            List(selection: $selection) {
-                // Search (no section)
-                NavigationSidebarRow(item: .search)
-                    .tag(NavigationItem.search)
+        List(selection: $selection) {
+            // Search (no section)
+            NavigationSidebarRow(item: .search)
+                .tag(NavigationItem.search)
 
-                // Index section
-                Section {
-                    NavigationSidebarRow(item: .drives)
-                        .tag(NavigationItem.drives)
-                    NavigationSidebarRow(item: .duplicates)
-                        .tag(NavigationItem.duplicates)
-                } header: {
-                    Text("Index")
-                        .font(.system(size: 11))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(DesignSystem.Colors.secondaryText)
-                }
-
-                // Drives section (dynamic)
-                Section {
-                    ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
-                        NavigationSidebarRow(item: .drive(drive))
-                            .tag(NavigationItem.drive(drive))
-                    }
-                } header: {
-                    Text("Drives")
-                        .font(.system(size: 11))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(DesignSystem.Colors.secondaryText)
-                }
+            // Index section
+            Section {
+                NavigationSidebarRow(item: .drives)
+                    .tag(NavigationItem.drives)
+                NavigationSidebarRow(item: .duplicates)
+                    .tag(NavigationItem.duplicates)
+            } header: {
+                Text("Index")
+                    .font(.system(size: 11))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
-            .listStyle(.sidebar)
 
-            // Settings pinned to bottom
-            Divider()
-
-            Button(action: {
-                selection = .settings
-            }) {
-                HStack {
-                    NavigationSidebarRow(item: .settings)
-                    Spacer()
+            // Drives section (dynamic)
+            Section {
+                ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
+                    NavigationSidebarRow(item: .drive(drive))
+                        .tag(NavigationItem.drive(drive))
                 }
-                .contentShape(Rectangle())
+            } header: {
+                Text("Drives")
+                    .font(.system(size: 11))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
-            .buttonStyle(.plain)
-            .background(selection == .settings ? Color.accentColor.opacity(0.15) : Color.clear)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 12)
         }
+        .listStyle(.sidebar)
         .navigationTitle("DriveIndex")
     }
 }

@@ -65,14 +65,6 @@ struct MainWindowView: View {
                 selectedItem = .search
             }
         }
-        .onChange(of: selectedItem) { oldValue, newValue in
-            // Open Settings window when Settings is selected
-            if newValue == .settings {
-                NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
-                // Revert selection back to previous item
-                selectedItem = oldValue ?? .drives
-            }
-        }
     }
 
     @ViewBuilder
@@ -91,13 +83,6 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .duplicates:
             DuplicatesView()
-        case .indexingTest:
-            IndexingView()
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
-        case .settings:
-            // Settings window is opened via notification, this should never be reached
-            EmptyView()
         }
     }
 }

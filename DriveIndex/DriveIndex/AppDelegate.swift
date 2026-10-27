@@ -45,14 +45,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Observe IndexManager state for menubar icon updates
         observeIndexManagerState()
 
-        // Listen for settings window open requests
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(showSettingsWindow),
-            name: .openSettingsWindow,
-            object: nil
-        )
-
         // Always show main window on launch
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.showMainWindow()
@@ -337,11 +329,4 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // All windows can close normally
         return true
     }
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    /// Posted when a view wants to open the settings window
-    static let openSettingsWindow = Notification.Name("openSettingsWindow")
 }
