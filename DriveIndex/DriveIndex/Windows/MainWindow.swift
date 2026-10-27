@@ -62,7 +62,6 @@ class MainWindow: NSWindow {
 
         // Hide toolbar customization button
         toolbar?.isVisible = true
-        toolbar?.showsBaselineSeparator = false
     }
 
     // MARK: - Public Methods
