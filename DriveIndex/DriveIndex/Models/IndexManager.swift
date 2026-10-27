@@ -28,6 +28,10 @@ class IndexManager: ObservableObject {
     private var indexingTask: Task<Void, Never>?
     private var hashingTask: Task<Void, Never>?
 
+    // Drive and kind of the current scan, so an FSEvents request can't narrow a mount scan
+    private var indexingUUID: String?
+    private var indexingIsMountScan = false
+
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
     private let optimizeThreshold = 50
@@ -89,8 +93,17 @@ class IndexManager: ObservableObject {
     }
 
     func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil) async {
+        // FSEvents during a mount scan of the same drive: restart the mount scan, which covers
+        // those changes too (an FSEvents-only scan would miss changes made while unmounted)
+        var changedPaths = changedPaths
+        if changedPaths != nil, isIndexing, indexingUUID == uuid, indexingIsMountScan {
+            changedPaths = nil
+        }
+
         // Cancel existing indexing if any
         indexingTask?.cancel()
+        indexingUUID = uuid
+        indexingIsMountScan = changedPaths == nil
 
         do {
             let values = try url.resourceValues(forKeys: [.volumeNameKey])
@@ -202,6 +215,9 @@ class IndexManager: ObservableObject {
                         self.currentProgress = nil
                         self.showErrorNotification(driveName: driveName, error: error)
                     }
+                } catch is CancellationError {
+                    // Superseded by a newer scan, which now owns the indexing state
+                    print("⏹️ Indexing cancelled for: \(driveName)")
                 } catch {
                     print("Error indexing drive: \(error)")
                     Task { @MainActor in

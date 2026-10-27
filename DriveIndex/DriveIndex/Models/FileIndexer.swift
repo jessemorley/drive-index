@@ -261,6 +261,9 @@ actor FileIndexer {
             try await database.insertBatch(batch)
         }
 
+        // A cancelled scan is partial: leave lastScanDate unset so the next scan is full again
+        try Task.checkCancellation()
+
         // Update drive metadata
         let fileCount = try await database.getFileCount(for: driveUUID)
         try await database.updateLastScanDate(for: driveUUID, date: Date())
@@ -433,6 +436,9 @@ actor FileIndexer {
         if !updateBatch.isEmpty {
             try await database.updateFilesBatch(updateBatch)
         }
+
+        // A cancelled scan's stream ends early with nothing visited: never sweep it
+        try Task.checkCancellation()
 
         // Mark-and-sweep: find deleted files
         let deletedPaths = Set(existingFiles.keys).subtracting(visitedPaths)
