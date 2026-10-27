@@ -304,14 +304,6 @@ actor FileIndexer {
         changedPaths: [String]? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
-        // Fetch existing files from database
-        let existingFiles = try await database.getExistingFiles(driveUUID: driveUUID)
-        print("📊 Delta scan: \(existingFiles.count) existing files in database")
-
-        // Fetch existing directories for incremental scan optimization
-        let existingDirectories = try await database.getExistingDirectories(driveUUID: driveUUID)
-        print("📁 Directory cache: \(existingDirectories.count) directories")
-
         // Build directories to scan from FSEvents paths if available
         let directoriesFromFSEvents: Set<String>?
         if let paths = changedPaths {
@@ -348,6 +340,21 @@ actor FileIndexer {
                 isComplete: false
             ))
         }
+
+        // Fetch existing files from database. For FSEvents scans, only the files directly
+        // inside the folders the walk reads (it always reads the root): those are exactly the
+        // rows it can visit, so anything left unvisited really was deleted.
+        let existingFiles = try await database.getExistingFiles(
+            driveUUID: driveUUID,
+            inFolders: directoriesFromFSEvents.map { $0.union([""]) }
+        )
+        print("📊 Delta scan: \(existingFiles.count) existing files in database")
+
+        // Fetch existing directories for incremental scan optimization (unused when FSEvents names the folders)
+        let existingDirectories = directoriesFromFSEvents == nil
+            ? try await database.getExistingDirectories(driveUUID: driveUUID)
+            : nil
+        print("📁 Directory cache: \(existingDirectories?.count ?? 0) directories")
 
         var filesProcessed = 0
         var insertBatch: [FileEntry] = []

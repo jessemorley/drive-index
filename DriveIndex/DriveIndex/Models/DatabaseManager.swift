@@ -501,7 +501,8 @@ actor DatabaseManager {
 
     /// Get existing files for a drive to support delta indexing
     /// Returns a dictionary mapping relative_path to (id, modified_at)
-    func getExistingFiles(driveUUID: String) throws -> [String: (id: Int64, modifiedAt: Date?)] {
+    /// - Parameter folders: If given, only files directly inside these folders ("" = root)
+    func getExistingFiles(driveUUID: String, inFolders folders: Set<String>? = nil) throws -> [String: (id: Int64, modifiedAt: Date?)] {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -509,26 +510,47 @@ actor DatabaseManager {
             }
         }
 
-        let selectSQL = "SELECT id, relative_path, modified_at FROM files WHERE drive_uuid = ?"
+        // Folder query: index range [folder/, folder0) then drop deeper paths.
+        // A range (not LIKE) stays case-sensitive and ignores % and _ in folder names,
+        // so no extra rows are loaded (delta indexing would delete them as unseen).
+        let selectSQL = folders == nil
+            ? "SELECT id, relative_path, modified_at FROM files WHERE drive_uuid = ?1"
+            : """
+                SELECT id, relative_path, modified_at FROM files
+                WHERE drive_uuid = ?1 AND relative_path >= ?2 AND relative_path < ?3
+                  AND instr(substr(relative_path, length(?2) + 1), '/') = 0
+              """
 
         guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
-
         var results: [String: (id: Int64, modifiedAt: Date?)] = [:]
 
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = sqlite3_column_int64(stmt, 0)
-            let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+        // One pass per folder, or a single pass over the whole drive
+        let passes: [String?] = folders.map { Array($0) } ?? [nil]
+        for folder in passes {
+            sqlite3_reset(stmt)
+            sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-            var modifiedAt: Date?
-            if sqlite3_column_type(stmt, 2) != SQLITE_NULL {
-                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+            if let folder = folder {
+                let prefix = folder.isEmpty ? "" : folder + "/"
+                let upperBound = folder.isEmpty ? "\u{10FFFF}" : folder + "0"  // "0" sorts right after "/"
+                sqlite3_bind_text(stmt, 2, (prefix as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (upperBound as NSString).utf8String, -1, SQLITE_TRANSIENT)
             }
 
-            results[relativePath] = (id: id, modifiedAt: modifiedAt)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+
+                var modifiedAt: Date?
+                if sqlite3_column_type(stmt, 2) != SQLITE_NULL {
+                    modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+                }
+
+                results[relativePath] = (id: id, modifiedAt: modifiedAt)
+            }
         }
 
         return results
@@ -640,6 +662,8 @@ actor DatabaseManager {
     }
 
     /// Delete files by relative paths (for delta indexing when files are removed)
+    /// Also deletes everything under each path, since a scoped delta scan never loads a
+    /// deleted folder's contents (e.g. a folder moved to the Trash only reports its parent)
     func deleteFiles(driveUUID: String, relativePaths: [String]) throws {
         guard !relativePaths.isEmpty else { return }
 
@@ -647,15 +671,21 @@ actor DatabaseManager {
 
         do {
             let deleteSQL = "DELETE FROM files WHERE drive_uuid = ? AND relative_path = ?"
+            let deleteSubtreeSQL = "DELETE FROM files WHERE drive_uuid = ? AND relative_path >= ? AND relative_path < ?"
 
             var stmt: OpaquePointer?
+            var subtreeStmt: OpaquePointer?
             defer {
                 if stmt != nil {
                     sqlite3_finalize(stmt)
                 }
+                if subtreeStmt != nil {
+                    sqlite3_finalize(subtreeStmt)
+                }
             }
 
-            guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
+            guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK,
+                  sqlite3_prepare_v2(db, deleteSubtreeSQL, -1, &subtreeStmt, nil) == SQLITE_OK else {
                 try? execute("ROLLBACK")
                 throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
             }
@@ -664,15 +694,22 @@ actor DatabaseManager {
                 sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_text(stmt, 2, (relativePath as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-                let result = sqlite3_step(stmt)
-                guard result == SQLITE_DONE else {
-                    let errorMsg = String(cString: sqlite3_errmsg(db))
-                    print("❌ SQLite error during delete: \(errorMsg)")
-                    try? execute("ROLLBACK")
-                    throw DatabaseError.executeFailed(errorMsg)
-                }
+                // Range [path/, path0) = everything under path ("0" sorts right after "/")
+                sqlite3_bind_text(subtreeStmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(subtreeStmt, 2, (relativePath + "/" as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(subtreeStmt, 3, (relativePath + "0" as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-                sqlite3_reset(stmt)
+                for s in [stmt, subtreeStmt] {
+                    let result = sqlite3_step(s)
+                    guard result == SQLITE_DONE else {
+                        let errorMsg = String(cString: sqlite3_errmsg(db))
+                        print("❌ SQLite error during delete: \(errorMsg)")
+                        try? execute("ROLLBACK")
+                        throw DatabaseError.executeFailed(errorMsg)
+                    }
+
+                    sqlite3_reset(s)
+                }
             }
 
             try execute("COMMIT")
