@@ -228,6 +228,34 @@ actor DatabaseManager {
         }
     }
 
+    /// Migrate existing drives table to add the FSEvents history cursor (NULL until a scan saves one)
+    private func migrateAddFSEventsColumns() throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(drives)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasLastId = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if String(cString: sqlite3_column_text(stmt, 1)) == "fsevents_last_id" {
+                hasLastId = true
+                break
+            }
+        }
+
+        if !hasLastId {
+            try execute("ALTER TABLE drives ADD COLUMN fsevents_last_id INTEGER")
+            try execute("ALTER TABLE drives ADD COLUMN fsevents_volume_uuid TEXT")
+        }
+    }
+
     private func createSchema() throws {
         // Main files table
         try execute("""
@@ -304,6 +332,9 @@ actor DatabaseManager {
 
         // Migrate files table to add hash columns if they don't exist
         try migrateAddHashColumns()
+
+        // Migrate drives table to add the FSEvents history cursor if it doesn't exist
+        try migrateAddFSEventsColumns()
 
         // Settings table
         try execute("""
@@ -870,10 +901,16 @@ actor DatabaseManager {
             }
         }
 
+        // Update in place rather than INSERT OR REPLACE, so the FSEvents cursor columns survive
         let upsertSQL = """
-            INSERT OR REPLACE INTO drives
+            INSERT INTO drives
             (uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uuid) DO UPDATE SET
+                name = excluded.name, last_seen = excluded.last_seen,
+                total_capacity = excluded.total_capacity, used_capacity = excluded.used_capacity,
+                last_scan_date = excluded.last_scan_date, file_count = excluded.file_count,
+                is_excluded = excluded.is_excluded
         """
 
         guard sqlite3_prepare_v2(db, upsertSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -1022,6 +1059,61 @@ actor DatabaseManager {
 
         sqlite3_bind_int64(stmt, 1, Int64(date.timeIntervalSince1970))
         sqlite3_bind_text(stmt, 2, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    /// FSEvents history cursor: the last event ID a finished scan covered, and the volume's event-store UUID
+    func getFSEventsCursor(for driveUUID: String) throws -> (id: UInt64, storeUUID: String)? {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT fsevents_last_id, fsevents_volume_uuid FROM drives WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW,
+              sqlite3_column_type(stmt, 0) != SQLITE_NULL,
+              sqlite3_column_type(stmt, 1) != SQLITE_NULL else {
+            return nil
+        }
+
+        return (UInt64(bitPattern: sqlite3_column_int64(stmt, 0)), String(cString: sqlite3_column_text(stmt, 1)))
+    }
+
+    /// Save (or clear, with nil) the FSEvents history cursor. Both columns change together.
+    func setFSEventsCursor(for driveUUID: String, _ cursor: (id: UInt64, storeUUID: String)?) throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let updateSQL = "UPDATE drives SET fsevents_last_id = ?, fsevents_volume_uuid = ? WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        if let cursor = cursor {
+            sqlite3_bind_int64(stmt, 1, Int64(bitPattern: cursor.id))
+            sqlite3_bind_text(stmt, 2, (cursor.storeUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 1)
+            sqlite3_bind_null(stmt, 2)
+        }
+        sqlite3_bind_text(stmt, 3, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
