@@ -1066,7 +1066,7 @@ actor DatabaseManager {
     }
 
     /// FSEvents history cursor: the last event ID a finished scan covered, and the volume's event-store UUID
-    func getFSEventsCursor(for driveUUID: String) throws -> (id: UInt64, storeUUID: String)? {
+    func getFSEventsCursor(for driveUUID: String) throws -> FSEventsCursor? {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -1092,7 +1092,7 @@ actor DatabaseManager {
     }
 
     /// Save (or clear, with nil) the FSEvents history cursor. Both columns change together.
-    func setFSEventsCursor(for driveUUID: String, _ cursor: (id: UInt64, storeUUID: String)?) throws {
+    func setFSEventsCursor(for driveUUID: String, _ cursor: FSEventsCursor?) throws {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {

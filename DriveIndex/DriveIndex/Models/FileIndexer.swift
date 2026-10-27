@@ -197,8 +197,13 @@ actor FileIndexer {
         driveURL: URL,
         driveUUID: String,
         changedPaths: [String]? = nil,
+        cursor: FSEventsCursor? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
+        // FSEvents position this scan covers: given for changed folders, now for a whole-drive scan
+        // (events during the scan get replayed next time, which is harmless)
+        let cursor = changedPaths == nil ? fseventsCursorNow(for: driveURL.path) : cursor
+
         // Determine scan type based on whether this drive has been indexed before
         let driveMetadata = try await database.getDriveMetadata(driveUUID)
         let shouldUseDelta = driveMetadata?.lastScanDate != nil
@@ -214,6 +219,16 @@ actor FileIndexer {
         } else {
             print("Starting full index of drive: \(driveURL.path) (first time)")
             try await indexDriveFull(driveURL: driveURL, driveUUID: driveUUID, onProgress: onProgress)
+        }
+
+        // Only a finished scan moves the cursor (both scans throw on cancellation). Without one
+        // (no event store), the next mount runs a full mount scan.
+        if let cursor = cursor {
+            do {
+                try await database.setFSEventsCursor(for: driveUUID, cursor)
+            } catch {
+                print("⚠️ Failed to save FSEvents cursor: \(error)")
+            }
         }
     }
 

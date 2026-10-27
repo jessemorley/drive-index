@@ -204,27 +204,12 @@ class DriveMonitor: ObservableObject {
                 // Show standalone alert asking user if they want to track this drive
                 pendingDrive = (url: volumeURL, uuid: uuid, name: volumeName)
                 showTrackingAlert()
+                await startMonitoringOrScan(url: volumeURL, uuid: uuid, scanIfNoHistory: false)
             } else if !isExcluded {
                 // Automatically index existing non-excluded drives
-                NotificationCenter.default.post(
-                    name: .shouldIndexDrive,
-                    object: nil,
-                    userInfo: ["driveURL": volumeURL, "driveUUID": uuid]
-                )
+                await startMonitoringOrScan(url: volumeURL, uuid: uuid, scanIfNoHistory: true)
             }
             // If excluded, do nothing (no indexing)
-
-            // Start FSEvents monitoring for non-excluded drives
-            if !isExcluded {
-                Task {
-                    do {
-                        try await fsEventsMonitor.startMonitoring(driveURL: volumeURL, driveUUID: uuid)
-                    } catch {
-                        print("⚠️ Failed to start FSEvents monitoring: \(error)")
-                        // Non-fatal: continue without live monitoring
-                    }
-                }
-            }
 
         } catch {
             print("Error handling mounted drive: \(error)")
@@ -376,6 +361,26 @@ class DriveMonitor: ObservableObject {
         }
     }
 
+    /// Start FSEvents monitoring. If it isn't replaying the drive's history since the last scan
+    /// (which then indexes the changed folders itself), run a mount scan when asked.
+    private func startMonitoringOrScan(url: URL, uuid: String, scanIfNoHistory: Bool) async {
+        var replaying = false
+        do {
+            replaying = try await fsEventsMonitor.startMonitoring(driveURL: url, driveUUID: uuid)
+        } catch {
+            print("⚠️ Failed to start FSEvents monitoring: \(error)")
+            // Non-fatal: continue without live monitoring
+        }
+
+        if scanIfNoHistory && !replaying {
+            NotificationCenter.default.post(
+                name: .shouldIndexDrive,
+                object: nil,
+                userInfo: ["driveURL": url, "driveUUID": uuid]
+            )
+        }
+    }
+
     /// Start FSEvents monitoring for all connected non-excluded drives
     /// Should only be called once on app initialization
     private func startFSEventsForConnectedDrives() async {
@@ -403,12 +408,9 @@ class DriveMonitor: ObservableObject {
                     continue
                 }
 
-                // Start monitoring
-                do {
-                    try await fsEventsMonitor.startMonitoring(driveURL: url, driveUUID: uuid)
-                } catch {
-                    print("⚠️ Failed to start FSEvents on init for \(uuid): \(error)")
-                }
+                // Start monitoring; catch up on changes made while the app wasn't running
+                let isIndexed = try await database.getDriveMetadata(uuid)?.lastScanDate != nil
+                await startMonitoringOrScan(url: url, uuid: uuid, scanIfNoHistory: isIndexed)
             } catch {
                 continue
             }

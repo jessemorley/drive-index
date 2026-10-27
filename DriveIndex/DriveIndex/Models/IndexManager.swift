@@ -32,6 +32,7 @@ class IndexManager: ObservableObject {
     // for the same drive can take over its work instead of dropping it
     private var indexingUUID: String?
     private var indexingChangedPaths: Set<String>?
+    private var indexingCursor: FSEventsCursor?
 
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
@@ -84,28 +85,40 @@ class IndexManager: ObservableObject {
                 return
             }
 
-            // Extract changed paths from FSEvents if available
+            // Extract changed paths from FSEvents if available, and the cursor they reach
             let changedPaths = userInfo["changedPaths"] as? [String]
+            var cursor: FSEventsCursor?
+            if let id = userInfo["eventId"] as? UInt64, let storeUUID = userInfo["storeUUID"] as? String {
+                cursor = (id, storeUUID)
+            }
 
             Task {
-                await self.indexDrive(url: driveURL, uuid: driveUUID, changedPaths: changedPaths)
+                await self.indexDrive(url: driveURL, uuid: driveUUID, changedPaths: changedPaths, cursor: cursor)
             }
         }
     }
 
-    func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil) async {
+    func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil, cursor: FSEventsCursor? = nil) async {
         // A scan of the same drive is still running: the new scan covers its folders too, or
         // becomes a mount scan if either is one (an FSEvents-only scan would miss changes made
         // while unmounted). Otherwise the cancelled scan's folders would wait for the next mount.
         var changedPaths = changedPaths.map(Set.init)
+        var cursor = cursor
         if indexingUUID == uuid {
             changedPaths = indexingChangedPaths.flatMap { running in changedPaths?.union(running) }
+            // The union covers both scans' events, so it reaches the later cursor
+            if let running = indexingCursor, running.id > cursor?.id ?? 0 {
+                cursor = running
+            }
         }
+        // A mount scan reads its own cursor when it starts
+        if changedPaths == nil { cursor = nil }
 
         // Cancel existing indexing if any
         indexingTask?.cancel()
         indexingUUID = uuid
         indexingChangedPaths = changedPaths
+        indexingCursor = cursor
 
         do {
             let values = try url.resourceValues(forKeys: [.volumeNameKey])
@@ -130,7 +143,8 @@ class IndexManager: ObservableObject {
                     try await fileIndexer.indexDrive(
                         driveURL: url,
                         driveUUID: uuid,
-                        changedPaths: changedPaths.map(Array.init)
+                        changedPaths: changedPaths.map(Array.init),
+                        cursor: cursor
                     ) { [weak self] progress in
                         Task { @MainActor in
                             self?.currentProgress = progress
