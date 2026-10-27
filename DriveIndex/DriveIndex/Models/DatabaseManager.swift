@@ -146,7 +146,6 @@ actor DatabaseManager {
         // Performance optimizations
         try execute("PRAGMA journal_mode = WAL")
         try execute("PRAGMA synchronous = NORMAL")
-        try execute("PRAGMA cache_size = 10000")
         try execute("PRAGMA temp_store = MEMORY")
     }
 
