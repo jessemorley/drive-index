@@ -78,10 +78,14 @@ struct DuplicatesView: View {
     private func card(_ group: DuplicateGroup) -> some View {
         GroupBox {
             DisclosureGroup(isExpanded: isExpanded(group)) {
-                ForEach(group.files, id: \.id) { file in
-                    Divider()
-                    copyRow(file)
+                // DisclosureGroup adds no gap under the label, so the first divider hits the header
+                VStack {
+                    ForEach(group.files, id: \.id) { file in
+                        Divider()
+                        copyRow(file)
+                    }
                 }
+                .padding(.top, 6)
             } label: {
                 header(group)
                     .contentShape(Rectangle())
