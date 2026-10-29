@@ -249,11 +249,10 @@ struct DriveSummary: View {
                     Text(drive.formattedTotal)
                 }
             } label: {
-                Label {
+                HStack {
                     Text(drive.name)
                         .lineLimit(1)
-                } icon: {
-                    ConnectionDot(isConnected: drive.isConnected)
+                    ConnectionChip(isConnected: drive.isConnected)
                 }
             }
 

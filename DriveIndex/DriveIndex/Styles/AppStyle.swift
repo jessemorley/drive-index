@@ -8,14 +8,18 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Connection status dot: sidebar, drives list, drive header, search results. Sized by the surrounding font.
-struct ConnectionDot: View {
+/// "Connected" / "Disconnected" chip for the drive header and drives list. Sized by the surrounding font.
+/// ponytail: macOS has no status-chip control; capsule tinted with hierarchical system colors
+struct ConnectionChip: View {
     let isConnected: Bool
 
     var body: some View {
-        Image(systemName: "circle.fill")
-            .imageScale(.small)
-            .foregroundStyle(isConnected ? .green : .secondary)
+        Text(isConnected ? "Connected" : "Disconnected")
+            .font(.caption)
+            .foregroundStyle(isConnected ? Color.green : Color.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(isConnected ? Color.green.quaternary : Color.gray.quaternary, in: .capsule)
     }
 }
 

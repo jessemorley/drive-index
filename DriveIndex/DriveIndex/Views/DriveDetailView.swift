@@ -104,13 +104,12 @@ struct DriveDetailView: View {
                 .font(.title)
                 .foregroundStyle(.primary)
 
-            Label {
-                Text("\(drive.formattedTotal) · \(drive.isConnected ? "Connected" : "Disconnected")")
-            } icon: {
-                ConnectionDot(isConnected: drive.isConnected)
+            HStack {
+                Text(drive.formattedTotal)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                ConnectionChip(isConnected: drive.isConnected)
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom)

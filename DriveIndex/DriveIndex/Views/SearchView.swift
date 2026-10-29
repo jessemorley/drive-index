@@ -104,12 +104,9 @@ struct SearchView: View {
             }
             .width(ideal: 120)
             TableColumn("Drive", value: \.driveName) { file in
-                Label {
-                    Text(file.driveName)
-                } icon: {
-                    ConnectionDot(isConnected: file.isConnected)
-                }
-                .foregroundStyle(.secondary)
+                // Offline drives greyed out, as in the sidebar
+                Text(file.driveName)
+                    .foregroundStyle(file.isConnected ? .secondary : .tertiary)
             }
             .width(ideal: 120)
             TableColumn("Date Modified") { file in

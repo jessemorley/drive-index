@@ -48,20 +48,26 @@ struct NavigationSidebarRow: View {
     let item: NavigationItem
 
     var body: some View {
-        HStack(spacing: 8) {
-            Label {
-                Text(item.title)
-            } icon: {
-                Image(systemName: item.icon)
-                    .symbolRenderingMode(.hierarchical)
-            }
-
-            // Show connection status badge for drive items
-            if case .drive(let driveInfo) = item {
-                Spacer()
-                ConnectionDot(isConnected: driveInfo.isConnected)
-            }
+        // Disconnected drives are greyed out; everything else keeps the sidebar default
+        if isDisconnectedDrive {
+            label.foregroundStyle(.secondary)
+        } else {
+            label
         }
+    }
+
+    private var label: some View {
+        Label {
+            Text(item.title)
+        } icon: {
+            Image(systemName: item.icon)
+                .symbolRenderingMode(.hierarchical)
+        }
+    }
+
+    private var isDisconnectedDrive: Bool {
+        if case .drive(let driveInfo) = item { return !driveInfo.isConnected }
+        return false
     }
 }
 
