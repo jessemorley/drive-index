@@ -15,7 +15,10 @@ DriveIndex should look like Finder and System Settings: system controls, fonts a
 These live in `DriveIndex/Styles/AppStyle.swift` because macOS has no equivalent:
 
 - **Storage category colors** (`StorageCategory.color`): Media `.pink`, Other `.orange`, Apps `.blue`, Documents `.purple`, System `.gray`. They carry meaning in the storage bar, and because they're system colors they adapt to light mode, dark mode and Increase Contrast.
-- **Connection status color**: `.green` when connected, `.secondary` when not. The sidebar dot and the drive header use it.
-- **Layout widths**: sidebar 200–250 pt and the main window's minimum size.
+- **Connection status dot** (`ConnectionDot`): `.green` when connected, `.secondary` when not. The sidebar, drives list, drive header and search results use it.
+- **Layout widths**: sidebar 200–250 pt (`SidebarWidth`). The main window's minimum size is set in `MainWindow.swift`.
+- **File icons** (`NSWorkspace.listIcon`): Finder's own icon for each file type, at list size. Use Finder or system icons instead of hand-picked SF Symbols for files and drives.
+
+`AppStyle.swift` also still holds a few old tokens that `DuplicatesView` uses, each marked `ponytail: kept for DuplicatesView until its rewrite`. Don't use them in new code.
 
 Anything else that ends up in `AppStyle.swift` must have a comment explaining why the system version doesn't work.

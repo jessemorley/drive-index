@@ -20,9 +20,9 @@ struct MainWindowView: View {
             // Sidebar
             NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
                 .navigationSplitViewColumnWidth(
-                    min: DesignSystem.Sidebar.minWidth,
-                    ideal: DesignSystem.Sidebar.width,
-                    max: DesignSystem.Sidebar.maxWidth
+                    min: SidebarWidth.min,
+                    ideal: SidebarWidth.ideal,
+                    max: SidebarWidth.max
                 )
         } detail: {
             // Detail view
@@ -31,7 +31,7 @@ struct MainWindowView: View {
                     detailView(for: selectedItem)
                 } else {
                     Text("Select an item from the sidebar")
-                        .secondaryText()
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

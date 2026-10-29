@@ -20,9 +20,9 @@ struct SettingsWindowView: View {
             // Sidebar
             SettingsNavigationSidebar(selection: $selectedItem)
                 .navigationSplitViewColumnWidth(
-                    min: DesignSystem.Sidebar.minWidth,
-                    ideal: DesignSystem.Sidebar.width,
-                    max: DesignSystem.Sidebar.maxWidth
+                    min: SidebarWidth.min,
+                    ideal: SidebarWidth.ideal,
+                    max: SidebarWidth.max
                 )
         } detail: {
             // Detail view
@@ -31,7 +31,7 @@ struct SettingsWindowView: View {
                     detailView(for: selectedItem)
                 } else {
                     Text("Select a settings section from the sidebar")
-                        .secondaryText()
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
