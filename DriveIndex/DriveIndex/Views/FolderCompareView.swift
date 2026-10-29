@@ -136,27 +136,38 @@ struct FolderCompareView: View {
         if inBoth.count == 1 {
             shown.append(inBoth[0])
         } else if !inBoth.isEmpty {
-            shown.append(StripRow(id: "\(inBoth.count) folders", both: inBoth.reduce(0) { $0 + $1.both }))
+            shown.append(StripRow(id: "\(inBoth.count) folders, all in both", both: inBoth.reduce(0) { $0 + $1.both }))
         }
 
         return Section {
-            ForEach(shown) { row in
-                VStack(alignment: .leading) {
-                    LabeledContent(row.id.isEmpty ? "Loose files" : row.id) {
-                        Text([row.onlyA > 0 ? "\(formatted(row.onlyA)) only in \(name(.a))" : nil,
-                              row.onlyB > 0 ? "\(formatted(row.onlyB)) only in \(name(.b))" : nil]
-                            .compactMap { $0 }.joined(separator: ", ").nonEmpty ?? "\(formatted(row.both)) in both")
-                    }
-                    GeometryReader { geometry in
-                        let scale = geometry.size.width / CGFloat(max(row.total, 1))
-                        HStack(spacing: 0) {
-                            Rectangle().fill(.blue).frame(width: CGFloat(row.onlyA) * scale)
-                            Rectangle().fill(.tertiary).frame(width: CGFloat(row.both) * scale)
-                            Rectangle().fill(.orange).frame(width: CGFloat(row.onlyB) * scale)
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow {
+                    Text("Folder")
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    Text("Only in \(name(.a))").gridColumnAlignment(.trailing)
+                    Text("Only in \(name(.b))").gridColumnAlignment(.trailing)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                ForEach(shown) { row in
+                    GridRow {
+                        Text(row.id.isEmpty ? "Loose files" : row.id)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 200, alignment: .leading)
+                        GeometryReader { geometry in
+                            let scale = geometry.size.width / CGFloat(max(row.total, 1))
+                            HStack(spacing: 0) {
+                                Rectangle().fill(.blue).frame(width: CGFloat(row.onlyA) * scale)
+                                Rectangle().fill(.tertiary).frame(width: CGFloat(row.both) * scale)
+                                Rectangle().fill(.orange).frame(width: CGFloat(row.onlyB) * scale)
+                            }
                         }
+                        .frame(height: 6)
+                        .clipShape(Capsule())
+                        Text(row.onlyA > 0 ? formatted(row.onlyA) : "")
+                        Text(row.onlyB > 0 ? formatted(row.onlyB) : "")
                     }
-                    .frame(height: 6)
-                    .clipShape(Capsule())
                 }
             }
         } header: {
@@ -185,14 +196,14 @@ struct FolderCompareView: View {
         if !files.isEmpty {
             let groups = Dictionary(grouping: files) { $0.path.contains("/") ? String($0.path.prefix { $0 != "/" }) : "" }
             let folders = groups.keys.filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            Section("\(title): \(files.count) files, \(formatted(total(files)))") {
+            Section("\(title): ^[\(files.count) file](inflect: true), \(formatted(total(files)))") {
                 ForEach(folders, id: \.self) { folder in
                     let contents = groups[folder]!
                     DisclosureGroup {
                         ForEach(contents, id: \.path) { fileRow($0, label: String($0.path.dropFirst(folder.count + 1)), root: root) }
                     } label: {
                         LabeledContent {
-                            Text("\(contents.count) files, \(formatted(total(contents)))")
+                            Text("^[\(contents.count) file](inflect: true), \(formatted(total(contents)))")
                         } label: {
                             Label {
                                 Text(folder)
@@ -225,7 +236,7 @@ struct FolderCompareView: View {
     @ViewBuilder
     private func changedSection(_ changed: [FolderComparison.Changed]) -> some View {
         if !changed.isEmpty {
-            Section("Changed: \(changed.count) files") {
+            Section("Changed: ^[\(changed.count) file](inflect: true)") {
                 ForEach(changed, id: \.path) { file in
                     LabeledContent {
                         Text(file.newer.map { "Newer in \(name($0))" } ?? "Same date")
@@ -245,7 +256,7 @@ struct FolderCompareView: View {
     @ViewBuilder
     private func movedSection(_ moved: [FolderComparison.Moved]) -> some View {
         if !moved.isEmpty {
-            Section("Moved: \(moved.count) files") {
+            Section("Moved: ^[\(moved.count) file](inflect: true)") {
                 ForEach(moved, id: \.path) { move in
                     let other: FolderComparison.Side = move.side == .a ? .b : .a
                     LabeledContent {
@@ -345,10 +356,6 @@ struct FolderCompareView: View {
             errorMessage = error.localizedDescription
         }
     }
-}
-
-private extension String {
-    var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 #Preview {
