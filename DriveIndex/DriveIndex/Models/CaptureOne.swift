@@ -132,25 +132,25 @@ struct MaskBackupSet: Identifiable {
         return size > 0
     }
 
-    /// Moves the backups to the drive's Trash, checking again first: the live mask must still be
+    /// Deletes the backups for good, checking again first: the live mask must still be
     /// there, and each backup must be a plain file (not a symlink) that maps to this live mask.
     /// The live mask itself is never touched.
-    func moveToTrash(on drive: URL) async -> (trashed: [String], failed: [String]) {
+    func delete(on drive: URL) async -> (deleted: [String], failed: [String]) {
         guard liveMaskExists(on: drive) else { return ([], backupPaths) }
 
-        var trashed: [String] = []
+        var deleted: [String] = []
         var failed: [String] = []
         for path in backupPaths {
             let url = drive.appending(path: path)
             let isFile = (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
             if isFile, Self.livePath(for: path) == livePath,
-               (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil {
-                trashed.append(path)
+               (try? FileManager.default.removeItem(at: url)) != nil {
+                deleted.append(path)
             } else {
                 failed.append(path)
             }
         }
-        return (trashed, failed)
+        return (deleted, failed)
     }
 }
 
@@ -258,15 +258,90 @@ struct OldSettingsFolder: Identifiable {
         return (files, newestSettings ?? folderDate)
     }
 
-    /// Moves the folder to the drive's Trash, after comparing it with its siblings again on disk.
-    func moveToTrash(on drive: URL) async -> Bool {
+    /// Deletes the folder for good, after comparing it with its siblings again on disk.
+    func delete(on drive: URL) async -> Bool {
         let siblings = (try? FileManager.default.contentsOfDirectory(atPath: drive.appending(path: captureOnePath).path)) ?? []
         let paths = siblings.filter { Self.version(of: $0) != nil }.map { "\(captureOnePath)/\($0)" }
         let url = drive.appending(path: path)
         guard Self.check(paths, driveUUID: driveUUID, on: drive).first(where: { $0.path == path })?.status == .safe,
               (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false
         else { return false }
-        // ponytail: Trash flattens names, so ten "Settings1670"s come back as "Settings1670 2"...; stage into one folder (as the cosc script does) if restoring in place matters
-        return (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil
+        return (try? FileManager.default.removeItem(at: url)) != nil
+    }
+}
+
+// MARK: - Session Trash
+
+/// One entry in a Capture One session's own Trash folder ("Session/Trash"): an image deleted in
+/// Capture One, or the "CaptureOne" folder holding those images' settings and previews.
+struct SessionTrashItem: Identifiable {
+    let driveUUID: String
+    /// "Session/Trash/IMG_0490.jpeg"
+    let path: String
+    var isDirectory = false
+    var size: Int64 = 0
+    var status: CleanupStatus = .unverified
+
+    var id: String { "\(driveUUID)/\(path)" }
+    var name: String { String(path.split(separator: "/").last!) }
+    /// The session folder, the one holding "Trash"
+    var sessionFolder: String { path.split(separator: "/").dropLast(2).joined(separator: "/") }
+
+    /// The top-level entry a path falls under, when it's inside the Trash folder of a session in
+    /// `sessionFiles` ("<drive>/<session folder>" keys); nil otherwise.
+    static func entry(driveUUID: String, path: String, sessionFiles: [String: String]) -> String? {
+        let parts = path.split(separator: "/")
+        for index in parts.indices.dropLast() where parts[index] == "Trash" {
+            if sessionFiles["\(driveUUID)/\(parts[..<index].joined(separator: "/"))"] != nil {
+                return parts[...(index + 1)].joined(separator: "/")
+            }
+        }
+        return nil
+    }
+
+    /// The indexed contents of every session's Trash, one item per top-level entry. On connected
+    /// drives sizes are measured on disk: the index skips the ".cos"/".cot"/".cop" files inside.
+    static func load(drives: [DriveInfo], sessionFiles: [String: String]) async throws -> [SessionTrashItem] {
+        var items: [String: SessionTrashItem] = [:]
+        for row in try await DatabaseManager.shared.getTrashContents() {
+            guard let entry = entry(driveUUID: row.driveUUID, path: row.path, sessionFiles: sessionFiles) else { continue }
+            let key = "\(row.driveUUID)/\(entry)"
+            items[key, default: SessionTrashItem(driveUUID: row.driveUUID, path: entry)].size += row.isDirectory ? 0 : row.size
+            if row.path != entry || row.isDirectory { items[key]!.isDirectory = true }
+        }
+
+        let mountPaths = CaptureOne.mountPaths(drives)
+        return items.values.compactMap { item in
+            var item = item
+            if let drive = mountPaths[item.driveUUID] {
+                let url = drive.appending(path: item.path)
+                // Gone from disk but still indexed: the next scan drops it
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                item.status = .safe
+                if item.isDirectory { item.size = diskSize(of: url) }
+            }
+            return item
+        }
+    }
+
+    private static func diskSize(of folder: URL) -> Int64 {
+        var total: Int64 = 0
+        let enumerator = FileManager.default.enumerator(atPath: folder.path)
+        while let relative = enumerator?.nextObject() as? String {
+            total += Int64((try? folder.appending(path: relative).resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
+    }
+
+    /// Deletes the entry for good, checking first that it still sits directly in a
+    /// "Trash" folder next to a session file, and isn't a symlink.
+    func delete(on drive: URL) async -> Bool {
+        let url = drive.appending(path: path)
+        let sessionFolder = drive.appending(path: sessionFolder)
+        let isSession = ((try? FileManager.default.contentsOfDirectory(atPath: sessionFolder.path)) ?? []).contains { $0.hasSuffix(".cosessiondb") }
+        guard path.split(separator: "/").dropLast().last == "Trash", isSession,
+              (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false
+        else { return false }
+        return (try? FileManager.default.removeItem(at: url)) != nil
     }
 }

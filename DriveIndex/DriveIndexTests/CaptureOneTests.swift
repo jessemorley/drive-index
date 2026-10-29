@@ -52,7 +52,7 @@ struct MaskBackupsTests {
 
     // The live mask is never touched, a symlinked backup is left alone, and nothing moves once
     // the live mask is gone
-    @Test func moveToTrashChecksDiskFirst() async throws {
+    @Test func deleteChecksDiskFirst() async throws {
         let drive = try makeDrive()
         defer { try? FileManager.default.removeItem(at: drive) }
         try FileManager.default.createDirectory(at: drive.appending(path: "Shoot/CaptureOne/Settings1670"), withIntermediateDirectories: true)
@@ -63,16 +63,16 @@ struct MaskBackupsTests {
         try FileManager.default.createSymbolicLink(at: drive.appending(path: rel + ".backup_1"), withDestinationURL: drive.appending(path: rel))
 
         let set = MaskBackupSet(driveUUID: "A", livePath: rel, backupPaths: [rel + ".backup", rel + ".backup_1"])
-        let result = await set.moveToTrash(on: drive)
-        #expect(result.trashed == [rel + ".backup"])
+        let result = await set.delete(on: drive)
+        #expect(result.deleted == [rel + ".backup"])
         #expect(result.failed == [rel + ".backup_1"])
         #expect(FileManager.default.fileExists(atPath: drive.appending(path: rel).path))
 
         try FileManager.default.removeItem(at: drive.appending(path: rel))
         try FileManager.default.removeItem(at: drive.appending(path: rel + ".backup_1"))
         try Data("old".utf8).write(to: drive.appending(path: rel + ".backup_1"))
-        let orphaned = await set.moveToTrash(on: drive)
-        #expect(orphaned.trashed.isEmpty)
+        let orphaned = await set.delete(on: drive)
+        #expect(orphaned.deleted.isEmpty)
         #expect(FileManager.default.fileExists(atPath: drive.appending(path: rel + ".backup_1").path))
     }
 
@@ -129,8 +129,8 @@ struct OldSettingsFolderTests {
         #expect(held.orphans == 1)
     }
 
-    // The trash step compares the folders again rather than trusting the list it was given
-    @Test func moveToTrashChecksAgain() async throws {
+    // The delete step compares the folders again rather than trusting the list it was given
+    @Test func deleteChecksAgain() async throws {
         let drive = try makeDrive()
         defer { try? FileManager.default.removeItem(at: drive) }
         let old = Date() - 3600
@@ -139,11 +139,37 @@ struct OldSettingsFolderTests {
         let folder = OldSettingsFolder(driveUUID: "A", path: "S/CaptureOne/Settings1670", status: .safe)
 
         try write(["new.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: old)
-        #expect(await folder.moveToTrash(on: drive) == false)
+        #expect(await folder.delete(on: drive) == false)
 
         try FileManager.default.removeItem(at: drive.appending(path: "S/CaptureOne/Settings1670/new.jpg.cos"))
-        #expect(await folder.moveToTrash(on: drive) == true)
+        #expect(await folder.delete(on: drive) == true)
         #expect(!FileManager.default.fileExists(atPath: drive.appending(path: "S/CaptureOne/Settings1670").path))
         #expect(FileManager.default.fileExists(atPath: drive.appending(path: "S/CaptureOne/Settings1680/a.jpg.cos").path))
+    }
+}
+
+struct SessionTrashTests {
+    // Only the Trash folder directly inside a session counts, and each item is its top-level entry
+    @Test func entriesComeFromSessionTrashOnly() {
+        let sessions = ["A/Jobs/Session": "Jobs/Session/Session.cosessiondb"]
+        #expect(SessionTrashItem.entry(driveUUID: "A", path: "Jobs/Session/Trash/IMG.jpeg", sessionFiles: sessions) == "Jobs/Session/Trash/IMG.jpeg")
+        #expect(SessionTrashItem.entry(driveUUID: "A", path: "Jobs/Session/Trash/CaptureOne/Settings1680/IMG.jpeg.cos", sessionFiles: sessions) == "Jobs/Session/Trash/CaptureOne")
+        #expect(SessionTrashItem.entry(driveUUID: "A", path: "Jobs/Session/Trash", sessionFiles: sessions) == nil)
+        #expect(SessionTrashItem.entry(driveUUID: "A", path: "Jobs/Other/Trash/IMG.jpeg", sessionFiles: sessions) == nil)
+        #expect(SessionTrashItem.entry(driveUUID: "A", path: "Jobs/Session/Capture/Trash/IMG.jpeg", sessionFiles: sessions) == nil)
+        #expect(SessionTrashItem.entry(driveUUID: "B", path: "Jobs/Session/Trash/IMG.jpeg", sessionFiles: sessions) == nil)
+    }
+
+    @Test func deleteNeedsASessionFile() async throws {
+        let drive = try makeDrive()
+        defer { try? FileManager.default.removeItem(at: drive) }
+        try write(["IMG.jpeg"], in: drive.appending(path: "Session/Trash"), modified: Date())
+        let entry = SessionTrashItem(driveUUID: "A", path: "Session/Trash/IMG.jpeg", status: .safe)
+
+        #expect(await entry.delete(on: drive) == false)
+
+        try Data().write(to: drive.appending(path: "Session/Session.cosessiondb"))
+        #expect(await entry.delete(on: drive) == true)
+        #expect(!FileManager.default.fileExists(atPath: drive.appending(path: "Session/Trash/IMG.jpeg").path))
     }
 }

@@ -7,16 +7,18 @@
 
 import SwiftUI
 
-/// One thing to remove: an image's mask backups, or an old Settings folder
+/// One thing to remove: an image's mask backups, an old Settings folder, or an entry in a session's Trash
 struct CleanupRow: Identifiable {
     enum Item {
         case masks(MaskBackupSet)
         case settings(OldSettingsFolder)
+        case trash(SessionTrashItem)
 
         var driveUUID: String {
             switch self {
             case .masks(let set): set.driveUUID
             case .settings(let folder): folder.driveUUID
+            case .trash(let entry): entry.driveUUID
             }
         }
 
@@ -24,6 +26,7 @@ struct CleanupRow: Identifiable {
             switch self {
             case .masks(let set): set.shootPath
             case .settings(let folder): folder.shootPath
+            case .trash(let entry): entry.sessionFolder
             }
         }
     }
@@ -35,18 +38,31 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): "masks:\(set.id)"
         case .settings(let folder): "settings:\(folder.id)"
+        case .trash(let entry): "trash:\(entry.id)"
         }
     }
 
     var tab: CaptureOneTab {
-        if case .settings = item { return .settings }
-        return .masks
+        switch item {
+        case .masks: .masks
+        case .settings: .settings
+        case .trash: .trash
+        }
+    }
+
+    var isFolder: Bool {
+        switch item {
+        case .masks: false
+        case .settings: true
+        case .trash(let entry): entry.isDirectory
+        }
     }
 
     var status: CleanupStatus {
         switch item {
         case .masks(let set): set.status
         case .settings(let folder): folder.status
+        case .trash(let entry): entry.status
         }
     }
 
@@ -54,6 +70,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.imageName
         case .settings(let folder): folder.name
+        case .trash(let entry): entry.name
         }
     }
 
@@ -68,6 +85,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")"
         case .settings(let folder): "Replaced by \(folder.kept.joined(separator: " and "))"
+        case .trash(let entry): entry.name == "CaptureOne" ? "Settings and previews" : ""
         }
     }
 
@@ -75,6 +93,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.size
         case .settings(let folder): folder.size ?? 0
+        case .trash(let entry): entry.size
         }
     }
 
@@ -88,6 +107,7 @@ struct CleanupRow: Identifiable {
         switch (status, item) {
         case (.safe, _): "Safe"
         case (.hold, .masks): "Keep: no live mask"
+        case (.hold, .trash): "Keep"
         case (.hold, .settings(let folder)): folder.orphans == 0 ? "Keep: unreadable" : "\(folder.orphans) unique file\(folder.orphans == 1 ? "" : "s")"
         case (.unverified, _): "Not checked"
         }
@@ -98,6 +118,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.backupPaths
         case .settings(let folder): [folder.path]
+        case .trash(let entry): [entry.path]
         }
     }
 }
@@ -105,6 +126,20 @@ struct CleanupRow: Identifiable {
 enum CaptureOneTab: String, CaseIterable {
     case settings = "Settings"
     case masks = "Mask Backups"
+    case trash = "Trash"
+}
+
+/// One card: a session and its rows on the current tab
+struct SessionGroup: Identifiable {
+    let session: CaptureOneSession
+    let rows: [CleanupRow]
+    let safeSize: Int64
+
+    var id: String { session.id }
+}
+
+private func formatted(_ bytes: Int64) -> String {
+    ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
 }
 
 struct CaptureOneView: View {
@@ -112,31 +147,35 @@ struct CaptureOneView: View {
 
     @AppStorage("captureOne.tab") private var tab: CaptureOneTab = .settings
     @State private var rows: [CleanupRow]?
+    /// `rows` on the current tab grouped into cards, most space to free first. Stored, not
+    /// computed: regrouping on every redraw made the delete animation stutter.
+    @State private var groups: [SessionGroup]?
     @State private var errorMessage: String?
     @State private var expanded: Set<String> = []
-    @State private var pendingTrash: [CleanupRow]?
-    @State private var trashFailures = 0
+    @State private var pendingDelete: [CleanupRow]?
+    @State private var deleteFailures = 0
+    /// Share of each session's deletion done, by bytes, while it runs
+    @State private var deleteProgress: [String: Double] = [:]
+    /// Sessions whose Delete button is showing "Deleted" before the card goes
+    @State private var flashingDeleted: Set<String> = []
+    @State private var isDeleting = false
+    /// Bytes freed so far, per tab, across launches
+    @AppStorage("captureOne.freed.settings") private var freedSettings = 0
+    @AppStorage("captureOne.freed.masks") private var freedMasks = 0
+    @AppStorage("captureOne.freed.trash") private var freedTrash = 0
 
     private var connectedDriveIDs: [String] {
         driveMonitor.drives.filter(\.isConnected).map(\.id)
     }
 
-    /// The current tab's rows, one card per session, most space to free first
-    private var sessions: [(session: CaptureOneSession, rows: [CleanupRow])]? {
-        guard let rows else { return nil }
-        return Dictionary(grouping: rows.filter { $0.tab == tab }, by: \.session)
-            .map { (session: $0.key, rows: $0.value.sorted(by: rowOrder)) }
-            .sorted { safeSize($0.rows) != safeSize($1.rows) ? safeSize($0.rows) > safeSize($1.rows) : $0.session.name.localizedStandardCompare($1.session.name) == .orderedAscending }
-    }
-
     private var safeRows: [CleanupRow] {
-        (sessions ?? []).flatMap(\.rows).filter { $0.status == .safe }
+        (groups ?? []).flatMap { $0.rows.filter { $0.status == .safe } }
     }
 
     var body: some View {
         content
             .navigationTitle("Capture One")
-            .navigationSubtitle(safeRows.isEmpty ? "" : "\(formatted(safeSize(safeRows))) safe to remove")
+            .navigationSubtitle(safeRows.isEmpty ? "" : "\(formatted(Self.safeSize(safeRows))) safe to remove")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "capture-one-toolbar") {
                 ToolbarItem(id: "tab", placement: .principal) {
@@ -146,10 +185,10 @@ struct CaptureOneView: View {
                     .pickerStyle(.segmented)
                     .fixedSize()
                 }
-                ToolbarItem(id: "trash-safe", placement: .automatic) {
-                    Button("Move All Safe to Trash", systemImage: "trash") { pendingTrash = safeRows }
+                ToolbarItem(id: "delete-safe", placement: .automatic) {
+                    Button("Delete All Safe", systemImage: "trash") { pendingDelete = safeRows }
                         .disabled(safeRows.isEmpty)
-                        .help("Move everything marked Safe on this tab to the Trash")
+                        .help("Delete everything marked Safe on this tab")
                 }
                 ToolbarItem(id: "refresh", placement: .automatic) {
                     Button("Refresh", systemImage: "arrow.clockwise") {
@@ -160,16 +199,21 @@ struct CaptureOneView: View {
             }
             // Re-runs when a drive connects or disconnects, so its items get checked
             .task(id: connectedDriveIDs) { await load() }
-            .confirmationDialog(trashTitle, isPresented: isConfirmingTrash, presenting: pendingTrash) { rows in
-                Button("Move to Trash", role: .destructive) {
-                    Task { await trash(rows) }
+            .onChange(of: tab) { regroup() }
+            .confirmationDialog(deleteTitle, isPresented: isConfirmingDelete, presenting: pendingDelete) { rows in
+                Button("Delete", role: .destructive) {
+                    Task { await delete(rows) }
                 }
-            } message: { _ in
-                Text("Everything in them also exists in the newer settings or the live masks. They go to the Trash on their drive and are deleted when you empty it.")
+            } message: { rows in
+                if rows.contains(where: { $0.tab == .trash }) {
+                    Text("These are files you deleted in Capture One, waiting in the session's Trash. They're deleted right away and can't be recovered.")
+                } else {
+                    Text("Everything in them also exists in the newer settings or the live masks. They're deleted right away and can't be recovered.")
+                }
             }
-            .alert("Some Items Weren't Moved", isPresented: Binding { trashFailures > 0 } set: { if !$0 { trashFailures = 0 } }) {
+            .alert("Some Items Weren't Deleted", isPresented: Binding { deleteFailures > 0 } set: { if !$0 { deleteFailures = 0 } }) {
             } message: {
-                Text("\(trashFailures) item\(trashFailures == 1 ? "" : "s") stayed in place: the drive was disconnected, a check just before moving found it was no longer safe, or the Finder couldn't move it.")
+                Text("\(deleteFailures) item\(deleteFailures == 1 ? "" : "s") stayed in place: the drive was disconnected, a check just before deleting found it was no longer safe, or it couldn't be deleted.")
             }
     }
 
@@ -177,32 +221,19 @@ struct CaptureOneView: View {
     private var content: some View {
         if let errorMessage {
             ContentUnavailableView("Couldn't Load Capture One Files", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
-        } else if let sessions, sessions.isEmpty {
-            switch tab {
-            case .settings:
-                ContentUnavailableView("No Old Settings Folders", systemImage: "folder", description: Text("Settings folders left behind when a newer Capture One opened a session will appear here"))
-            case .masks:
-                ContentUnavailableView("No Mask Backups", systemImage: "camera.aperture", description: Text("Capture One mask backups on your indexed drives will appear here"))
-            }
-        } else if let sessions {
-            let loose = sessions.filter { $0.session.file == nil }
+        } else if let groups {
+            // Session Trash on a disconnected drive can't be emptied, so it waits at the bottom
+            let unchecked = { (group: SessionGroup) in tab == .trash && group.rows.allSatisfy { $0.status == .unverified } }
             ScrollView {
                 LazyVStack {
-                    ForEach(sessions.filter { $0.session.file != nil }, id: \.session.id) { session in
-                        card(session.session, rows: session.rows)
+                    SpaceSavedCard(settings: freedSettings, masks: freedMasks, trash: freedTrash)
+                    if groups.isEmpty {
+                        emptyState
+                            .padding(.top, 40)
                     }
-                    if !loose.isEmpty {
-                        Section {
-                            ForEach(loose, id: \.session.id) { session in
-                                card(session.session, rows: session.rows)
-                            }
-                        } header: {
-                            Text("No Session File")
-                                .font(.headline)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.top)
-                        }
-                    }
+                    section("Sessions", groups.filter { $0.session.file != nil && !unchecked($0) })
+                    section("Not Checked", groups.filter { $0.session.file != nil && unchecked($0) })
+                    section("Folders", groups.filter { $0.session.file == nil })
                 }
                 .padding()
             }
@@ -212,112 +243,50 @@ struct CaptureOneView: View {
         }
     }
 
+    @ViewBuilder
+    private var emptyState: some View {
+        switch tab {
+        case .settings:
+            ContentUnavailableView("No Old Settings Folders", systemImage: "folder", description: Text("Settings folders left behind when a newer Capture One opened a session will appear here"))
+        case .masks:
+            ContentUnavailableView("No Mask Backups", systemImage: "camera.aperture", description: Text("Capture One mask backups on your indexed drives will appear here"))
+        case .trash:
+            ContentUnavailableView("Session Trash Is Empty", systemImage: "trash", description: Text("Images you delete in Capture One wait in each session's Trash folder; they'll appear here"))
+        }
+    }
+
     // MARK: - Cards
 
-    private func card(_ session: CaptureOneSession, rows: [CleanupRow]) -> some View {
-        GroupBox {
-            DisclosureGroup(isExpanded: isExpanded(session)) {
-                // DisclosureGroup adds no gap under the label, so the first divider hits the header
-                VStack {
-                    ForEach(rows) { row in
-                        Divider()
-                        itemRow(row)
-                            // ponytail: measured, lines child icons up with the session icon past the chevron; adjust if the disclosure chevron changes
-                            .padding(.leading, 17)
-                    }
-                }
-                .padding(.top, 6)
-            } label: {
-                header(session, rows: rows)
-                    .contentShape(Rectangle())
-                    // macOS only toggles from the chevron; let the whole header do it
-                    .onTapGesture { isExpanded(session).wrappedValue.toggle() }
-                    .padding(.leading, 4)
-            }
-            // GroupBox's inset puts the chevron tight against the card edge
-            .padding(4)
-        }
-    }
-
-    private func isExpanded(_ session: CaptureOneSession) -> Binding<Bool> {
-        Binding {
-            expanded.contains(session.id)
-        } set: { isOn in
-            if isOn { expanded.insert(session.id) } else { expanded.remove(session.id) }
-        }
-    }
-
-    private func header(_ session: CaptureOneSession, rows: [CleanupRow]) -> some View {
-        let drive = driveMonitor.drives.first { $0.id == session.driveUUID }
-        let connected = drive?.isConnected ?? false
-        let safe = rows.filter { $0.status == .safe }
-        return HStack {
-            Label {
-                Text(session.name)
-            } icon: {
-                Image(nsImage: NSWorkspace.shared.listIcon(name: session.file ?? session.name, isDirectory: session.file == nil))
-            }
-            .lineLimit(1)
-            .truncationMode(.middle)
-            if session.file == nil {
-                Button("Show Folder") { showFolder(session) }
-                    .controlSize(.small)
-                    .disabled(!connected)
-                    .help("Show this folder in Finder")
-            } else {
-                Button("Open Session") { openSession(session) }
-                    .controlSize(.small)
-                    .disabled(!connected)
-                    .help("Open this session in Capture One")
-            }
-            Text(drive?.name ?? "Unknown drive")
-                .foregroundStyle(connected ? .secondary : .tertiary)
-            Spacer()
-            if !safe.isEmpty {
-                Button("Delete \(formatted(safeSize(safe)))", systemImage: "trash") { pendingTrash = safe }
-                    .controlSize(.small)
-                    .help("Move this session's safe items to the Trash")
-            } else if !connected {
-                Text("Connect \(drive?.name ?? "the drive") to check")
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Nothing safe to remove")
-                    .foregroundStyle(.secondary)
+    @ViewBuilder
+    private func section(_ title: String, _ groups: [SessionGroup]) -> some View {
+        if !groups.isEmpty {
+            Section {
+                ForEach(groups) { card($0) }
+            } header: {
+                Text(title)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top)
             }
         }
     }
 
-    private func itemRow(_ row: CleanupRow) -> some View {
-        HStack {
-            Label {
-                Text(row.name)
-            } icon: {
-                Image(nsImage: NSWorkspace.shared.listIcon(name: row.name, isDirectory: row.tab == .settings))
-            }
-            .lineLimit(1)
-            .truncationMode(.middle)
-            Text(row.location)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer()
-            Text(row.details)
-                .foregroundStyle(.secondary)
-            Label(row.statusText, systemImage: row.status.symbol)
-                .foregroundStyle(row.status.color)
-            if let size = row.sizeText {
-                Text(size)
-            }
-        }
-        .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) { revealInFinder(row) }
-        .contextMenu {
-            Button("Move to Trash") { pendingTrash = [row] }
-                .disabled(row.status != .safe)
-            Button("Reveal in Finder") { revealInFinder(row) }
-                .disabled(row.status == .unverified)
-        }
+    private func card(_ group: SessionGroup) -> some View {
+        let drive = driveMonitor.drives.first { $0.id == group.session.driveUUID }
+        return SessionCard(
+            group: group,
+            driveName: drive?.name ?? "Unknown drive",
+            connected: drive?.isConnected ?? false,
+            isExpanded: expanded.contains(group.id),
+            progress: deleteProgress[group.id],
+            flashingDeleted: flashingDeleted.contains(group.id),
+            toggle: { if expanded.contains(group.id) { expanded.remove(group.id) } else { expanded.insert(group.id) } },
+            open: { group.session.file == nil ? showFolder(group.session) : openSession(group.session) },
+            showInFinder: { showFolder(group.session) },
+            delete: { pendingDelete = $0 },
+            reveal: { revealInFinder($0) }
+        )
+        .equatable()
     }
 
     // MARK: - Data
@@ -329,63 +298,150 @@ struct CaptureOneView: View {
             async let settings = OldSettingsFolder.load(drives: drives)
             async let sessionFiles = CaptureOne.sessionFiles()
             let (maskSets, folders, files) = try await (masks, settings, sessionFiles)
+            let trashEntries = try await SessionTrashItem.load(drives: drives, sessionFiles: files)
 
             // A safe old Settings folder takes its mask backups with it, so they aren't listed twice
             let leaving = Set(folders.filter { $0.status == .safe }.map(\.id))
             let items = folders.map(CleanupRow.Item.settings)
                 + maskSets.filter { !leaving.contains("\($0.driveUUID)/\($0.settingsPath)") }.map(CleanupRow.Item.masks)
+                + trashEntries.map(CleanupRow.Item.trash)
 
             rows = items.map { item in
                 CleanupRow(item: item, session: CaptureOne.session(driveUUID: item.driveUUID, shootPath: item.shootPath, files: files))
             }
+            // Settings and masks inside a session's Trash go when the Trash is emptied, so they're only on the Trash tab
+            .filter { $0.tab == .trash || !($0.location == "Trash" || $0.location.hasPrefix("Trash/")) }
+            regroup()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    private func regroup() {
+        guard let rows else {
+            groups = nil
+            return
+        }
+        groups = Dictionary(grouping: rows.filter { $0.tab == tab }, by: \.session)
+            .map { SessionGroup(session: $0.key, rows: $0.value.sorted(by: Self.rowOrder), safeSize: Self.safeSize($0.value)) }
+            .sorted { $0.safeSize != $1.safeSize ? $0.safeSize > $1.safeSize : $0.session.name.localizedStandardCompare($1.session.name) == .orderedAscending }
+    }
+
     /// Safe first, then by name
-    private func rowOrder(_ a: CleanupRow, _ b: CleanupRow) -> Bool {
+    private static func rowOrder(_ a: CleanupRow, _ b: CleanupRow) -> Bool {
         if (a.status == .safe) != (b.status == .safe) { return a.status == .safe }
         return "\(a.location)/\(a.name)".localizedStandardCompare("\(b.location)/\(b.name)") == .orderedAscending
     }
 
-    private func safeSize(_ rows: [CleanupRow]) -> Int64 {
+    static func safeSize(_ rows: [CleanupRow]) -> Int64 {
         rows.filter { $0.status == .safe }.reduce(0) { $0 + $1.size }
     }
 
-    // MARK: - Trash
+    // MARK: - Delete
 
-    private var isConfirmingTrash: Binding<Bool> {
-        Binding { pendingTrash != nil } set: { if !$0 { pendingTrash = nil } }
+    private var isConfirmingDelete: Binding<Bool> {
+        Binding { pendingDelete != nil } set: { if !$0 { pendingDelete = nil } }
     }
 
-    private var trashTitle: String {
-        let rows = pendingTrash ?? []
-        return "Move \(rows.count) item\(rows.count == 1 ? "" : "s") (\(formatted(safeSize(rows)))) to the Trash?"
+    private var deleteTitle: String {
+        let rows = pendingDelete ?? []
+        return "Delete \(rows.count) item\(rows.count == 1 ? "" : "s") (\(formatted(Self.safeSize(rows))))?"
     }
 
-    private func trash(_ rows: [CleanupRow]) async {
+    /// Deletes session by session in card order. Each card's button fills as its items go, then
+    /// shows "Deleted"; the cards all leave together once every session is done, so the list
+    /// doesn't shuffle while small sessions finish in quick succession.
+    private func delete(_ rows: [CleanupRow]) async {
+        // One deletion at a time; the buttons stay live rather than greying out
+        guard !isDeleting else { return }
+        isDeleting = true
+
+        let order = (groups ?? []).map(\.id)
+        let bySession = Dictionary(grouping: rows, by: \.session.id)
+        let sessionIDs = bySession.keys.sorted { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+        for id in sessionIDs { deleteProgress[id] = 0 }
+
         var failed = 0
-        for row in rows {
-            guard let driveURL = driveURL(row.item.driveUUID) else {
-                failed += 1
-                continue
+        var deleted: Set<String> = []
+        var finishing: [Task<Void, Never>] = []
+        for id in sessionIDs {
+            let sessionRows = bySession[id]!
+            let total = max(Self.safeSize(sessionRows), 1)
+            var done: Int64 = 0
+            var sessionFailed = false
+            for row in sessionRows {
+                if await deleteRow(row) {
+                    deleted.insert(row.id)
+                    addFreed(row)
+                } else {
+                    failed += 1
+                    sessionFailed = true
+                }
+                done += row.size
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    deleteProgress[id] = Double(done) / Double(total)
+                }
             }
-            var removed: [String] = []
-            switch row.item {
-            case .masks(let set):
-                let result = await set.moveToTrash(on: driveURL)
-                removed = result.trashed
-                if !result.failed.isEmpty { failed += 1 }
-            case .settings(let folder):
-                if await folder.moveToTrash(on: driveURL) { removed = [folder.path] } else { failed += 1 }
+            if !sessionFailed {
+                finishing.append(Task { await showDeleted(id) })
             }
-            // ponytail: drop them from the index now so they don't reappear before FSEvents rescans; if this fails, that rescan catches up
-            try? await DatabaseManager.shared.deleteFiles(driveUUID: row.item.driveUUID, relativePaths: removed)
         }
-        await load()
-        trashFailures = failed
+
+        for task in finishing { await task.value }
+        // Hold the last "Deleted" a moment, then everything that went leaves at once
+        try? await Task.sleep(for: .milliseconds(700))
+        withAnimation(.easeOut(duration: 0.25)) {
+            // Drop what went rather than rescanning every drive
+            self.rows?.removeAll { deleted.contains($0.id) }
+            regroup()
+        } completion: {
+            // Only now: clearing during the fade would flip "Deleted" back to "Delete…"
+            deleteProgress = [:]
+            flashingDeleted = []
+        }
+        isDeleting = false
+        deleteFailures = failed
+    }
+
+    /// Counts a fully deleted row towards its tab's total. Sizes are what was listed: measured on
+    /// disk for Settings folders and session Trash, from the index for mask backups.
+    private func addFreed(_ row: CleanupRow) {
+        let bytes = Int(row.size)
+        switch row.tab {
+        case .settings: freedSettings += bytes
+        case .masks: freedMasks += bytes
+        case .trash: freedTrash += bytes
+        }
+    }
+
+    /// Lets the fill reach the end, then turns the button to "Deleted". Only for sessions where
+    /// every item went; a partial one keeps its fill and stays listed with what's left.
+    private func showDeleted(_ sessionID: String) async {
+        try? await Task.sleep(for: .milliseconds(450))
+        flashingDeleted.insert(sessionID)
+    }
+
+    /// Deletes one row's files after the on-disk checks; true when all of them went
+    private func deleteRow(_ row: CleanupRow) async -> Bool {
+        guard let driveURL = driveURL(row.item.driveUUID) else { return false }
+        var removed: [String] = []
+        var complete = false
+        switch row.item {
+        case .masks(let set):
+            let result = await set.delete(on: driveURL)
+            removed = result.deleted
+            complete = result.failed.isEmpty
+        case .settings(let folder):
+            complete = await folder.delete(on: driveURL)
+            if complete { removed = [folder.path] }
+        case .trash(let entry):
+            complete = await entry.delete(on: driveURL)
+            if complete { removed = [entry.path] }
+        }
+        // ponytail: drop them from the index now so they don't reappear before FSEvents rescans; if this fails, that rescan catches up
+        try? await DatabaseManager.shared.deleteFiles(driveUUID: row.item.driveUUID, relativePaths: removed)
+        return complete
     }
 
     // MARK: - Actions
@@ -417,9 +473,206 @@ struct CaptureOneView: View {
         }
         NSWorkspace.shared.activateFileViewerSelecting([driveURL.appendingPathComponent(session.folder)])
     }
+}
 
-    private func formatted(_ bytes: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+/// A session's card. Equatable on what it shows (not its actions), so while one session is
+/// being deleted only that card redraws.
+private struct SessionCard: View, Equatable {
+    let group: SessionGroup
+    let driveName: String
+    let connected: Bool
+    let isExpanded: Bool
+    let progress: Double?
+    let flashingDeleted: Bool
+    let toggle: () -> Void
+    let open: () -> Void
+    let showInFinder: () -> Void
+    let delete: ([CleanupRow]) -> Void
+    let reveal: (CleanupRow) -> Void
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.group.id == b.group.id && a.group.rows.map(\.id) == b.group.rows.map(\.id)
+            && a.group.rows.map(\.status) == b.group.rows.map(\.status) && a.group.safeSize == b.group.safeSize
+            && a.driveName == b.driveName && a.connected == b.connected
+            && a.isExpanded == b.isExpanded && a.progress == b.progress && a.flashingDeleted == b.flashingDeleted
+    }
+
+    var body: some View {
+        GroupBox {
+            DisclosureGroup(isExpanded: Binding { isExpanded } set: { _ in toggle() }) {
+                // DisclosureGroup adds no gap under the label, so the first divider hits the header
+                VStack {
+                    ForEach(group.rows) { row in
+                        Divider()
+                        itemRow(row)
+                            // ponytail: measured, lines child icons up with the session icon past the chevron; adjust if the disclosure chevron changes
+                            .padding(.leading, 17)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                header
+                    .contentShape(Rectangle())
+                    // macOS only toggles from the chevron; let the whole header do it
+                    .onTapGesture { toggle() }
+                    .contextMenu { headerMenu }
+                    .padding(.leading, 4)
+            }
+            // GroupBox's inset puts the chevron tight against the card edge
+            .padding(4)
+        }
+    }
+
+    private var header: some View {
+        let session = group.session
+        let safe = group.rows.filter { $0.status == .safe }
+        return HStack {
+            Label {
+                Text(session.name)
+            } icon: {
+                Image(nsImage: NSWorkspace.shared.listIcon(name: session.file ?? session.name, isDirectory: session.file == nil))
+            }
+            .lineLimit(1)
+            .truncationMode(.middle)
+            Button(session.file == nil ? "Show Folder" : "Open Session", action: open)
+                .controlSize(.small)
+                .disabled(!connected)
+                .help(session.file == nil ? "Show this folder in Finder" : "Open this session in Capture One")
+            Text(driveName)
+                .foregroundStyle(connected ? .secondary : .tertiary)
+            Spacer()
+            if !safe.isEmpty {
+                let title = "Delete \(formatted(group.safeSize))"
+                Button(title, systemImage: "trash") { delete(safe) }
+                    .controlSize(.small)
+                    .buttonBorderShape(.capsule)
+                    .overlay {
+                        if flashingDeleted {
+                            DeleteProgressFill(title: "Deleted", systemImage: "checkmark", progress: 1)
+                        } else {
+                            DeleteProgressFill(title: title, systemImage: "trash", progress: progress)
+                        }
+                    }
+                    .help("Delete this session's safe items")
+            } else if !connected {
+                Text("Connect \(driveName) to check")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Nothing safe to remove")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var headerMenu: some View {
+        let safe = group.rows.filter { $0.status == .safe }
+        if group.session.file != nil {
+            Button("Open Session", action: open)
+                .disabled(!connected)
+        }
+        Button("Show in Finder", action: showInFinder)
+            .disabled(!connected)
+        Divider()
+        Button("Delete Safe Items") { delete(safe) }
+            .disabled(safe.isEmpty)
+    }
+
+    private func itemRow(_ row: CleanupRow) -> some View {
+        HStack {
+            Label {
+                Text(row.name)
+            } icon: {
+                Image(nsImage: NSWorkspace.shared.listIcon(name: row.name, isDirectory: row.isFolder))
+            }
+            .lineLimit(1)
+            .truncationMode(.middle)
+            Text(row.location)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Text(row.details)
+                .foregroundStyle(.secondary)
+            // Everything in a session's Trash was deleted in Capture One; a status would only repeat that
+            if row.tab != .trash {
+                Label(row.statusText, systemImage: row.status.symbol)
+                    .foregroundStyle(row.status.color)
+            }
+            if let size = row.sizeText {
+                Text(size)
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { reveal(row) }
+        .contextMenu {
+            Button("Delete") { delete([row]) }
+                .disabled(row.status != .safe)
+            Button("Reveal in Finder") { reveal(row) }
+                .disabled(row.status == .unverified)
+        }
+    }
+}
+
+/// Space freed by deleting from each tab, kept across launches; the same card tops every tab
+private struct SpaceSavedCard: View {
+    let settings: Int
+    let masks: Int
+    let trash: Int
+
+    var body: some View {
+        GroupBox {
+            HStack(spacing: 32) {
+                stat("Space Saved", settings + masks + trash)
+                Divider()
+                stat("Settings", settings)
+                stat(CaptureOneTab.masks.rawValue, masks)
+                stat(CaptureOneTab.trash.rawValue, trash)
+                Spacer()
+            }
+            // A vertical Divider takes all the height it's offered; keep the card to its content
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(8)
+        }
+        .padding(.bottom, 12)
+    }
+
+    private func stat(_ label: String, _ bytes: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Text(formatted(Int64(bytes)))
+                .font(.title2)
+                .contentTransition(.numericText())
+        }
+    }
+}
+
+/// Red fill sweeping across a Delete button while its session is deleted. The button's own
+/// label is repeated in white over the red so it stays legible; nothing in macOS draws a
+/// progress fill inside a button.
+private struct DeleteProgressFill: View {
+    let title: String
+    let systemImage: String
+    let progress: Double?
+
+    var body: some View {
+        if let progress {
+            GeometryReader { geometry in
+                ZStack {
+                    Color.red
+                    Label(title, systemImage: systemImage)
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                }
+                .mask(alignment: .leading) {
+                    Rectangle().frame(width: geometry.size.width * progress)
+                }
+            }
+            .clipShape(.capsule)
+            .allowsHitTesting(false)
+        }
     }
 }
 
@@ -445,4 +698,10 @@ extension CleanupStatus {
     CaptureOneView()
         .environmentObject(DriveMonitor())
         .frame(width: 900, height: 700)
+}
+
+#Preview("Space saved") {
+    SpaceSavedCard(settings: 63_078_400, masks: 1_642_137_000, trash: 2_830_000_000)
+        .padding()
+        .frame(width: 800)
 }

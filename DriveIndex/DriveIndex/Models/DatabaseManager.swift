@@ -1701,6 +1701,38 @@ actor DatabaseManager {
         return results
     }
 
+    /// Everything under a folder named like "Trash". Callers keep only Capture One session Trash folders.
+    func getTrashContents() throws -> [(driveUUID: String, path: String, size: Int64, isDirectory: Bool)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT drive_uuid, relative_path, size, is_directory
+            FROM files
+            WHERE relative_path GLOB '*Trash/*'
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var results: [(String, String, Int64, Bool)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 0))
+            let path = String(cString: sqlite3_column_text(stmt, 1))
+            let size = sqlite3_column_int64(stmt, 2)
+            let isDirectory = sqlite3_column_int(stmt, 3) != 0
+            results.append((driveUUID, path, size, isDirectory))
+        }
+
+        return results
+    }
+
     /// Capture One session files ("<name>.cosessiondb")
     func getSessionFiles() throws -> [(driveUUID: String, path: String)] {
         var stmt: OpaquePointer?
