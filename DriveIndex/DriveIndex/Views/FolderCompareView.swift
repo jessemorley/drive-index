@@ -311,29 +311,16 @@ struct FolderCompareView: View {
         }
     }
 
-    /// Changed files exist on both sides, so they span both columns
+    /// Changed files exist on both sides, so they span both columns: counted by which side is newer
     @ViewBuilder
     private func changedList(_ changed: [FolderComparison.Changed]) -> some View {
         if !changed.isEmpty {
-            card("Changed: ^[\(changed.count) file](inflect: true)", changed, id: \.path) { file in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(file.path)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text("\(formatted(file.sizeA)) in \(name(.a)), \(formatted(file.sizeB)) in \(name(.b))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(file.newer.map { "Newer in \(name($0))" } ?? "Same date")
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-                .contextMenu {
-                    Button("Reveal in Finder") { reveal(urls.map { [$0.0.appending(path: file.path), $0.1.appending(path: file.path)] }) }
-                        .disabled(urls == nil)
-                }
+            let lines = [FolderComparison.Side.a, .b].compactMap { side -> (String, Int)? in
+                let n = changed.filter { $0.newer == side }.count
+                return n > 0 ? ("newer on \(driveName(side))", n) : nil
+            } + [("with the same date on both", changed.filter { $0.newer == nil }.count)].filter { $0.1 > 0 }
+            card("Changed: ^[\(changed.count) file](inflect: true)", lines, id: \.0) { line in
+                Text("^[\(line.1) file](inflect: true) \(line.0)")
             }
         }
     }
@@ -341,30 +328,8 @@ struct FolderCompareView: View {
     @ViewBuilder
     private func movedList(_ moved: [FolderComparison.Moved]) -> some View {
         if !moved.isEmpty {
-            card("Moved: ^[\(moved.count) file](inflect: true)", moved, id: \.path) { move in
-                let other: FolderComparison.Side = move.side == .a ? .b : .a
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(move.path)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text("At \(move.otherPath) in \(name(other))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Spacer()
-                    Text(formatted(move.size))
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-                .contextMenu {
-                    Button("Reveal in Finder") {
-                        reveal(urls.map { [(move.side == .a ? $0.0 : $0.1).appending(path: move.path)] })
-                    }
-                    .disabled(urls == nil)
-                }
+            card("Moved", [moved.count], id: \.description) { count in
+                Text("^[\(count) file](inflect: true) in both, at different paths")
             }
         }
     }
