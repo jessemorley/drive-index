@@ -697,6 +697,7 @@ private struct SessionCard: View, Equatable {
                 // Green while the live mask is there, orange when it's missing
                 StatusChip(title: "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")",
                            color: row.status == .safe ? .green : row.status == .hold ? .orange : nil)
+                    .help(row.status == .hold ? "Original mask file missing" : "")
             } else {
                 Text(row.location)
                     .foregroundStyle(.secondary)
