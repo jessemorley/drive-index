@@ -25,9 +25,12 @@ struct DriveMetadata {
     let lastSeen: Date
     let totalCapacity: Int64
     let usedCapacity: Int64
+    /// Last scan that changed the index ("last updated"); the caches are keyed on it
     let lastScanDate: Date?
     let fileCount: Int
     let isExcluded: Bool
+    /// Last completed scan, changes or not ("last scanned")
+    var lastCheckedDate: Date? = nil
 }
 
 struct DuplicateGroup: Identifiable {
@@ -56,7 +59,13 @@ actor DatabaseManager {
     private let dbPath: String
     private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    private init() {
+    /// - Parameter path: a database file other than the app's (tests)
+    init(path: String? = nil) {
+        if let path = path {
+            dbPath = path
+            return
+        }
+
         // Store database in Application Support directory
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
@@ -256,6 +265,33 @@ actor DatabaseManager {
         }
     }
 
+    /// Migrate existing drives table to add the last completed scan date (NULL until a scan finishes)
+    private func migrateAddLastCheckedColumn() throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(drives)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasColumn = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if String(cString: sqlite3_column_text(stmt, 1)) == "last_checked_date" {
+                hasColumn = true
+                break
+            }
+        }
+
+        if !hasColumn {
+            try execute("ALTER TABLE drives ADD COLUMN last_checked_date INTEGER")
+        }
+    }
+
     private func createSchema() throws {
         // Main files table
         try execute("""
@@ -335,6 +371,9 @@ actor DatabaseManager {
 
         // Migrate drives table to add the FSEvents history cursor if it doesn't exist
         try migrateAddFSEventsColumns()
+
+        // Migrate drives table to add the last completed scan date if it doesn't exist
+        try migrateAddLastCheckedColumn()
 
         // Settings table
         try execute("""
@@ -953,7 +992,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded, last_checked_date
             FROM drives WHERE uuid = ?
         """
 
@@ -981,6 +1020,11 @@ actor DatabaseManager {
         let fileCount = Int(sqlite3_column_int(stmt, 6))
         let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
+        var lastCheckedDate: Date?
+        if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+            lastCheckedDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 8)))
+        }
+
         return DriveMetadata(
             uuid: uuidStr,
             name: name,
@@ -989,7 +1033,8 @@ actor DatabaseManager {
             usedCapacity: usedCapacity,
             lastScanDate: lastScanDate,
             fileCount: fileCount,
-            isExcluded: isExcluded
+            isExcluded: isExcluded,
+            lastCheckedDate: lastCheckedDate
         )
     }
 
@@ -1002,7 +1047,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded, last_checked_date
             FROM drives
             ORDER BY last_seen DESC
         """
@@ -1028,6 +1073,11 @@ actor DatabaseManager {
             let fileCount = Int(sqlite3_column_int(stmt, 6))
             let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
+            var lastCheckedDate: Date?
+            if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+                lastCheckedDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 8)))
+            }
+
             results.append(DriveMetadata(
                 uuid: uuid,
                 name: name,
@@ -1036,7 +1086,8 @@ actor DatabaseManager {
                 usedCapacity: usedCapacity,
                 lastScanDate: lastScanDate,
                 fileCount: fileCount,
-                isExcluded: isExcluded
+                isExcluded: isExcluded,
+                lastCheckedDate: lastCheckedDate
             ))
         }
 
@@ -1051,7 +1102,29 @@ actor DatabaseManager {
             }
         }
 
-        let updateSQL = "UPDATE drives SET last_scan_date = ? WHERE uuid = ?"
+        let updateSQL = "UPDATE drives SET last_scan_date = ?1, last_checked_date = ?1 WHERE uuid = ?2"
+
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, Int64(date.timeIntervalSince1970))
+        sqlite3_bind_text(stmt, 2, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    func updateLastCheckedDate(for driveUUID: String, date: Date) throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let updateSQL = "UPDATE drives SET last_checked_date = ? WHERE uuid = ?"
 
         guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))

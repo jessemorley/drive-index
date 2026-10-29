@@ -20,6 +20,7 @@ struct DriveInfo: Identifiable, Equatable, Hashable {
     let lastScanDate: Date?
     let fileCount: Int
     let isExcluded: Bool
+    var lastCheckedDate: Date? = nil
 
     var usedCapacity: Int64 {
         totalCapacity - availableCapacity
@@ -42,14 +43,15 @@ struct DriveInfo: Identifiable, Equatable, Hashable {
         ByteCountFormatter.string(fromByteCount: usedCapacity, countStyle: .file)
     }
 
+    /// Last completed scan; drives not scanned since the column was added fall back to the last update
     var formattedLastScan: String {
-        guard let lastScanDate = lastScanDate else {
+        guard let date = lastCheckedDate ?? lastScanDate else {
             return "Never"
         }
 
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return "Scanned " + formatter.localizedString(for: lastScanDate, relativeTo: Date())
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     var isIndexed: Bool {
@@ -311,7 +313,8 @@ class DriveMonitor: ObservableObject {
                         lastSeen: Date(),
                         lastScanDate: metadata?.lastScanDate,
                         fileCount: metadata?.fileCount ?? 0,
-                        isExcluded: metadata?.isExcluded ?? false
+                        isExcluded: metadata?.isExcluded ?? false,
+                        lastCheckedDate: metadata?.lastCheckedDate
                     )
 
                     updatedDrives.append(driveInfo)
@@ -336,7 +339,8 @@ class DriveMonitor: ObservableObject {
                         lastSeen: dbDrive.lastSeen,
                         lastScanDate: dbDrive.lastScanDate,
                         fileCount: dbDrive.fileCount,
-                        isExcluded: dbDrive.isExcluded
+                        isExcluded: dbDrive.isExcluded,
+                        lastCheckedDate: dbDrive.lastCheckedDate
                     )
 
                     updatedDrives.append(driveInfo)
