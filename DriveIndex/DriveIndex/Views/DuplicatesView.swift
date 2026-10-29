@@ -177,12 +177,19 @@ struct DuplicatesView: View {
                 Text(modifiedAt, format: .dateTime.day().month().year())
                     .foregroundStyle(.secondary)
             }
+            Button("Move to Trash", systemImage: "trash") { moveToTrash(file) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .disabled(!connected)
+                .help("Move this copy to the Trash")
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { revealInFinder(file) }
         .contextMenu {
             Button("Reveal in Finder") { revealInFinder(file) }
+                .disabled(!connected)
+            Button("Move to Trash") { moveToTrash(file) }
                 .disabled(!connected)
         }
     }
@@ -223,6 +230,29 @@ struct DuplicatesView: View {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([driveURL.appendingPathComponent(file.relativePath)])
+    }
+
+    /// Trashes one copy, then drops it (and anything inside it) from the index and the cards
+    private func moveToTrash(_ file: DuplicateFile) {
+        guard let drive = driveMonitor.drives.first(where: { $0.id == file.driveUUID }),
+              let driveURL = driveMonitor.getDriveURL(for: drive),
+              (try? FileManager.default.trashItem(at: driveURL.appendingPathComponent(file.relativePath), resultingItemURL: nil)) != nil else {
+            NSSound.beep()
+            return
+        }
+        // ponytail: drop it from the index now so it doesn't reappear before FSEvents rescans; if this fails, that rescan catches up
+        Task { try? await DatabaseManager.shared.deleteFiles(driveUUID: file.driveUUID, relativePaths: [file.relativePath]) }
+
+        func isGone(_ copy: DuplicateFile) -> Bool {
+            copy.driveUUID == file.driveUUID
+                && (copy.relativePath == file.relativePath || copy.relativePath.hasPrefix(file.relativePath + "/"))
+        }
+        withAnimation {
+            groups = groups.compactMap { group in
+                let files = group.files.filter { !isGone($0) }
+                return files.count > 1 ? DuplicateGroup(name: group.name, size: group.size, count: files.count, files: files) : nil
+            }
+        }
     }
 }
 
