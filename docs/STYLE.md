@@ -19,6 +19,4 @@ These live in `DriveIndex/Styles/AppStyle.swift` because macOS has no equivalent
 - **Layout widths**: sidebar 200–250 pt (`SidebarWidth`). The main window's minimum size is set in `MainWindow.swift`.
 - **File icons** (`NSWorkspace.listIcon`): Finder's own icon for each file type, at list size. Use Finder or system icons instead of hand-picked SF Symbols for files and drives.
 
-`AppStyle.swift` also still holds a few old tokens that `DuplicatesView` uses, each marked `ponytail: kept for DuplicatesView until its rewrite`. Don't use them in new code.
-
 Anything else that ends up in `AppStyle.swift` must have a comment explaining why the system version doesn't work.
