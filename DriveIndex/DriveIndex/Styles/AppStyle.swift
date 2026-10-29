@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
-extension DriveInfo {
-    /// Sidebar dot and drive header status.
-    var connectionStatusColor: Color { isConnected ? .green : .secondary }
+extension Color {
+    /// Connection status dot: sidebar, drive header, search results.
+    static func connectionStatus(_ isConnected: Bool) -> Color { isConnected ? .green : .secondary }
 }
 
 extension StorageCategory {
@@ -22,5 +23,16 @@ extension StorageCategory {
         case .system: return .gray
         case .other: return .orange
         }
+    }
+}
+
+extension NSWorkspace {
+    /// Finder's icon for a file, by type rather than path so it works for offline drives.
+    /// ponytail: looked up per row render; cache by extension if long tables stutter
+    func listIcon(name: String, isDirectory: Bool) -> NSImage {
+        let type = isDirectory ? UTType.folder : UTType(filenameExtension: (name as NSString).pathExtension) ?? .data
+        let image = icon(for: type)
+        image.size = NSSize(width: 16, height: 16)  // Finder list-view icon size
+        return image
     }
 }

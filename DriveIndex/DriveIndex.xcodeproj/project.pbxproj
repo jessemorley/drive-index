@@ -42,7 +42,6 @@
 		87000007 /* MainWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000017 /* MainWindowView.swift */; };
 		87000020 /* FileBrowserManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000021 /* FileBrowserManager.swift */; };
 		87000022 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000023 /* FileBrowserView.swift */; };
-		87000024 /* FileTreeRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000025 /* FileTreeRow.swift */; };
 		870000A0B0C0D0E0F0A1B2C3 /* FileRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870000A0B0C0D0E0F0A1B2C4 /* FileRow.swift */; };
 		87FB00012ED0000000000001 /* FileBrowserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87FB00002ED0000000000001 /* FileBrowserCache.swift */; };
 /* End PBXBuildFile section */
@@ -96,7 +95,6 @@
 		87000017 /* MainWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowView.swift; sourceTree = "<group>"; };
 		87000021 /* FileBrowserManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserManager.swift; sourceTree = "<group>"; };
 		87000023 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
-		87000025 /* FileTreeRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTreeRow.swift; sourceTree = "<group>"; };
 		870000A0B0C0D0E0F0A1B2C4 /* FileRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRow.swift; sourceTree = "<group>"; };
 		87FB00002ED0000000000001 /* FileBrowserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserCache.swift; sourceTree = "<group>"; };
 		E5DA1CF0DEB44944B1BD8C57 /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
@@ -221,7 +219,6 @@
 		86B531A92EC04858007DC54C /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				87000025 /* FileTreeRow.swift */,
 				870000A0B0C0D0E0F0A1B2C4 /* FileRow.swift */,
 				863168322EC999A6007B6201 /* NavigationSidebar.swift */,
 				87000013 /* SettingsNavigationSidebar.swift */,
@@ -373,7 +370,6 @@
 				87000002 /* SearchView.swift in Sources */,
 				87000020 /* FileBrowserManager.swift in Sources */,
 				87000022 /* FileBrowserView.swift in Sources */,
-				87000024 /* FileTreeRow.swift in Sources */,
 				870000A0B0C0D0E0F0A1B2C3 /* FileRow.swift in Sources */,
 				87000003 /* SettingsNavigationSidebar.swift in Sources */,
 				87000004 /* SettingsNavigationItem.swift in Sources */,

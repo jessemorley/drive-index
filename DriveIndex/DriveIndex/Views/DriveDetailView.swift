@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct DriveDetailView: View {
     let drive: DriveInfo
@@ -95,10 +96,9 @@ struct DriveDetailView: View {
 
     private var hero: some View {
         VStack {
-            Image(systemName: "externaldrive.fill")
-                .font(.largeTitle)
-                .imageScale(.large)
-                .foregroundStyle(.tint)
+            Image(nsImage: driveIcon)
+                .resizable()
+                .frame(width: 64, height: 64)
 
             Text(drive.name)
                 .font(.title)
@@ -109,13 +109,23 @@ struct DriveDetailView: View {
             } icon: {
                 Image(systemName: "circle.fill")
                     .imageScale(.small)
-                    .foregroundStyle(drive.connectionStatusColor)
+                    .foregroundStyle(Color.connectionStatus(drive.isConnected))
             }
             .font(.callout)
             .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom)
+    }
+
+    /// The volume's own Finder icon when mounted, Finder's generic external drive icon when offline
+    private var driveIcon: NSImage {
+        if FileManager.default.fileExists(atPath: drive.path) {
+            return NSWorkspace.shared.icon(forFile: drive.path)
+        }
+        // ponytail: not public API; falls back to the generic volume (folder-looking) icon if Apple moves it
+        return NSImage(contentsOfFile: "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/External.icns")
+            ?? NSWorkspace.shared.icon(for: .volume)
     }
 
     @ViewBuilder
@@ -157,21 +167,39 @@ struct DriveDetailView: View {
 // MARK: - Preview
 
 #Preview {
-    NavigationStack {
-        DriveDetailView(drive: DriveInfo(
-            id: "test-uuid",
-            name: "My External Drive",
-            path: "/Volumes/MyDrive",
-            totalCapacity: 500_000_000_000,
-            availableCapacity: 200_000_000_000,
-            isConnected: true,
-            lastSeen: Date(),
-            lastScanDate: Date(),
-            fileCount: 15432,
-            isExcluded: false
-        ))
-        .environmentObject(DriveMonitor())
-        .environmentObject(IndexManager())
+    let scanDate = Date(timeIntervalSinceNow: -3600)
+    let drive = DriveInfo(
+        id: "test-uuid",
+        name: "My External Drive",
+        path: "/Volumes/MyDrive",
+        totalCapacity: 2_000_000_000_000,
+        availableCapacity: 900_000_000_000,
+        isConnected: true,
+        lastSeen: Date(),
+        lastScanDate: scanDate,
+        fileCount: 15432,
+        isExcluded: false
+    )
+    // Prime the caches so the preview shows storage and files without a database
+    StorageCache.shared.set(driveUUID: drive.id, breakdown: StorageBreakdown(
+        driveUUID: drive.id,
+        totalCapacity: drive.totalCapacity,
+        usedCapacity: drive.usedCapacity,
+        categories: [(StorageCategory.media, 0.32), (.documents, 0.1), (.apps, 0.05), (.system, 0.03), (.other, 0.05)].map {
+            .init(category: $0.0, size: Int64(Double(drive.totalCapacity) * $0.1), fileCount: 0, percentage: $0.1)
+        }
+    ), scanDate: scanDate)
+    FileBrowserCache.shared.set(driveUUID: drive.id, rootItems: [
+        FileBrowserItem(id: 1, name: "Photos", relativePath: "Photos", size: 0, createdAt: nil, modifiedAt: scanDate, isDirectory: true),
+        FileBrowserItem(id: 2, name: "Projects", relativePath: "Projects", size: 0, createdAt: nil, modifiedAt: scanDate, isDirectory: true),
+        FileBrowserItem(id: 3, name: "Backup.dmg", relativePath: "Backup.dmg", size: 64_000_000_000, createdAt: nil, modifiedAt: Date(timeIntervalSinceNow: -86400 * 9), isDirectory: false),
+        FileBrowserItem(id: 4, name: "Notes.md", relativePath: "Notes.md", size: 12_400, createdAt: nil, modifiedAt: Date(timeIntervalSinceNow: -86400 * 2), isDirectory: false),
+    ], scanDate: scanDate)
+
+    return NavigationStack {
+        DriveDetailView(drive: drive)
+            .environmentObject(DriveMonitor())
+            .environmentObject(IndexManager())
     }
-    .frame(width: 480, height: 1100)  // detail column at the main window's minimum width
+    .frame(width: 480, height: 1300)  // detail column at the main window's minimum width
 }
