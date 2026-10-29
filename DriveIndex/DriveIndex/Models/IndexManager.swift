@@ -283,7 +283,7 @@ class IndexManager: ObservableObject {
     /// missing mount point would sweep its whole index).
     private func runNextOwedScan() {
         for (uuid, next) in owedScans.work {
-            guard (try? next.url.resourceValues(forKeys: [.volumeUUIDStringKey]))?.volumeUUIDString == uuid else {
+            guard isMounted(next.url, uuid: uuid) else {
                 owedScans.remove(uuid: uuid)
                 continue
             }

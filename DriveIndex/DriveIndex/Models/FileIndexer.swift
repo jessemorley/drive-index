@@ -280,6 +280,11 @@ actor FileIndexer {
         // A cancelled scan is partial: leave lastScanDate unset so the next scan is full again
         try Task.checkCancellation()
 
+        // So is one whose drive was unmounted mid-walk
+        guard isMounted(driveURL, uuid: driveUUID) else {
+            throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: driveURL.path])
+        }
+
         // Update drive metadata
         let fileCount = try await database.getFileCount(for: driveUUID)
         try await database.updateLastScanDate(for: driveUUID, date: Date())
@@ -467,6 +472,11 @@ actor FileIndexer {
         // A cancelled scan's stream ends early with nothing visited: never sweep it
         try Task.checkCancellation()
 
+        // So does a drive unmounted mid-walk: the sweep would delete everything it didn't reach
+        guard isMounted(driveURL, uuid: driveUUID) else {
+            throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: driveURL.path])
+        }
+
         // The stream has finished, so the walk has made its last report
         let skippedState = skipped.withLock { $0 }
         skippedDirectories = skippedState.count
@@ -594,7 +604,7 @@ actor FileIndexer {
         }
     }
     
-    private static func enumerateFiles(
+    static func enumerateFiles(
         at url: URL,
         basePath: String,
         driveUUID: String,
@@ -608,6 +618,21 @@ actor FileIndexer {
         continuation: AsyncStream<FileEntry>.Continuation
     ) {
         let fileManager = FileManager.default
+
+        func relative(_ url: URL) -> String {
+            let fullPath = url.path
+            return fullPath.hasPrefix(basePath) ? String(fullPath.dropFirst(basePath.count + 1)) : fullPath
+        }
+
+        // Rows the walk won't reach but must not be swept: the path and everything under it
+        func markSubtreeVisited(_ relativePath: String) {
+            guard let existing = existingFiles else { return }
+            let dirPrefix = relativePath + "/"
+            let pathsToMark = existing.keys.filter { $0 == relativePath || $0.hasPrefix(dirPrefix) }
+            if !pathsToMark.isEmpty {
+                onFilesMarkedVisited?(pathsToMark)
+            }
+        }
 
         let resourceKeys: Set<URLResourceKey> = [
             .nameKey,
@@ -628,6 +653,9 @@ actor FileIndexer {
             includingPropertiesForKeys: Array(resourceKeys),
             options: options,
             errorHandler: { url, error in
+                // Unreadable isn't deleted: keep what the index has under it
+                markSubtreeVisited(relative(url))
+
                 // Skip permission denied errors silently
                 let nsError = error as NSError
                 if nsError.domain == NSCocoaErrorDomain &&
@@ -766,37 +794,19 @@ actor FileIndexer {
                     onDirectorySkipped?()
 
                     // Mark all files in this directory as visited
-                    if let existing = existingFiles {
-                        var pathsToMark: [String] = []
-                        let dirPrefix = relativePath + "/"
-                        for (filePath, _) in existing {
-                            if filePath == relativePath || filePath.hasPrefix(dirPrefix) {
-                                pathsToMark.append(filePath)
-                            }
-                        }
-                        if !pathsToMark.isEmpty {
-                            onFilesMarkedVisited?(pathsToMark)
-                        }
-                    }
+                    markSubtreeVisited(relativePath)
 
                     continue
                 }
             }
+
+            let relativePath = relative(fileURL)
 
             do {
                 let values = try fileURL.resourceValues(forKeys: resourceKeys)
 
                 guard let name = values.name else {
                     continue
-                }
-
-                // Calculate relative path
-                let fullPath = fileURL.path
-                let relativePath: String
-                if fullPath.hasPrefix(basePath) {
-                    relativePath = String(fullPath.dropFirst(basePath.count + 1))
-                } else {
-                    relativePath = fullPath
                 }
 
                 let entry = FileEntry(
@@ -813,7 +823,9 @@ actor FileIndexer {
                 continuation.yield(entry)
 
             } catch {
-                // Skip files we can't read
+                // Skip files we can't read, but keep their rows: the walk may still descend into
+                // an unreadable folder, and sweeping it would delete its visited children too
+                onFilesMarkedVisited?([relativePath])
                 continue
             }
         }
@@ -850,4 +862,9 @@ actor FileIndexer {
             return false
         }
     }
+}
+
+/// Whether the drive is still mounted at url. A fresh URL, so no cached resource value answers
+func isMounted(_ url: URL, uuid: String) -> Bool {
+    (try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.volumeUUIDStringKey]))?.volumeUUIDString == uuid
 }

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import os
 import Testing
 @testable import DriveIndex
 
@@ -66,32 +67,44 @@ struct ExclusionTests {
     }
 }
 
-struct DeleteFilesTests {
-    // Finding 5: the walk yields a/x but fails to read folder a, so the sweep deletes a.
-    // The subtree delete then removes a/x too, although this scan just visited it.
-    @Test func unvisitedFolderDeleteKeepsVisitedChildren() async throws {
-        let path = FileManager.default.temporaryDirectory
-            .appendingPathComponent("DriveIndexTests-\(UUID().uuidString).db").path
-        defer { try? FileManager.default.removeItem(atPath: path) }
-
-        let db = DatabaseManager(path: path)
-        try await db.recoverDatabase()  // opens the file and creates the schema
-        try await db.upsertDriveMetadata(DriveMetadata(
-            uuid: "A", name: "A", lastSeen: Date(), totalCapacity: 1, usedCapacity: 0,
-            lastScanDate: nil, fileCount: 0, isExcluded: false
-        ))
-        try await db.insertBatch([
-            FileEntry(id: nil, driveUUID: "A", name: "a", relativePath: "a", size: 0,
-                      createdAt: nil, modifiedAt: nil, isDirectory: true),
-            FileEntry(id: nil, driveUUID: "A", name: "x", relativePath: "a/x", size: 1,
-                      createdAt: nil, modifiedAt: nil, isDirectory: false)
-        ])
-
-        try await db.deleteFiles(driveUUID: "A", relativePaths: ["a"])
-
-        let left = try await db.getExistingFiles(driveUUID: "A")
-        withKnownIssue("Finding 5: deleteFiles removes the whole subtree, including visited rows") {
-            #expect(left["a/x"] != nil)
+struct SweepTests {
+    // Finding 5: what the walk can't read must not be swept. Folder a can't be listed, so a/x
+    // isn't reached; it must still count as visited, while a row for a removed file doesn't.
+    @Test func unreadableFolderIsNotSwept() async throws {
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory.appendingPathComponent("DriveIndexTests-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+        // The walk reports /private/var paths; resolvingSymlinksInPath would give /var
+        let root = URL(fileURLWithPath: String(cString: realpath(tmp.path, nil)))
+        let a = root.appendingPathComponent("a")
+        try fm.createDirectory(at: a, withIntermediateDirectories: true)
+        fm.createFile(atPath: a.appendingPathComponent("x").path, contents: Data())
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: a.path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: a.path)
+            try? fm.removeItem(at: root)
         }
+
+        let existing: [String: (id: Int64, modifiedAt: Date?)] = [
+            "a": (1, nil), "a/x": (2, nil), "gone": (3, nil)
+        ]
+        let marked = OSAllocatedUnfairLock(initialState: Set<String>())
+        let stream = AsyncStream<FileEntry> { continuation in
+            FileIndexer.enumerateFiles(
+                at: root, basePath: root.path, driveUUID: "A",
+                excludedDirs: [], excludedExts: [],
+                cachedDirectories: nil, existingFiles: existing, directoriesFromFSEvents: nil,
+                onDirectorySkipped: nil,
+                onFilesMarkedVisited: { paths in marked.withLock { $0.formUnion(paths) } },
+                continuation: continuation
+            )
+        }
+        var visited = Set<String>()
+        for await entry in stream { visited.insert(entry.relativePath) }
+        visited.formUnion(marked.withLock { $0 })
+
+        #expect(visited.contains("a"))
+        #expect(visited.contains("a/x"))
+        #expect(!visited.contains("gone"))
     }
 }
