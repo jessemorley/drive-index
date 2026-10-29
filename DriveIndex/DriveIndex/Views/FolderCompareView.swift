@@ -62,7 +62,8 @@ struct FolderCompareView: View {
                 } else if let result {
                     copyControls(result)
                     let listing = result.listingFolders()
-                    columns { side in
+                    // A column with nothing of its own sits level with the middle of the other's list
+                    columns(alignment: result.onlyA.isEmpty != result.onlyB.isEmpty ? .center : .top) { side in
                         filesList(side, side == .a ? result.onlyA : result.onlyB, side == .a ? listing.a : listing.b,
                                   root: side == .a ? urls?.0 : urls?.1)
                     }
@@ -96,8 +97,9 @@ struct FolderCompareView: View {
     // MARK: - Sections
 
     /// Side A on the left, side B on the right, equal widths
-    private func columns(@ViewBuilder _ content: (FolderComparison.Side) -> some View) -> some View {
-        HStack(alignment: .top, spacing: 16) {
+    private func columns(alignment: VerticalAlignment = .top,
+                         @ViewBuilder _ content: (FolderComparison.Side) -> some View) -> some View {
+        HStack(alignment: alignment, spacing: 16) {
             content(.a).frame(maxWidth: .infinity, alignment: .topLeading)
             content(.b).frame(maxWidth: .infinity, alignment: .topLeading)
         }
@@ -233,8 +235,13 @@ struct FolderCompareView: View {
         if files.isEmpty {
             // The side with nothing of its own is the one that can go
             VStack(spacing: 12) {
-                Text("Nothing only here")
+                let other: FolderComparison.Side = side == .a ? .b : .a
+                let changed = result?.changed.count ?? 0
+                Text(changed == 0
+                     ? "Everything from this folder is available on \(driveName(other))."
+                     : "Everything else from this folder is available on \(driveName(other)). ^[\(changed) changed file](inflect: true) are listed below.")
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
                 if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
                     let folder = side == .a ? pair.a : pair.b
                     Button("Move “\(folder.name)” to Trash", role: .destructive) {

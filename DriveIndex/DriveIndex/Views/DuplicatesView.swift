@@ -160,6 +160,40 @@ struct DuplicatesView: View {
             Text("\(group.files.count) copies")
                 .foregroundStyle(.secondary)
             Text("\(formatted(group.wastedBytes)) wasted")
+            if kind == .folders {
+                compareParentsButton(group)
+            }
+        }
+    }
+
+    /// Opens Folder Compare on the copies' parent folders; with more than two copies, pick the pair
+    @ViewBuilder
+    private func compareParentsButton(_ group: DuplicateGroup) -> some View {
+        let pairs = group.files.indices.flatMap { i in group.files[(i + 1)...].map { (group.files[i], $0) } }
+        if pairs.count == 1 {
+            Button("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
+                comparing = FolderPair(a: parentLocation(pairs[0].0), b: parentLocation(pairs[0].1))
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.orange)
+            .help("Compare the folders these copies are in")
+        } else {
+            Menu("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
+                ForEach(pairs.indices, id: \.self) { i in
+                    let (a, b) = pairs[i]
+                    Button("\(a.driveName) and \(b.driveName): \(parentLocation(a).relativePath), \(parentLocation(b).relativePath)") {
+                        comparing = FolderPair(a: parentLocation(a), b: parentLocation(b))
+                    }
+                }
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(.orange)
+            .help("Compare the folders these copies are in")
         }
     }
 
