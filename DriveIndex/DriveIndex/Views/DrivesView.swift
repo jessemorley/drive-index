@@ -45,7 +45,7 @@ struct DrivesView: View {
                     .formStyle(.grouped)
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)]) {
                             ForEach(sortedDrives) { drive in
                                 NavigationLink(value: drive) {
                                     DriveCard(drive: drive)
@@ -130,17 +130,18 @@ struct DriveCard: View {
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading) {
-                DriveSummary(drive: drive)
+            VStack(alignment: .leading, spacing: 14) {
+                DriveSummary(drive: drive, stacksLastScanned: true)
 
-                // Rescan and Reveal on left, Eject on right
+                // Rescan and Show in Finder on left, Eject on right; disabled (not hidden) when
+                // disconnected so every card in the grid is the same height
                 HStack {
                     Button(drive.lastScanDate == nil ? "Scan" : "Rescan") {
                         scanDrive(drive)
                     }
                     .disabled(indexManager.isIndexing || !drive.isConnected)
 
-                    Button("Reveal in Finder") {
+                    Button("Show in Finder") {
                         revealInFinder(drive)
                     }
                     .disabled(!drive.isConnected)
@@ -154,6 +155,7 @@ struct DriveCard: View {
                     .help("Eject drive")
                 }
             }
+            .padding(10)
         }
     }
 
@@ -214,7 +216,7 @@ struct DriveDetailCard: View {
                     }
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
     }
 
@@ -249,21 +251,23 @@ struct DriveDetailCard: View {
 /// Name, status, capacity and scan info shared by the list rows and grid cards.
 struct DriveSummary: View {
     let drive: DriveInfo
+    /// Grid cards always put "Last scanned" on its own line; the list keeps it on the right
+    var stacksLastScanned = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LabeledContent {
+            // HStack, not LabeledContent: it only right-aligns the size inside a Form, and grid cards are GroupBoxes
+            HStack {
+                Image(nsImage: drive.finderIcon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                Text(drive.name)
+                    .lineLimit(1)
+                ConnectionChip(isConnected: drive.isConnected)
+                Spacer()
                 if drive.totalCapacity > 0 {
                     Text(drive.formattedTotal)
-                }
-            } label: {
-                HStack {
-                    Image(nsImage: drive.finderIcon)
-                        .resizable()
-                        .frame(width: 24, height: 24)
-                    Text(drive.name)
-                        .lineLimit(1)
-                    ConnectionChip(isConnected: drive.isConnected)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -272,11 +276,21 @@ struct DriveSummary: View {
                     .accessibilityLabel("\(drive.formattedUsed) of \(drive.formattedTotal) used")
             }
 
-            HStack {
-                Text(details)
-                Spacer()
-                Text("Last scanned \(drive.formattedLastScan)")
+            // Last scanned moves under the details in grid cards, or when the list row is too narrow for both
+            ViewThatFits(in: .horizontal) {
+                if !stacksLastScanned {
+                    HStack {
+                        Text(details)
+                        Spacer()
+                        Text("Last scanned \(drive.formattedLastScan)")
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(details)
+                    Text("Last scanned \(drive.formattedLastScan)")
+                }
             }
+            .lineLimit(1)
             .font(.caption)
             .foregroundStyle(.secondary)
         }
