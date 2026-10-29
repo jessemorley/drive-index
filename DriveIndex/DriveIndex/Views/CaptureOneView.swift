@@ -96,7 +96,7 @@ struct CleanupRow: Identifiable {
 
     var details: String {
         switch item {
-        case .masks(let set): "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")"
+        case .masks: ""  // the chips list the backups
         case .settings: ""
         case .loose: "Not in a session"
         case .trash(let entry): entry.name == "CaptureOne" ? "Settings and previews" : ""
@@ -135,6 +135,7 @@ struct CleanupRow: Identifiable {
     /// already say a row is safe or has unique files; a status would only repeat that
     var showsStatus: Bool {
         if tab == .trash || (tab == .settings && status == .safe) { return false }
+        if tab == .masks, status != .unverified { return false }
         return !hasUniqueFiles
     }
 
@@ -688,6 +689,14 @@ private struct SessionCard: View, Equatable {
                     StatusChip(title: name, color: kept ? (missing ? .orange : .green) : nil)
                         .help(kept && missing ? Self.uniqueFilesHelp(folders) : "")
                 }
+            } else if case .masks(let set) = row.item {
+                Text(row.location)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                // Green while the live mask is there, orange when it's missing
+                StatusChip(title: "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")",
+                           color: row.status == .safe ? .green : row.status == .hold ? .orange : nil)
             } else {
                 Text(row.location)
                     .foregroundStyle(.secondary)
