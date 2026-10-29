@@ -122,11 +122,22 @@ struct OldSettingsFolderTests {
         #expect(safe.kept == ["Settings1680"])
         #expect(safe.status == .safe)
 
-        // A settings file only in the old folder is an edit found nowhere else
-        try write(["c.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: old)
+        // A mask the newer folder didn't carry forward, for an image it has settings for, is never read again;
+        // Finder's .DS_Store isn't settings
+        try write(["a.jpg"], in: drive.appending(path: "S"), modified: old)
+        try FileManager.default.removeItem(at: drive.appending(path: "S/CaptureOne/Settings1680/a.jpg.comask"))
+        try write([".DS_Store"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: old)
+        #expect(try #require(OldSettingsFolder.check(paths, driveUUID: "A", on: drive).first).status == .safe)
+
+        // Settings only in the old folder for an image that's been deleted are disposable
+        try write(["c.jpg.cos", "c.jpg.comask.backup"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: old)
+        #expect(try #require(OldSettingsFolder.check(paths, driveUUID: "A", on: drive).first).status == .safe)
+
+        // With the image still there, they're edits found nowhere else
+        try write(["c.jpg"], in: drive.appending(path: "S"), modified: old)
         let held = try #require(OldSettingsFolder.check(paths, driveUUID: "A", on: drive).first)
         #expect(held.status == .hold)
-        #expect(held.orphans == 1)
+        #expect(held.orphans == 2)
     }
 
     // The delete step compares the folders again rather than trusting the list it was given
@@ -139,6 +150,7 @@ struct OldSettingsFolderTests {
         let folder = OldSettingsFolder(driveUUID: "A", path: "S/CaptureOne/Settings1670", status: .safe)
 
         try write(["new.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: old)
+        try write(["new.jpg"], in: drive.appending(path: "S"), modified: old)
         #expect(await folder.delete(on: drive) == false)
 
         try FileManager.default.removeItem(at: drive.appending(path: "S/CaptureOne/Settings1670/new.jpg.cos"))
@@ -152,6 +164,7 @@ struct OldSettingsFolderTests {
         let drive = try makeDrive()
         defer { try? FileManager.default.removeItem(at: drive) }
         try write(["a.jpg.cos", "unique.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: Date() - 3600)
+        try write(["unique.jpg"], in: drive.appending(path: "S"), modified: Date())
         try write(["a.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1680"), modified: Date())
 
         let kept = OldSettingsFolder(driveUUID: "A", path: "S/CaptureOne/Settings1680", status: .safe)

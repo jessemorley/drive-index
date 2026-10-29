@@ -288,6 +288,22 @@ struct OldSettingsFolder: Identifiable {
         let listed = paths.map { (path: $0, name: String($0.split(separator: "/").last!), contents: contents(of: drive.appending(path: $0))) }
         let keepNames = keep(listed.map { ($0.name, $0.contents?.modified ?? .distantFuture) })
         let keptFiles = Set(listed.filter { keepNames.contains($0.name) }.flatMap { $0.contents?.files.keys.map { $0 } ?? [] })
+        // The images sit beside "CaptureOne". nil when unreadable, so nothing counts as deleted.
+        let shoot = paths.first.map { drive.appending(path: $0.split(separator: "/").dropLast(2).joined(separator: "/")) }
+        let images = shoot.flatMap { try? FileManager.default.contentsOfDirectory(atPath: $0.path) }.map(Set.init)
+        /// "IMG.HEIC.cos", "IMG.HEIC.comask.backup_3" → "IMG.HEIC"; nil for files in subfolders
+        let image = { (file: String) -> String? in
+            guard !file.contains("/") else { return nil }
+            return ((CaptureOne.liveMaskName(forBackup: file).map(String.init) ?? file) as NSString).deletingPathExtension
+        }
+        // Once an image has settings in the kept folder, Capture One only reads those; whatever it
+        // left behind here (a mask it didn't carry forward, say) is never used again
+        let migrated = Set(keptFiles.filter { $0.hasSuffix(".cos") }.compactMap(image))
+        /// Settings for an image that's since been deleted ("IMG.HEIC.cos" with no "IMG.HEIC") are disposable
+        let imageDeleted = { (file: String) in
+            guard let images, let image = image(file) else { return false }
+            return !images.contains(image)
+        }
 
         return listed.filter { !keepNames.contains($0.name) }.map { folder in
             var old = OldSettingsFolder(driveUUID: driveUUID, path: folder.path, kept: keepNames.sorted())
@@ -299,6 +315,7 @@ struct OldSettingsFolder: Identifiable {
             old.orphans = contents.files.keys.filter { file in
                 // A mask backup whose live mask was carried forward is disposable anyway
                 !keptFiles.contains(file) && !(CaptureOne.liveMaskName(forBackup: file).map { keptFiles.contains(String($0)) } ?? false)
+                    && !imageDeleted(file) && !(image(file).map(migrated.contains) ?? false)
             }.count
             old.status = old.orphans == 0 ? .safe : .hold
             return old
@@ -313,6 +330,8 @@ struct OldSettingsFolder: Identifiable {
         var files: [String: Int64] = [:]
         var newestSettings: Date?
         while let relative = enumerator.nextObject() as? String {
+            // Finder's .DS_Store and the like aren't settings
+            if relative.split(separator: "/").last!.hasPrefix(".") { continue }
             let values = try? folder.appending(path: relative).resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey])
             guard values?.isRegularFile == true else { continue }
             files[relative] = Int64(values?.fileSize ?? 0)
