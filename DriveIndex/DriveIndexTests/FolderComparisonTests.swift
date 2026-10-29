@@ -130,6 +130,24 @@ struct FolderComparisonTests {
         #expect(after.changed.map(\.path) == ["Images/Textures/only-b.jpg"])
     }
 
+    /// A rerun with the earlier hashes only hashes files that are new or changed
+    @Test func rerunHashesOnlyNewFiles() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        try pair.write(pair.a, "shared.txt", "same size")
+        try pair.write(pair.b, "shared.txt", "same size")
+        try pair.write(pair.a, "copied.txt", "abc")
+        let first = try await pair.compare()
+        #expect(first.onlyA.map(\.path) == ["copied.txt"])
+
+        try pair.write(pair.b, "copied.txt", "abc")
+        final class Hashed: @unchecked Sendable { var bytes: Int64 = 0 }
+        let hashed = Hashed()
+        let second = try await FolderComparison.compare(pair.a, pair.b, reusing: first.hashes) { _, bytes in hashed.bytes = bytes }
+        #expect(second.verdict == .identical)
+        #expect(hashed.bytes == 6)  // copied.txt on both sides, not shared.txt again
+    }
+
     /// The index skips Capture One sidecars; on disk they count
     @Test func sidecarOnlyInBMakesAIncomplete() async throws {
         let pair = Pair()

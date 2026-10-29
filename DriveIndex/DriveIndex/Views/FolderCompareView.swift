@@ -29,6 +29,8 @@ struct FolderCompareView: View {
     @State private var copying: (done: Int64, total: Int64)?
     @State private var copyTask: Task<Void, Never>?
     @State private var copyFailures: [String] = []
+    /// Comparing again after a copy, with the earlier result still on screen
+    @State private var checking = false
 
     private var urls: (URL, URL)? {
         guard let a = pair.a.url(in: driveMonitor.drives), let b = pair.b.url(in: driveMonitor.drives) else { return nil }
@@ -107,7 +109,7 @@ struct FolderCompareView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if let result, !fromIndex, copying == nil, trashable(result.verdict).contains(side) {
+            if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
                 Button("Move “\(folder.name)” to Trash", role: .destructive) {
                     onTrash(folder)
                     dismiss()
@@ -154,6 +156,13 @@ struct FolderCompareView: View {
             let offline = [pair.a, pair.b].filter { $0.url(in: driveMonitor.drives) == nil }.map(\.driveName)
             Text("From the index. Connect \(offline.joined(separator: " and ")) to compare on disk. The index skips Capture One sidecars and can be out of date.")
                 .foregroundStyle(.secondary)
+        } else if checking {
+            HStack {
+                ProgressView().controlSize(.small)
+                Text("Checking copies… \(formatted(progress.bytes)) hashed")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         } else if let copying {
             ProgressView(value: Double(copying.done), total: Double(max(copying.total, 1))) {
                 Text("Copying… \(formatted(copying.done)) of \(formatted(copying.total))")
@@ -405,11 +414,14 @@ struct FolderCompareView: View {
             copyFailures.append(error.localizedDescription)
         }
         copying = nil
-        await run()
+        checking = true
+        await run(reusing: result)
+        checking = false
     }
 
-    private func run() async {
-        result = nil
+    /// - Parameter earlier: kept on screen while this runs, and its hashes reused
+    private func run(reusing earlier: FolderComparison? = nil) async {
+        if earlier == nil { result = nil }
         errorMessage = nil
         progress = (0, 0)
         let urls = urls
@@ -417,7 +429,7 @@ struct FolderCompareView: View {
         do {
             var comparison: FolderComparison
             if let urls {
-                comparison = try await FolderComparison.compare(urls.0, urls.1) { files, bytes in
+                comparison = try await FolderComparison.compare(urls.0, urls.1, reusing: earlier?.hashes ?? [:]) { files, bytes in
                     Task { @MainActor in progress = (files, bytes) }
                 }
             } else {

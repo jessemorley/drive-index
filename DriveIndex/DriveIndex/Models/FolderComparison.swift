@@ -86,6 +86,8 @@ struct FolderComparison {
     var onlyB: [File] = []
     var changed: [Changed] = []
     var moved: [Moved] = []
+    /// On disk: each hashed file's SHA-256, keyed by its path, size and modified date
+    var hashes: [String: String] = [:]
 
     /// Where to list each file only one side has: under the highest folder the other side doesn't
     /// have at all, else under its own folder ("" at the top level). Keyed by path.
@@ -179,23 +181,30 @@ extension FolderComparison {
     }
 
     /// On disk. Files are hashed in full, and only when another file's size matches.
-    /// - Parameter progress: files found, bytes hashed so far
-    static func compare(_ a: URL, _ b: URL, progress: @escaping @Sendable (Int, Int64) -> Void = { _, _ in }) async throws -> FolderComparison {
+    /// - Parameters:
+    ///   - known: hashes from an earlier run; a file whose path, size and modified date are
+    ///     unchanged isn't hashed again
+    ///   - progress: files found, bytes hashed so far
+    static func compare(_ a: URL, _ b: URL, reusing known: [String: String] = [:],
+                        progress: @escaping @Sendable (Int, Int64) -> Void = { _, _ in }) async throws -> FolderComparison {
         let filesA = try walk(a), filesB = try walk(b)
         let count = filesA.count + filesB.count
         progress(count, 0)
 
-        var hashes: [String: String] = [:]
+        var hashes = known
         var hashed: Int64 = 0
-        return try compare(filesA, filesB) { side, file in
+        var result = try compare(filesA, filesB) { side, file in
             let url = (side == .a ? a : b).appending(path: file.path)
-            if let hash = hashes[url.path] { return hash }
+            let key = "\(url.path)\t\(file.size)\t\(file.modified?.timeIntervalSince1970 ?? 0)"
+            if let hash = hashes[key] { return hash }
             let hash = try sha256(url)
-            hashes[url.path] = hash
+            hashes[key] = hash
             hashed += file.size
             progress(count, hashed)
             return hash
         }
+        result.hashes = hashes
+        return result
     }
 
     /// From the index. Files too small to be hashed there match by name and size.
