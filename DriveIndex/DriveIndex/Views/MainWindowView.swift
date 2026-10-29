@@ -36,27 +36,16 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Indexing progress overlay; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
+                // Indexing progress strip; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
-                    Group {
-                        if let pending = indexManager.pendingChanges {
-                            PendingChangesOverlay(driveName: pending.driveName, changeCount: pending.changeCount)
-                        } else if let progress = indexManager.currentProgress, let summary = progress.summary {
-                            CompletionOverlay(summary: summary)
-                        } else if indexManager.isIndexing {
-                            ActiveIndexingOverlay()
-                                .environmentObject(indexManager)
-                        } else if indexManager.isHashing {
-                            ActiveHashingOverlay()
-                                .environmentObject(indexManager)
-                        }
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    IndexingStatusBar()
+                        .environmentObject(indexManager)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: indexManager.isIndexing)
-            .animation(.easeInOut(duration: 0.2), value: indexManager.isHashing)
-            .animation(.easeInOut(duration: 0.2), value: indexManager.pendingChanges != nil)
+            .animation(.default, value: indexManager.isIndexing)
+            .animation(.default, value: indexManager.isHashing)
+            .animation(.default, value: indexManager.pendingChanges != nil)
         }
         .navigationSplitViewStyle(.balanced)
         .onChange(of: searchText) { oldValue, newValue in
@@ -102,224 +91,72 @@ private func formatFileCount(_ count: Int) -> String {
     }
 }
 
-struct PendingChangesOverlay: View {
-    let driveName: String
-    let changeCount: Int
-
-    var body: some View {
-        HStack(spacing: Spacing.medium) {
-            HStack(spacing: Spacing.xSmall) {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 6, height: 6)
-
-                Text("CHANGES DETECTED")
-                    .font(AppTypography.statusText)
-                    .foregroundColor(.blue)
-            }
-
-            Text("\(changeCount) file change\(changeCount == 1 ? "" : "s") on \(driveName)")
-                .font(.subheadline)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(Spacing.medium)
-        .background(Color.blue.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, Spacing.Container.horizontalPadding)
-        .padding(.bottom, Spacing.medium)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
-    }
-}
-
-struct CompletionOverlay: View {
-    let summary: String
-
-    var body: some View {
-        HStack(spacing: Spacing.medium) {
-            HStack(spacing: Spacing.xSmall) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 6, height: 6)
-
-                Text("SCAN COMPLETE")
-                    .font(AppTypography.statusText)
-                    .foregroundColor(.green)
-            }
-
-            Text(summary)
-                .font(.system(.caption, design: .monospaced))
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(Spacing.medium)
-        .background(Color.green.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.green.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, Spacing.Container.horizontalPadding)
-        .padding(.bottom, Spacing.medium)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
-    }
-}
-
-struct ActiveIndexingOverlay: View {
+/// Thin strip at the bottom of the main window while changes are pending, a scan or hash runs, or a scan just finished.
+struct IndexingStatusBar: View {
     @EnvironmentObject var indexManager: IndexManager
-    @State private var isScanningAnimating = false
-    @State private var isIndexingAnimating = false
 
     var body: some View {
-        Group {
-            // Show single-line "Scanning" view when filesProcessed is 0 or no progress yet
-            if indexManager.currentProgress == nil || indexManager.currentProgress?.filesProcessed == 0 {
-                HStack(spacing: Spacing.medium) {
-                    HStack(spacing: Spacing.xSmall) {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 6, height: 6)
-                            .opacity(isScanningAnimating ? 1.0 : 0.5)
-                            .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isScanningAnimating)
-                            .onAppear { isScanningAnimating = true }
-
-                        Text("SCANNING")
-                            .font(AppTypography.statusText)
-                            .foregroundColor(.orange)
-                    }
-
-                    Text("Looking for changes on \(indexManager.indexingDriveName)")
-                        .font(.system(.caption, design: .monospaced))
-                        .lineLimit(1)
-
-                    Spacer()
-                }
-                .padding(Spacing.medium)
-                .background(Color.orange.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                )
-                .padding(.horizontal, Spacing.Container.horizontalPadding)
-                .padding(.bottom, Spacing.medium)
-                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
-            } else {
-                // Show single-line indexing progress view
-                HStack(spacing: Spacing.medium) {
-                    HStack(spacing: Spacing.xSmall) {
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 6, height: 6)
-                            .opacity(isIndexingAnimating ? 1.0 : 0.5)
-                            .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isIndexingAnimating)
-                            .onAppear { isIndexingAnimating = true }
-
-                        Text("INDEXING")
-                            .font(AppTypography.statusText)
-                            .foregroundColor(.orange)
-                    }
-
-                    if let progress = indexManager.currentProgress {
-                        Text("\(formatFileCount(progress.filesProcessed)) files indexed")
-                            .font(.system(.caption, design: .monospaced))
-                            .lineLimit(1)
-                            .frame(minWidth: 120, alignment: .leading)
-
-                        if !progress.currentFile.isEmpty {
-                            Text(progress.currentFile)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                    } else {
-                        Text(indexManager.indexingDriveName)
-                            .font(.subheadline)
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-                }
-                .padding(Spacing.medium)
-                .background(Color.orange.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                )
-                .padding(.horizontal, Spacing.Container.horizontalPadding)
-                .padding(.bottom, Spacing.medium)
-                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
+        VStack(spacing: 0) {
+            Divider()
+            HStack {
+                content
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .lineLimit(1)
+            .controlSize(.small)
+            .padding(.horizontal)
+            .padding(.vertical, 6)
         }
+        .background(.bar)
         .animation(nil, value: indexManager.currentProgress?.filesProcessed)
     }
-}
 
-struct ActiveHashingOverlay: View {
-    @EnvironmentObject var indexManager: IndexManager
-    @State private var isAnimating = false
-
-    var body: some View {
-        HStack(spacing: Spacing.medium) {
-            HStack(spacing: Spacing.xSmall) {
-                Circle()
-                    .fill(Color.purple)
-                    .frame(width: 6, height: 6)
-                    .opacity(isAnimating ? 1.0 : 0.5)
-                    .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: isAnimating)
-                    .onAppear { isAnimating = true }
-
-                Text("ANALYSING")
-                    .font(AppTypography.statusText)
-                    .foregroundColor(.purple)
-            }
-
-            if let progress = indexManager.hashProgress {
-                Text("Computing file hashes")
-                    .font(.system(.caption, design: .monospaced))
-                    .lineLimit(1)
-                    .frame(minWidth: 120, alignment: .leading)
-
-                Text(String(format: "%.0f%%", progress.percentage))
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(.secondary)
+    @ViewBuilder
+    private var content: some View {
+        if let pending = indexManager.pendingChanges {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .foregroundStyle(.secondary)
+            Text("\(pending.changeCount) file change\(pending.changeCount == 1 ? "" : "s") detected on \(pending.driveName)")
+        } else if let progress = indexManager.currentProgress, let summary = progress.summary {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text("Scan complete")
+            Text(summary)
+                .foregroundStyle(.secondary)
+        } else if indexManager.isIndexing {
+            ProgressView()
+            if let progress = indexManager.currentProgress, progress.filesProcessed > 0 {
+                Text("Indexing \(formatFileCount(progress.filesProcessed)) files")
+                    .monospacedDigit()
+                    .fixedSize()
+                if !progress.currentFile.isEmpty {
+                    Text(progress.currentFile)
+                        .foregroundStyle(.secondary)
+                        .truncationMode(.middle)
+                }
             } else {
+                Text("Looking for changes on \(indexManager.indexingDriveName)")
+            }
+        } else if indexManager.isHashing {
+            if let progress = indexManager.hashProgress {
+                ProgressView(value: progress.percentage, total: 100)
+                    .progressViewStyle(.circular)
+                Text("Computing file hashes")
+                Text(String(format: "%.0f%%", progress.percentage))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
                 Text("Computing file hashes for duplicate detection")
-                    .font(.system(.caption, design: .monospaced))
-                    .lineLimit(1)
             }
-
             Spacer()
-
-            // Cancel button
-            Button(action: {
+            Button("Cancel", systemImage: "xmark.circle.fill") {
                 indexManager.cancelHashing()
-            }) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
-                    .imageScale(.medium)
             }
-            .buttonStyle(.plain)
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
             .help("Cancel hash computation")
         }
-        .padding(Spacing.medium)
-        .background(Color.purple.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, Spacing.Container.horizontalPadding)
-        .padding(.bottom, Spacing.medium)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: -2)
     }
 }
 
@@ -328,4 +165,25 @@ struct ActiveHashingOverlay: View {
         .environmentObject(DriveMonitor())
         .environmentObject(IndexManager())
         .frame(width: 900, height: 600)
+}
+
+#Preview("Status bar") {
+    let indexing = IndexManager()
+    indexing.isIndexing = true
+    indexing.currentProgress = IndexProgress(filesProcessed: 12_345, currentFile: "Photos/2024/Trip/IMG_0042.HEIC", isComplete: false)
+    let hashing = IndexManager()
+    hashing.isHashing = true
+    hashing.hashProgress = HashProgress(filesHashed: 42, totalFiles: 100, isComplete: false, currentFile: nil)
+    let pending = IndexManager()
+    pending.pendingChanges = PendingChanges(driveName: "Jesse T72", changeCount: 3)
+    let done = IndexManager()
+    done.currentProgress = IndexProgress(filesProcessed: 10, currentFile: "", isComplete: true, summary: "3 added, 1 removed")
+
+    return VStack(spacing: 20) {
+        ForEach([pending, indexing, hashing, done].indices, id: \.self) { i in
+            IndexingStatusBar().environmentObject([pending, indexing, hashing, done][i])
+        }
+    }
+    .frame(width: 480)
+    .padding(.vertical)
 }

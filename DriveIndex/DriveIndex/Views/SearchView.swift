@@ -107,9 +107,7 @@ struct SearchView: View {
                 Label {
                     Text(file.driveName)
                 } icon: {
-                    Image(systemName: "circle.fill")
-                        .imageScale(.small)
-                        .foregroundStyle(Color.connectionStatus(file.isConnected))
+                    ConnectionDot(isConnected: file.isConnected)
                 }
                 .foregroundStyle(.secondary)
             }

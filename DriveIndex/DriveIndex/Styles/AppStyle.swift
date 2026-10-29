@@ -8,9 +8,15 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-extension Color {
-    /// Connection status dot: sidebar, drive header, search results.
-    static func connectionStatus(_ isConnected: Bool) -> Color { isConnected ? .green : .secondary }
+/// Connection status dot: sidebar, drives list, drive header, search results. Sized by the surrounding font.
+struct ConnectionDot: View {
+    let isConnected: Bool
+
+    var body: some View {
+        Image(systemName: "circle.fill")
+            .imageScale(.small)
+            .foregroundStyle(isConnected ? .green : .secondary)
+    }
 }
 
 extension StorageCategory {

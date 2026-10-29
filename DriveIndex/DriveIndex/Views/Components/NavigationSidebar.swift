@@ -25,9 +25,6 @@ struct NavigationSidebar: View {
                     .tag(NavigationItem.duplicates)
             } header: {
                 Text("Index")
-                    .font(.system(size: 11))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
 
             // Drives section (dynamic)
@@ -38,9 +35,6 @@ struct NavigationSidebar: View {
                 }
             } header: {
                 Text("Drives")
-                    .font(.system(size: 11))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
         }
         .listStyle(.sidebar)
@@ -65,9 +59,7 @@ struct NavigationSidebarRow: View {
             // Show connection status badge for drive items
             if case .drive(let driveInfo) = item {
                 Spacer()
-                Circle()
-                    .fill(driveInfo.isConnected ? Color.green : Color.gray.opacity(0.5))
-                    .frame(width: 6, height: 6)
+                ConnectionDot(isConnected: driveInfo.isConnected)
             }
         }
     }

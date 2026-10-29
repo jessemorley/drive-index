@@ -107,9 +107,7 @@ struct DriveDetailView: View {
             Label {
                 Text("\(drive.formattedTotal) · \(drive.isConnected ? "Connected" : "Disconnected")")
             } icon: {
-                Image(systemName: "circle.fill")
-                    .imageScale(.small)
-                    .foregroundStyle(Color.connectionStatus(drive.isConnected))
+                ConnectionDot(isConnected: drive.isConnected)
             }
             .font(.callout)
             .foregroundStyle(.secondary)
