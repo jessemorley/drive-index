@@ -238,7 +238,7 @@ actor HashWorker {
     private func computeHash(for fileURL: URL, fileSize: Int64) async throws -> String {
         // Always use positioned reads since we're only reading 64KB total (32KB × 2)
         // Memory-mapped I/O is slower on external drives even for medium files
-        return try computeHashPositioned(fileURL: fileURL, fileSize: fileSize)
+        return try Self.computeHashPositioned(fileURL: fileURL, fileSize: fileSize)
     }
 
     /// Compute hash using memory-mapped I/O (fast for small files)
@@ -256,8 +256,9 @@ actor HashWorker {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Compute hash using positioned reads (efficient for large files)
-    private func computeHashPositioned(fileURL: URL, fileSize: Int64) throws -> String {
+    /// Compute hash using positioned reads (efficient for large files). This is the `files.hash`
+    /// the index stores: a partial hash, not a full SHA-256 of the file.
+    static func computeHashPositioned(fileURL: URL, fileSize: Int64) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
 

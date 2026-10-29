@@ -1718,7 +1718,7 @@ actor DatabaseManager {
     }
 
     /// Get all files matching a specific hash
-    private func getDuplicateFilesByHash(hash: String) throws -> [DuplicateFile] {
+    func getDuplicateFilesByHash(hash: String) throws -> [DuplicateFile] {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -1759,6 +1759,83 @@ actor DatabaseManager {
                 driveName: driveName,
                 relativePath: relativePath,
                 modifiedAt: modifiedAt
+            ))
+        }
+
+        return files
+    }
+
+    /// Files with a name and size, for files too small to be hashed
+    func getFiles(name: String, size: Int64) throws -> [DuplicateFile] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let sql = """
+            SELECT f.id, f.drive_uuid, d.name, f.relative_path, f.modified_at
+            FROM files f
+            JOIN drives d ON d.uuid = f.drive_uuid
+            WHERE f.name = ? AND f.size = ? AND f.is_directory = 0
+            ORDER BY d.name, f.relative_path
+        """
+
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 2, size)
+
+        var files: [DuplicateFile] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            files.append(DuplicateFile(
+                id: sqlite3_column_int64(stmt, 0),
+                driveUUID: String(cString: sqlite3_column_text(stmt, 1)),
+                driveName: String(cString: sqlite3_column_text(stmt, 2)),
+                relativePath: String(cString: sqlite3_column_text(stmt, 3)),
+                modifiedAt: sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 4)))
+            ))
+        }
+
+        return files
+    }
+
+    /// The files under a folder, with paths relative to it, for comparing it from the index
+    func getFolderFiles(driveUUID: String, path: String) throws -> [FolderComparison.File] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        // Range [path/, path0) = everything under path ("0" sorts right after "/"); "" = the whole drive
+        let sql = """
+            SELECT relative_path, size, modified_at, hash
+            FROM files
+            WHERE drive_uuid = ?1 AND is_directory = 0 AND (?2 = '' OR (relative_path >= ?2 || '/' AND relative_path < ?2 || '0'))
+        """
+
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, (path as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        var files: [FolderComparison.File] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let relativePath = String(cString: sqlite3_column_text(stmt, 0))
+            files.append(FolderComparison.File(
+                path: path.isEmpty ? relativePath : String(relativePath.dropFirst(path.count + 1)),
+                size: sqlite3_column_int64(stmt, 1),
+                modified: sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2))),
+                hash: sqlite3_column_text(stmt, 3).map { String(cString: $0) }
             ))
         }
 
