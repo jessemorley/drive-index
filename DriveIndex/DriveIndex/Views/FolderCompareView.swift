@@ -74,8 +74,10 @@ struct FolderCompareView: View {
         }
         .overlay {
             if isLoading {
-                ProgressView {
-                    Text("Comparing… \(progress.files) files, \(formatted(progress.bytes)) hashed")
+                VStack(spacing: 8) {
+                    ProgressView()
+                    Text("Comparing…")
+                    Text("\(progress.files) files, \(formatted(progress.bytes)) hashed")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -175,17 +177,17 @@ struct FolderCompareView: View {
             }
         } else if !result.onlyA.isEmpty || !result.onlyB.isEmpty {
             HStack {
-                Button("Copy to \(name(.b))", systemImage: "arrow.right") { startCopy([.a]) }
+                Button("Copy to \(driveName(.b))", systemImage: "arrow.right") { startCopy([.a]) }
                     .disabled(result.onlyA.isEmpty)
-                    .help("Copy the \(result.onlyA.count) files only in \(name(.a)) to \(name(.b))")
+                    .help("Copy the \(result.onlyA.count) files only in \(name(.a)) to \(name(.b)) on \(pair.b.driveName)")
                 Spacer()
                 if !result.onlyA.isEmpty, !result.onlyB.isEmpty {
                     Button("Make All Files Available in Both", systemImage: "arrow.left.arrow.right") { startCopy([.a, .b]) }
                     Spacer()
                 }
-                Button("Copy to \(name(.a))", systemImage: "arrow.left") { startCopy([.b]) }
+                Button("Copy to \(driveName(.a))", systemImage: "arrow.left") { startCopy([.b]) }
                     .disabled(result.onlyB.isEmpty)
-                    .help("Copy the \(result.onlyB.count) files only in \(name(.b)) to \(name(.a))")
+                    .help("Copy the \(result.onlyB.count) files only in \(name(.b)) to \(name(.a)) on \(pair.a.driveName)")
             }
         }
         if !copyFailures.isEmpty {
@@ -223,7 +225,7 @@ struct FolderCompareView: View {
         }
     }
 
-    /// The files only this side has: folders first (expandable), then the loose files. With none,
+    /// The files only this side has: folders first, one row each, then the loose files. With none,
     /// the trash button for this folder, when the other side has everything.
     @ViewBuilder
     private func filesList(_ side: FolderComparison.Side, _ files: [FolderComparison.File], _ listing: [String: String],
@@ -250,27 +252,14 @@ struct FolderCompareView: View {
                 + (groups[""] ?? []).map { ListEntry(folder: "", files: [$0]) }
             card("Only here: ^[\(files.count) file](inflect: true), \(formatted(total(files)))", entries, id: \.id) { entry in
                 if entry.folder.isEmpty {
-                    fileRow(entry.files[0], label: entry.files[0].path, root: root)
+                    let file = entry.files[0]
+                    row(file.path, size: file.size, note: file.elsewhere.map(safeNote), at: root?.appending(path: file.path))
                 } else {
-                    DisclosureGroup {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(entry.files, id: \.path) { fileRow($0, label: String($0.path.dropFirst(entry.folder.count + 1)), root: root) }
-                        }
-                        .padding(.top, 4)
-                    } label: {
-                        HStack {
-                            Label {
-                                Text(entry.folder)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            } icon: {
-                                Image(nsImage: NSWorkspace.shared.listIcon(name: (entry.folder as NSString).lastPathComponent, isDirectory: true))
-                            }
-                            Spacer()
-                            Text(formatted(total(entry.files)))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    let safe = entry.files.filter { $0.elsewhere != nil }
+                    let note = safe.count == entry.files.count
+                        ? safeNote(safe[0].elsewhere!)
+                        : safe.isEmpty ? nil : "\(safe.count) of \(entry.files.count) files safe elsewhere"
+                    row(entry.folder, isFolder: true, size: total(entry.files), note: note, at: root?.appending(path: entry.folder))
                 }
             }
         }
@@ -283,18 +272,28 @@ struct FolderCompareView: View {
         var id: String { folder.isEmpty ? files[0].path : folder + "/" }
     }
 
-    private func fileRow(_ file: FolderComparison.File, label: String, root: URL?) -> some View {
+    /// A copy's folder; for a folder row, the first file's copy stands for the rest
+    private func safeNote(_ copy: DuplicateFile) -> String {
+        "Safe elsewhere: \(copy.driveName) \((copy.relativePath as NSString).deletingLastPathComponent)/"
+    }
+
+    /// A file, or a folder of files, only one side has
+    private func row(_ name: String, isFolder: Bool = false, size: Int64, note: String?, at url: URL?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(label)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                Label {
+                    Text(name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } icon: {
+                    Image(nsImage: NSWorkspace.shared.listIcon(name: (name as NSString).lastPathComponent, isDirectory: isFolder))
+                }
                 Spacer()
-                Text(formatted(file.size))
+                Text(formatted(size))
                     .foregroundStyle(.secondary)
             }
-            if let copy = file.elsewhere {
-                Text("Safe elsewhere: \(copy.driveName) \((copy.relativePath as NSString).deletingLastPathComponent)/")
+            if let note {
+                Text(note)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -303,8 +302,8 @@ struct FolderCompareView: View {
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Reveal in Finder") { reveal(root.map { [$0.appending(path: file.path)] }) }
-                .disabled(root == nil)
+            Button("Reveal in Finder") { reveal(url.map { [$0] }) }
+                .disabled(url == nil)
         }
     }
 
@@ -367,6 +366,11 @@ struct FolderCompareView: View {
     }
 
     // MARK: - Text
+
+    /// The drive's name, or the folder's when both folders are on the same drive
+    private func driveName(_ side: FolderComparison.Side) -> String {
+        pair.a.driveUUID == pair.b.driveUUID ? name(side) : (side == .a ? pair.a : pair.b).driveName
+    }
 
     /// The folder's name, with its drive when both folders share a name
     private func name(_ side: FolderComparison.Side) -> String {
