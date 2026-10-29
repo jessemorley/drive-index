@@ -72,8 +72,8 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .duplicates:
             DuplicatesView()
-        case .maskBackups:
-            MaskBackupsView()
+        case .captureOne:
+            CaptureOneView()
         }
     }
 }
