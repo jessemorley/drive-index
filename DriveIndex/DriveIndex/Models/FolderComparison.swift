@@ -71,6 +71,8 @@ struct FolderComparison {
         let sizeA: Int64
         let sizeB: Int64
         let newer: Side?  // nil: same modified date
+        var modifiedA: Date? = nil
+        var modifiedB: Date? = nil
     }
 
     /// Content one side has at a path the other side has it at a different path
@@ -117,6 +119,23 @@ struct FolderComparison {
         return (listing(onlyA, otherFolders: folders(.b)), listing(onlyB, otherFolders: folders(.a)))
     }
 
+    /// For two copies of a Capture One session (each with a "<name>.cosessiondb" at its top): the
+    /// latest modified date on each side among the files that differ. The session database and
+    /// CaptureOne/Cache are left out, since just opening a session touches them. nil when either
+    /// folder isn't a session.
+    func sessionEdits() -> (a: Date?, b: Date?)? {
+        func isSessionPath(_ path: String) -> Bool { !path.contains("/") && path.hasSuffix(".cosessiondb") }
+        let shared = both.map(\.path) + changed.map(\.path)
+        guard (shared + onlyA.map(\.path)).contains(where: isSessionPath),
+              (shared + onlyB.map(\.path)).contains(where: isSessionPath) else { return nil }
+
+        func counts(_ path: String) -> Bool { !path.contains(".cosessiondb") && !path.contains("CaptureOne/Cache/") }
+        func latest(_ dates: [Date?]) -> Date? { dates.compactMap { $0 }.max() }
+        let edited = changed.filter { counts($0.path) }
+        return (latest(edited.map(\.modifiedA) + onlyA.filter { counts($0.path) }.map(\.modified)),
+                latest(edited.map(\.modifiedB) + onlyB.filter { counts($0.path) }.map(\.modified)))
+    }
+
     var verdict: Verdict {
         let aHasAll = onlyB.isEmpty && changed.allSatisfy { $0.newer == .a }
         let bHasAll = onlyA.isEmpty && changed.allSatisfy { $0.newer == .b }
@@ -150,7 +169,8 @@ extension FolderComparison {
                 case let (ma?, mb?) where mb > ma: .b
                 default: nil
                 }
-                result.changed.append(Changed(path: path, sizeA: fileA.size, sizeB: fileB.size, newer: newer))
+                result.changed.append(Changed(path: path, sizeA: fileA.size, sizeB: fileB.size, newer: newer,
+                                              modifiedA: fileA.modified, modifiedB: fileB.modified))
             }
         }
 
@@ -244,11 +264,7 @@ extension FolderComparison {
     /// - Returns: the files that weren't copied, and why
     static func copy(_ files: [File], from source: URL, to destination: URL,
                      progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws -> [(path: String, error: Error)] {
-        let needed = files.reduce(0) { $0 + $1.size }
-        let values = try destination.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
-        if let free = values.volumeAvailableCapacityForImportantUsage ?? values.volumeAvailableCapacity.map(Int64.init), free < needed {
-            throw CocoaError(.fileWriteOutOfSpace, userInfo: [NSFilePathErrorKey: destination.path])
-        }
+        try checkSpace(for: files.reduce(0) { $0 + $1.size }, on: destination)
 
         var failures: [(path: String, error: Error)] = []
         var copied: Int64 = 0
@@ -264,6 +280,65 @@ extension FolderComparison {
                 failures.append((file.path, error))
             }
         }
+        return failures
+    }
+
+    private static func checkSpace(for bytes: Int64, on destination: URL) throws {
+        let values = try destination.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+        if let free = values.volumeAvailableCapacityForImportantUsage ?? values.volumeAvailableCapacity.map(Int64.init), free < bytes {
+            throw CocoaError(.fileWriteOutOfSpace, userInfo: [NSFilePathErrorKey: destination.path])
+        }
+    }
+
+    /// What mirroring one side onto the other does to the destination
+    struct MirrorPlan {
+        var replace: [String] = []  // changed files: the destination's copy goes, the source's comes in
+        var remove: [String] = []   // only on the destination, or there at a different path
+        var add: [File] = []        // only on the source, or there at a different path
+        var replacingNewer = 0      // changed files that are newer on the destination
+    }
+
+    func mirrorPlan(from side: Side) -> MirrorPlan {
+        var plan = MirrorPlan()
+        plan.replace = changed.map(\.path)
+        plan.replacingNewer = changed.filter { $0.newer != nil && $0.newer != side }.count
+        plan.remove = (side == .a ? onlyB : onlyA).map(\.path)
+        plan.add = side == .a ? onlyA : onlyB
+        for move in moved {
+            let (sourcePath, destinationPath) = move.side == side ? (move.path, move.otherPath) : (move.otherPath, move.path)
+            plan.remove.append(destinationPath)
+            plan.add.append(File(path: sourcePath, size: move.size, modified: nil))
+        }
+        return plan
+    }
+
+    /// Makes the destination folder match the source, like `rsync --delete` with a backup folder:
+    /// the destination's changed files and extras go to the Trash first, then the source's
+    /// versions and missing files are copied in, keeping their dates. Checks free space first;
+    /// cancelling stops between files.
+    /// - Parameters:
+    ///   - remove: how a destination file is set aside (the Trash; tests delete)
+    ///   - progress: bytes copied so far
+    /// - Returns: the files that weren't removed or copied, and why
+    static func mirror(_ plan: MirrorPlan, from source: URL, to destination: URL,
+                       remove: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) },
+                       progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws -> [(path: String, error: Error)] {
+        let replaced = plan.replace.map { File(path: $0, size: (try? source.appending(path: $0).resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0, modified: nil) }
+        let incoming = plan.add + replaced
+        try checkSpace(for: incoming.reduce(0) { $0 + $1.size }, on: destination)
+
+        var failures: [(path: String, error: Error)] = []
+        var kept: Set<String> = []  // couldn't be set aside, so nothing is copied over them
+        for path in plan.replace + plan.remove {
+            try Task.checkCancellation()
+            do {
+                try remove(destination.appending(path: path))
+            } catch {
+                failures.append((path, error))
+                kept.insert(path)
+            }
+        }
+        failures += try await copy(incoming.filter { !kept.contains($0.path) }, from: source, to: destination, progress: progress)
         return failures
     }
 

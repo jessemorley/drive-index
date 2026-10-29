@@ -29,6 +29,8 @@ struct FolderCompareView: View {
     @State private var copying: (done: Int64, total: Int64)?
     @State private var copyTask: Task<Void, Never>?
     @State private var copyFailures: [String] = []
+    /// The session copy to sync from, while its confirmation is up
+    @State private var syncSource: FolderComparison.Side?
     /// Comparing again after a copy, with the earlier result still on screen
     @State private var checking = false
 
@@ -92,6 +94,12 @@ struct FolderCompareView: View {
         }
         .task(id: connected) { await run() }
         .onDisappear { copyTask?.cancel() }
+        .confirmationDialog("Sync this session?", isPresented: Binding { syncSource != nil } set: { if !$0 { syncSource = nil } },
+                            presenting: syncSource) { source in
+            Button("Sync to \(driveName(source == .a ? .b : .a))", role: .destructive) { startSync(from: source) }
+        } message: { source in
+            syncMessage(from: source)
+        }
     }
 
     // MARK: - Sections
@@ -175,6 +183,10 @@ struct FolderCompareView: View {
                 Text("Copying… \(formatted(copying.done)) of \(formatted(copying.total))")
                     .monospacedDigit()
             }
+        } else if let edits = result.sessionEdits() {
+            if !result.onlyA.isEmpty || !result.onlyB.isEmpty || !result.changed.isEmpty || !result.moved.isEmpty {
+                sessionSync(edits)
+            }
         } else if !result.onlyA.isEmpty || !result.onlyB.isEmpty {
             HStack {
                 Button("Copy to \(driveName(.b))", systemImage: "arrow.right") { startCopy([.a]) }
@@ -192,10 +204,42 @@ struct FolderCompareView: View {
         }
         if !copyFailures.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Label("^[\(copyFailures.count) file](inflect: true) weren't copied", systemImage: "exclamationmark.triangle")
+                Label("^[\(copyFailures.count) file](inflect: true) weren't moved or copied", systemImage: "exclamationmark.triangle")
                 ForEach(copyFailures.prefix(5), id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
             }
         }
+    }
+
+    /// Two copies of a Capture One session: sync the one with the latest edit onto the other, or the
+    /// other way round from the menu
+    private func sessionSync(_ edits: (a: Date?, b: Date?)) -> some View {
+        let source: FolderComparison.Side = (edits.b ?? .distantPast) > (edits.a ?? .distantPast) ? .b : .a
+        let destination: FolderComparison.Side = source == .a ? .b : .a
+        func latest(_ side: FolderComparison.Side) -> String {
+            (side == .a ? edits.a : edits.b).map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "none"
+        }
+        return VStack(spacing: 6) {
+            Menu {
+                Button("Sync to \(driveName(source)) Instead") { syncSource = destination }
+            } label: {
+                Label("Sync Session to \(driveName(destination))", systemImage: source == .a ? "arrow.right" : "arrow.left")
+            } primaryAction: {
+                syncSource = source
+            }
+            .fixedSize()
+            Text("Latest edit on \(driveName(.a)): \(latest(.a)). On \(driveName(.b)): \(latest(.b)).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func syncMessage(from source: FolderComparison.Side) -> Text {
+        guard let plan = result?.mirrorPlan(from: source) else { return Text("") }
+        let destination = driveName(source == .a ? .b : .a)
+        let text = Text("\(name(source == .a ? .b : .a)) on \(destination) will match \(driveName(source)): ^[\(plan.replace.count) file](inflect: true) replaced, ^[\(plan.remove.count) file](inflect: true) removed and ^[\(plan.add.count) file](inflect: true) added. Replaced and removed files go to the Trash.")
+        return plan.replacingNewer == 0 ? text
+            : text + Text("\n\nCareful: \(destination) has the newer version of ^[\(plan.replacingNewer) file](inflect: true) being replaced.")
     }
 
     /// A titled card of rows, divided like the duplicate cards
@@ -387,6 +431,35 @@ struct FolderCompareView: View {
     private func reveal(_ urls: [URL]?) {
         guard let urls else { return NSSound.beep() }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    private func startSync(from source: FolderComparison.Side) {
+        copyTask = Task { await syncSession(from: source) }
+    }
+
+    /// Makes the other session copy match this one, then compares again
+    private func syncSession(from side: FolderComparison.Side) async {
+        guard let urls, let result else { return }
+        let plan = result.mirrorPlan(from: side)
+        let (from, to) = side == .a ? (urls.0, urls.1) : (urls.1, urls.0)
+        let all = total(plan.add) + result.changed.reduce(0) { $0 + (side == .a ? $1.sizeA : $1.sizeB) }
+        copying = (0, all)
+        copyFailures = []
+        do {
+            copyFailures = try await FolderComparison.mirror(plan, from: from, to: to) { bytes in
+                Task { @MainActor in copying = (bytes, all) }
+            }
+            .map { "\($0.path): \($0.error.localizedDescription)" }
+        } catch is CancellationError {
+            copying = nil
+            return
+        } catch {
+            copyFailures = [error.localizedDescription]
+        }
+        copying = nil
+        checking = true
+        await run(reusing: result)
+        checking = false
     }
 
     private func startCopy(_ sides: [FolderComparison.Side]) {

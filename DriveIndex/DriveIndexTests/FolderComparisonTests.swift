@@ -148,6 +148,48 @@ struct FolderComparisonTests {
         #expect(hashed.bytes == 6)  // copied.txt on both sides, not shared.txt again
     }
 
+    /// Opening a session touches its database and caches; only real edits pick the newer side
+    @Test func newerSessionIgnoresDatabaseAndCache() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        let (early, late, latest) = (Date(timeIntervalSince1970: 1_000), Date(timeIntervalSince1970: 2_000), Date(timeIntervalSince1970: 3_000))
+        try pair.write(pair.a, "Shoot.cosessiondb", "db v1", modified: early)
+        try pair.write(pair.b, "Shoot.cosessiondb", "db v2", modified: latest)  // only opened on B
+        try pair.write(pair.b, "Capture/CaptureOne/Cache/Thumbnails/IMG_1.cot", "thumb", modified: latest)
+        try pair.write(pair.a, "Capture/CaptureOne/Settings160/IMG_1.CR3.cos", "edit 2", modified: late)
+        try pair.write(pair.b, "Capture/CaptureOne/Settings160/IMG_1.CR3.cos", "edit 1", modified: early)
+
+        let edits = try #require(try await pair.compare().sessionEdits())
+        #expect(edits.a == late && edits.b == early)
+        #expect(try await Pair().compare().sessionEdits() == nil)  // not sessions
+    }
+
+    /// Mirroring makes the destination match: changed files replaced, extras removed, moves followed
+    @Test func mirrorMakesDestinationIdentical() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        try pair.write(pair.a, "Shoot.cosessiondb", "db")
+        try pair.write(pair.b, "Shoot.cosessiondb", "db")
+        try pair.write(pair.a, "edit.cos", "new edit", modified: Date(timeIntervalSince1970: 2_000))
+        try pair.write(pair.b, "edit.cos", "old", modified: Date(timeIntervalSince1970: 1_000))
+        try pair.write(pair.a, "Capture/new.CR3", "new shot")
+        try pair.write(pair.b, "Capture/CaptureOne/Cache/extra.cot", "stale cache")
+        try pair.write(pair.a, "Output/renamed.jpg", "pixels")
+        try pair.write(pair.b, "Output/original.jpg", "pixels")
+
+        let before = try await pair.compare()
+        let plan = before.mirrorPlan(from: .a)
+        #expect(plan.replacingNewer == 0)
+        var removed: [String] = []
+        let failures = try await FolderComparison.mirror(plan, from: pair.a, to: pair.b) { url in
+            removed.append(url.lastPathComponent)
+            try FileManager.default.removeItem(at: url)
+        }
+        #expect(failures.isEmpty)
+        #expect(Set(removed) == ["edit.cos", "extra.cot", "original.jpg"])
+        #expect(try await pair.compare().verdict == .identical)
+    }
+
     /// The index skips Capture One sidecars; on disk they count
     @Test func sidecarOnlyInBMakesAIncomplete() async throws {
         let pair = Pair()
