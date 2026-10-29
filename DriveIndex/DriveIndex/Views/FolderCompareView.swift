@@ -31,6 +31,8 @@ struct FolderCompareView: View {
     @State private var copyFailures: [String] = []
     /// The session copy to sync from, while its confirmation is up
     @State private var syncSource: FolderComparison.Side?
+    /// Both folders are Capture One sessions, or inside one (checked on disk)
+    @State private var inSession = false
     /// Comparing again after a copy, with the earlier result still on screen
     @State private var checking = false
 
@@ -190,9 +192,9 @@ struct FolderCompareView: View {
                 Text("Copying… \(formatted(copying.done)) of \(formatted(copying.total))")
                     .monospacedDigit()
             }
-        } else if let edits = result.sessionEdits() {
+        } else if inSession {
             if !result.onlyA.isEmpty || !result.onlyB.isEmpty || !result.changed.isEmpty || !result.moved.isEmpty {
-                sessionSync(edits)
+                sessionSync(result.sessionEdits())
             }
         } else if !result.onlyA.isEmpty || !result.onlyB.isEmpty {
             HStack {
@@ -435,6 +437,13 @@ struct FolderCompareView: View {
         }
     }
 
+    /// The folder has a session file, or one of the folders above it on its drive does
+    private func isInSession(_ folder: FolderLocation) -> Bool {
+        guard let drive = driveMonitor.drives.first(where: { $0.id == folder.driveUUID && $0.isConnected }) else { return false }
+        // isInSession checks from the folder holding its path upwards; "/." makes that the folder itself
+        return LooseCaptureOneFolder.isInSession(folder.relativePath + "/.", on: URL(filePath: drive.path))
+    }
+
     private func reveal(_ urls: [URL]?) {
         guard let urls else { return NSSound.beep() }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
@@ -514,6 +523,7 @@ struct FolderCompareView: View {
         do {
             var comparison: FolderComparison
             if let urls {
+                inSession = [pair.a, pair.b].allSatisfy(isInSession)
                 comparison = try await FolderComparison.compare(urls.0, urls.1, reusing: earlier?.hashes ?? [:]) { files, bytes, toHash in
                     Task { @MainActor in progress = (files, bytes, toHash) }
                 }

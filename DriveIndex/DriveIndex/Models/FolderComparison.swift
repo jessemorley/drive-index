@@ -119,16 +119,10 @@ struct FolderComparison {
         return (listing(onlyA, otherFolders: folders(.b)), listing(onlyB, otherFolders: folders(.a)))
     }
 
-    /// For two copies of a Capture One session (each with a "<name>.cosessiondb" at its top): the
-    /// latest modified date on each side among the files that differ. The session database and
-    /// CaptureOne/Cache are left out, since just opening a session touches them. nil when either
-    /// folder isn't a session.
-    func sessionEdits() -> (a: Date?, b: Date?)? {
-        func isSessionPath(_ path: String) -> Bool { !path.contains("/") && path.hasSuffix(".cosessiondb") }
-        let shared = both.map(\.path) + changed.map(\.path)
-        guard (shared + onlyA.map(\.path)).contains(where: isSessionPath),
-              (shared + onlyB.map(\.path)).contains(where: isSessionPath) else { return nil }
-
+    /// For two copies of a Capture One session, or of a folder inside one: the latest modified date
+    /// on each side among the files that differ. The session database and CaptureOne/Cache are left
+    /// out, since just opening a session touches them.
+    func sessionEdits() -> (a: Date?, b: Date?) {
         func counts(_ path: String) -> Bool { !path.contains(".cosessiondb") && !path.contains("CaptureOne/Cache/") }
         func latest(_ dates: [Date?]) -> Date? { dates.compactMap { $0 }.max() }
         let edited = changed.filter { counts($0.path) }

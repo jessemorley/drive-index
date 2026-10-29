@@ -159,9 +159,8 @@ struct FolderComparisonTests {
         try pair.write(pair.a, "Capture/CaptureOne/Settings160/IMG_1.CR3.cos", "edit 2", modified: late)
         try pair.write(pair.b, "Capture/CaptureOne/Settings160/IMG_1.CR3.cos", "edit 1", modified: early)
 
-        let edits = try #require(try await pair.compare().sessionEdits())
+        let edits = try await pair.compare().sessionEdits()
         #expect(edits.a == late && edits.b == early)
-        #expect(try await Pair().compare().sessionEdits() == nil)  // not sessions
     }
 
     /// Mirroring makes the destination match: changed files replaced, extras removed, moves followed
