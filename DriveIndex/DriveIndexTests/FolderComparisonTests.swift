@@ -103,6 +103,33 @@ struct FolderComparisonTests {
         #expect(listing.a == ["top.zip": ""])
     }
 
+    /// Copying both ways fills the gaps; nothing already at the destination is overwritten
+    @Test func copyFillsGapsWithoutOverwriting() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        let date = Date(timeIntervalSince1970: 1_000_000)
+        try pair.write(pair.a, "shared.txt", "shared")
+        try pair.write(pair.b, "shared.txt", "shared")
+        try pair.write(pair.a, "Archives/only-a.zip", "a", modified: date)
+        try pair.write(pair.b, "Images/Textures/only-b.jpg", "b", modified: date)
+
+        let before = try await pair.compare()
+        // Appeared at the destination after the comparison: must survive
+        try pair.write(pair.a, "Images/Textures/only-b.jpg", "newer, keep me")
+
+        let toB = try await FolderComparison.copy(before.onlyA, from: pair.a, to: pair.b)
+        let toA = try await FolderComparison.copy(before.onlyB, from: pair.b, to: pair.a)
+        #expect(toB.isEmpty)
+        #expect(toA.map(\.path) == ["Images/Textures/only-b.jpg"])
+        #expect(try String(contentsOf: pair.a.appending(path: "Images/Textures/only-b.jpg"), encoding: .utf8) == "newer, keep me")
+
+        let copied = try FileManager.default.attributesOfItem(atPath: pair.b.appending(path: "Archives/only-a.zip").path)
+        #expect(copied[.modificationDate] as? Date == date)
+        let after = try await pair.compare()
+        #expect(after.onlyA.isEmpty && after.onlyB.isEmpty)
+        #expect(after.changed.map(\.path) == ["Images/Textures/only-b.jpg"])
+    }
+
     /// The index skips Capture One sidecars; on disk they count
     @Test func sidecarOnlyInBMakesAIncomplete() async throws {
         let pair = Pair()

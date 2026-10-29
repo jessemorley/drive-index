@@ -2,8 +2,8 @@
 //  FolderCompareView.swift
 //  DriveIndex
 //
-//  Sheet comparing two folders: which one is the complete or newer copy, how many files are
-//  shared, and side by side, the files only each side has
+//  Sheet comparing two folders side by side: how many files each shares with the other, the files
+//  only each has, copying them across, and trashing a folder once the other has everything
 //
 
 import SwiftUI
@@ -26,6 +26,9 @@ struct FolderCompareView: View {
     @State private var fromIndex = false
     @State private var progress: (files: Int, bytes: Int64) = (0, 0)
     @State private var errorMessage: String?
+    @State private var copying: (done: Int64, total: Int64)?
+    @State private var copyTask: Task<Void, Never>?
+    @State private var copyFailures: [String] = []
 
     private var urls: (URL, URL)? {
         guard let a = pair.a.url(in: driveMonitor.drives), let b = pair.b.url(in: driveMonitor.drives) else { return nil }
@@ -40,11 +43,16 @@ struct FolderCompareView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                columns { header($0) }
+                columns { side in
+                    VStack(spacing: 16) {
+                        header(side)
+                        if let result { availability(side, result) }
+                    }
+                }
                 if let errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                 } else if let result {
-                    summary(result)
+                    copyControls(result)
                     let listing = result.listingFolders()
                     columns { side in
                         filesList(side == .a ? result.onlyA : result.onlyB, side == .a ? listing.a : listing.b,
@@ -66,10 +74,11 @@ struct FolderCompareView: View {
         .frame(minWidth: 760, idealWidth: 860, minHeight: 480, idealHeight: 680)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(result == nil && errorMessage == nil ? "Cancel" : "Done") { dismiss() }
+                Button(result == nil && errorMessage == nil || copying != nil ? "Cancel" : "Done") { dismiss() }
             }
         }
         .task(id: connected) { await run() }
+        .onDisappear { copyTask?.cancel() }
     }
 
     // MARK: - Sections
@@ -98,7 +107,7 @@ struct FolderCompareView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if let result, !fromIndex, trashable(result.verdict).contains(side) {
+            if let result, !fromIndex, copying == nil, trashable(result.verdict).contains(side) {
                 Button("Move “\(folder.name)” to Trash", role: .destructive) {
                     onTrash(folder)
                     dismiss()
@@ -108,50 +117,67 @@ struct FolderCompareView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Verdict, the safe-elsewhere lines and the availability bar, full width
-    private func summary(_ result: FolderComparison) -> some View {
-        // By file count; changed files are neither shared nor on one side only
-        let counts = (onlyA: result.onlyA.count, shared: result.both.count + result.moved.count, onlyB: result.onlyB.count)
-        let fileTotal = max(counts.onlyA + counts.shared + counts.onlyB, 1)
+    /// This side's files by count: shared with the other side (in both, or moved), or only here.
+    /// Changed files are neither.
+    private func availability(_ side: FolderComparison.Side, _ result: FolderComparison) -> some View {
+        let unique = side == .a ? result.onlyA.count : result.onlyB.count
+        let shared = result.both.count + result.moved.count
+        let fileTotal = max(unique + shared, 1)
+        let color: Color = side == .a ? .blue : .orange
         func percent(_ n: Int) -> String {
             (Double(n) / Double(fileTotal)).formatted(.percent.precision(.fractionLength(0...1)))
         }
 
-        return VStack(alignment: .leading, spacing: 10) {
-            Label {
-                Text(verdictText(result))
-            } icon: {
-                Image(systemName: result.verdict == .neither ? "arrow.left.arrow.right" : "checkmark.circle")
-            }
-            .font(.headline)
-            ForEach([FolderComparison.Side.a, .b], id: \.self) { side in
-                let files = side == .a ? result.onlyA : result.onlyB
-                if !files.isEmpty, files.allSatisfy({ $0.elsewhere != nil }) {
-                    Text("Everything only in \(name(side)) is safe elsewhere")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if fromIndex {
-                let offline = [pair.a, pair.b].filter { $0.url(in: driveMonitor.drives) == nil }.map(\.driveName)
-                Text("From the index. Connect \(offline.joined(separator: " and ")) to compare on disk. The index skips Capture One sidecars and can be out of date.")
-                    .foregroundStyle(.secondary)
-            }
+        return VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geometry in
                 let scale = geometry.size.width / CGFloat(fileTotal)
                 HStack(spacing: 0) {
-                    Rectangle().fill(.blue).frame(width: CGFloat(counts.onlyA) * scale)
-                    Rectangle().fill(.tertiary).frame(width: CGFloat(counts.shared) * scale)
-                    Rectangle().fill(.orange).frame(width: CGFloat(counts.onlyB) * scale)
+                    Rectangle().fill(.tertiary).frame(width: CGFloat(shared) * scale)
+                    Rectangle().fill(color).frame(width: CGFloat(unique) * scale)
                 }
             }
             .frame(height: 8)
             .clipShape(Capsule())
             HStack {
-                legend("Only in \(name(.a)): \(percent(counts.onlyA))", .blue)
+                legend("Shared: \(percent(shared))", .tertiary)
                 Spacer()
-                legend("Shared: \(percent(counts.shared))", .tertiary)
+                legend("Only here: \(percent(unique))", color)
+            }
+        }
+    }
+
+    /// Copy what's missing one way or both, then compare again. A folder can be trashed only once
+    /// that fresh comparison shows the other copy has everything.
+    @ViewBuilder
+    private func copyControls(_ result: FolderComparison) -> some View {
+        if fromIndex {
+            let offline = [pair.a, pair.b].filter { $0.url(in: driveMonitor.drives) == nil }.map(\.driveName)
+            Text("From the index. Connect \(offline.joined(separator: " and ")) to compare on disk. The index skips Capture One sidecars and can be out of date.")
+                .foregroundStyle(.secondary)
+        } else if let copying {
+            ProgressView(value: Double(copying.done), total: Double(max(copying.total, 1))) {
+                Text("Copying… \(formatted(copying.done)) of \(formatted(copying.total))")
+                    .monospacedDigit()
+            }
+        } else if !result.onlyA.isEmpty || !result.onlyB.isEmpty {
+            HStack {
+                Button("Copy to \(name(.b))", systemImage: "arrow.right") { startCopy([.a]) }
+                    .disabled(result.onlyA.isEmpty)
+                    .help("Copy the \(result.onlyA.count) files only in \(name(.a)) to \(name(.b))")
                 Spacer()
-                legend("Only in \(name(.b)): \(percent(counts.onlyB))", .orange)
+                if !result.onlyA.isEmpty, !result.onlyB.isEmpty {
+                    Button("Make All Files Available in Both", systemImage: "arrow.left.arrow.right") { startCopy([.a, .b]) }
+                    Spacer()
+                }
+                Button("Copy to \(name(.a))", systemImage: "arrow.left") { startCopy([.b]) }
+                    .disabled(result.onlyB.isEmpty)
+                    .help("Copy the \(result.onlyB.count) files only in \(name(.b)) to \(name(.a))")
+            }
+        }
+        if !copyFailures.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                Label("^[\(copyFailures.count) file](inflect: true) weren't copied", systemImage: "exclamationmark.triangle")
+                ForEach(copyFailures.prefix(5), id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
             }
         }
     }
@@ -321,25 +347,6 @@ struct FolderCompareView: View {
         return pair.a.name == pair.b.name ? "\(folder.name) on \(folder.driveName)" : folder.name
     }
 
-    private func verdictText(_ result: FolderComparison) -> String {
-        switch result.verdict {
-        case .identical:
-            return "\(name(.a)) and \(name(.b)) have the same files"
-                + (result.moved.isEmpty ? "" : ", \(result.moved.count) in different places")
-        case .complete(let side):
-            let other: FolderComparison.Side = side == .a ? .b : .a
-            let extra = total(side == .a ? result.onlyA : result.onlyB)
-            let more = extra > 0 ? ", plus \(formatted(extra)) more" : ""
-            return result.changed.isEmpty
-                ? "\(name(side)) has everything in \(name(other))\(more)"
-                : "\(name(side)) is the newer copy: everything in \(name(other)), \(result.changed.count) newer edits\(more)"
-        case .neither:
-            return result.onlyA.isEmpty && result.onlyB.isEmpty
-                ? "Each copy has newer edits the other lacks"
-                : "Neither copy has everything the other has"
-        }
-    }
-
     private func total(_ files: [FolderComparison.File]) -> Int64 { files.reduce(0) { $0 + $1.size } }
 
     private func formatted(_ bytes: Int64) -> String {
@@ -366,6 +373,39 @@ struct FolderCompareView: View {
     private func reveal(_ urls: [URL]?) {
         guard let urls else { return NSSound.beep() }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    private func startCopy(_ sides: [FolderComparison.Side]) {
+        copyTask = Task { await copyMissing(sides) }
+    }
+
+    /// Copies the files only the given sides have to the other side, then compares again
+    private func copyMissing(_ sides: [FolderComparison.Side]) async {
+        guard let urls, let result else { return }
+        let batches = sides.map { side in
+            side == .a ? (files: result.onlyA, from: urls.0, to: urls.1) : (files: result.onlyB, from: urls.1, to: urls.0)
+        }
+        let all = batches.reduce(0) { $0 + total($1.files) }
+        copying = (0, all)
+        copyFailures = []
+        var done: Int64 = 0
+        do {
+            for batch in batches {
+                let base = done
+                let failures = try await FolderComparison.copy(batch.files, from: batch.from, to: batch.to) { bytes in
+                    Task { @MainActor in copying = (base + bytes, all) }
+                }
+                copyFailures += failures.map { "\($0.path): \($0.error.localizedDescription)" }
+                done += total(batch.files)
+            }
+        } catch is CancellationError {
+            copying = nil
+            return
+        } catch {
+            copyFailures.append(error.localizedDescription)
+        }
+        copying = nil
+        await run()
     }
 
     private func run() async {

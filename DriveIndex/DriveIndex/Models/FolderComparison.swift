@@ -228,6 +228,36 @@ extension FolderComparison {
         return files
     }
 
+    /// Copies files only one side has to the other, at the same paths, keeping their dates. Never
+    /// overwrites: a file that has appeared at the destination since the comparison is left alone
+    /// and reported. Checks free space first; cancelling stops between files.
+    /// - Parameter progress: bytes copied so far
+    /// - Returns: the files that weren't copied, and why
+    static func copy(_ files: [File], from source: URL, to destination: URL,
+                     progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws -> [(path: String, error: Error)] {
+        let needed = files.reduce(0) { $0 + $1.size }
+        let values = try destination.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
+        if let free = values.volumeAvailableCapacityForImportantUsage ?? values.volumeAvailableCapacity.map(Int64.init), free < needed {
+            throw CocoaError(.fileWriteOutOfSpace, userInfo: [NSFilePathErrorKey: destination.path])
+        }
+
+        var failures: [(path: String, error: Error)] = []
+        var copied: Int64 = 0
+        for file in files {
+            try Task.checkCancellation()
+            let target = destination.appending(path: file.path)
+            do {
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.copyItem(at: source.appending(path: file.path), to: target)  // fails if target exists
+                copied += file.size
+                progress(copied)
+            } catch {
+                failures.append((file.path, error))
+            }
+        }
+        return failures
+    }
+
     static func sha256(_ url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
