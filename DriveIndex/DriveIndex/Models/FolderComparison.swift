@@ -149,12 +149,32 @@ struct FolderComparison {
 }
 
 extension FolderComparison {
+    static func isJunk(_ path: String) -> Bool {
+        let name = (path as NSString).lastPathComponent
+        return name == ".DS_Store" || name == "Icon\r" || name.hasPrefix("._")
+    }
+
+    /// The most a comparison can hash: files at the same path with the same size, and files only one
+    /// side has paired with the other side's files of the same size. Moves can finish early.
+    static func hashBudget(_ a: [String: File], _ b: [String: File]) -> Int64 {
+        let a = a.filter { !isJunk($0.key) }, b = b.filter { !isJunk($0.key) }
+        var hashed: Set<String> = []  // "a/path", "b/path"
+        for (path, file) in a where b[path]?.size == file.size { hashed.insert("a/\(path)"); hashed.insert("b/\(path)") }
+        for (side, x, y) in [("a", a, b), ("b", b, a)] {
+            let other = side == "a" ? "b" : "a"
+            let onlySizes = Set(x.filter { y[$0.key] == nil }.map(\.value.size))
+            let ySizes = Set(y.values.map(\.size))
+            for (path, file) in x where y[path] == nil && ySizes.contains(file.size) { hashed.insert("\(side)/\(path)") }
+            for (path, file) in y where onlySizes.contains(file.size) { hashed.insert("\(other)/\(path)") }
+        }
+        return hashed.reduce(0) { total, key in
+            let path = String(key.dropFirst(2))
+            return total + ((key.hasPrefix("a/") ? a[path] : b[path])?.size ?? 0)
+        }
+    }
+
     /// - Parameter content: equal for files with the same content; only asked of files whose sizes match
     static func compare(_ a: [String: File], _ b: [String: File], content: (Side, File) throws -> String) throws -> FolderComparison {
-        func isJunk(_ path: String) -> Bool {
-            let name = (path as NSString).lastPathComponent
-            return name == ".DS_Store" || name == "Icon\r" || name.hasPrefix("._")
-        }
         let a = a.filter { !isJunk($0.key) }, b = b.filter { !isJunk($0.key) }
         var result = FolderComparison()
 
@@ -204,12 +224,14 @@ extension FolderComparison {
     /// - Parameters:
     ///   - known: hashes from an earlier run; a file whose path, size and modified date are
     ///     unchanged isn't hashed again
-    ///   - progress: files found, bytes hashed so far
+    ///   - progress: files found, bytes hashed so far, and the most it will hash (including files
+    ///     whose earlier hashes are reused, so a rerun finishes early)
     static func compare(_ a: URL, _ b: URL, reusing known: [String: String] = [:],
-                        progress: @escaping @Sendable (Int, Int64) -> Void = { _, _ in }) async throws -> FolderComparison {
+                        progress: @escaping @Sendable (_ files: Int, _ hashed: Int64, _ toHash: Int64) -> Void = { _, _, _ in }) async throws -> FolderComparison {
         let filesA = try walk(a), filesB = try walk(b)
         let count = filesA.count + filesB.count
-        progress(count, 0)
+        let toHash = hashBudget(filesA, filesB)
+        progress(count, 0, toHash)
 
         var hashes = known
         var hashed: Int64 = 0
@@ -220,7 +242,7 @@ extension FolderComparison {
             let hash = try sha256(url)
             hashes[key] = hash
             hashed += file.size
-            progress(count, hashed)
+            progress(count, hashed, toHash)
             return hash
         }
         result.hashes = hashes
@@ -298,17 +320,27 @@ extension FolderComparison {
         var replacingNewer = 0      // changed files that are newer on the destination
     }
 
+    /// Built from the paths each side has, so a file several moves point at is removed at most once,
+    /// and a path the source also has is never removed
     func mirrorPlan(from side: Side) -> MirrorPlan {
+        var sizes: [String: Int64] = [:]
+        func paths(_ of: Side) -> Set<String> {
+            var paths = Set(both.map(\.path) + changed.map(\.path))
+            for file in of == .a ? onlyA : onlyB { paths.insert(file.path); sizes[file.path] = file.size }
+            for move in moved {
+                let path = move.side == of ? move.path : move.otherPath
+                paths.insert(path)
+                sizes[path] = move.size
+            }
+            return paths
+        }
+        let source = paths(side), destination = paths(side == .a ? .b : .a)
+
         var plan = MirrorPlan()
         plan.replace = changed.map(\.path)
         plan.replacingNewer = changed.filter { $0.newer != nil && $0.newer != side }.count
-        plan.remove = (side == .a ? onlyB : onlyA).map(\.path)
-        plan.add = side == .a ? onlyA : onlyB
-        for move in moved {
-            let (sourcePath, destinationPath) = move.side == side ? (move.path, move.otherPath) : (move.otherPath, move.path)
-            plan.remove.append(destinationPath)
-            plan.add.append(File(path: sourcePath, size: move.size, modified: nil))
-        }
+        plan.remove = destination.subtracting(source).sorted()
+        plan.add = source.subtracting(destination).sorted().map { File(path: $0, size: sizes[$0] ?? 0, modified: nil) }
         return plan
     }
 

@@ -24,7 +24,7 @@ struct FolderCompareView: View {
 
     @State private var result: FolderComparison?
     @State private var fromIndex = false
-    @State private var progress: (files: Int, bytes: Int64) = (0, 0)
+    @State private var progress: (files: Int, bytes: Int64, total: Int64) = (0, 0, 0)
     @State private var errorMessage: String?
     @State private var copying: (done: Int64, total: Int64)?
     @State private var copyTask: Task<Void, Never>?
@@ -80,7 +80,14 @@ struct FolderCompareView: View {
                 VStack(spacing: 8) {
                     ProgressView()
                     Text("Comparing…")
-                    Text("\(progress.files) files, \(formatted(progress.bytes)) hashed")
+                    // Until both folders are walked there's nothing to measure against
+                    if progress.total > 0 {
+                        ProgressView(value: Double(progress.bytes), total: Double(progress.total))
+                            .frame(width: 280)
+                    }
+                    Text(progress.total > 0
+                         ? "\(progress.files) files, \(formatted(progress.bytes)) of \(formatted(progress.total)) hashed"
+                         : "Finding files…")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
@@ -501,14 +508,14 @@ struct FolderCompareView: View {
     private func run(reusing earlier: FolderComparison? = nil) async {
         if earlier == nil { result = nil }
         errorMessage = nil
-        progress = (0, 0)
+        progress = (0, 0, 0)
         let urls = urls
         fromIndex = urls == nil
         do {
             var comparison: FolderComparison
             if let urls {
-                comparison = try await FolderComparison.compare(urls.0, urls.1, reusing: earlier?.hashes ?? [:]) { files, bytes in
-                    Task { @MainActor in progress = (files, bytes) }
+                comparison = try await FolderComparison.compare(urls.0, urls.1, reusing: earlier?.hashes ?? [:]) { files, bytes, toHash in
+                    Task { @MainActor in progress = (files, bytes, toHash) }
                 }
             } else {
                 let database = DatabaseManager.shared
