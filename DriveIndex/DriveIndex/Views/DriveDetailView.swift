@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct DriveDetailView: View {
     let drive: DriveInfo
@@ -96,7 +95,7 @@ struct DriveDetailView: View {
 
     private var hero: some View {
         VStack {
-            Image(nsImage: driveIcon)
+            Image(nsImage: drive.finderIcon)
                 .resizable()
                 .frame(width: 64, height: 64)
 
@@ -113,16 +112,6 @@ struct DriveDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom)
-    }
-
-    /// The volume's own Finder icon when mounted, Finder's generic external drive icon when offline
-    private var driveIcon: NSImage {
-        if FileManager.default.fileExists(atPath: drive.path) {
-            return NSWorkspace.shared.icon(forFile: drive.path)
-        }
-        // ponytail: not public API; falls back to the generic volume (folder-looking) icon if Apple moves it
-        return NSImage(contentsOfFile: "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/External.icns")
-            ?? NSWorkspace.shared.icon(for: .volume)
     }
 
     @ViewBuilder

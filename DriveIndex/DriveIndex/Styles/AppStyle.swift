@@ -36,6 +36,18 @@ extension StorageCategory {
     }
 }
 
+extension DriveInfo {
+    /// The volume's own Finder icon when mounted, Finder's generic external drive icon when offline
+    var finderIcon: NSImage {
+        if FileManager.default.fileExists(atPath: path) {
+            return NSWorkspace.shared.icon(forFile: path)
+        }
+        // ponytail: not public API; falls back to the generic volume (folder-looking) icon if Apple moves it
+        return NSImage(contentsOfFile: "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/External.icns")
+            ?? NSWorkspace.shared.icon(for: .volume)
+    }
+}
+
 extension NSWorkspace {
     /// Finder's icon for a file, by type rather than path so it works for offline drives.
     /// ponytail: looked up per row render; cache by extension if long tables stutter

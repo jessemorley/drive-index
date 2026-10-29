@@ -193,20 +193,28 @@ struct DriveDetailCard: View {
 
     var body: some View {
         Section {
-            NavigationLink(value: drive) {
-                DriveSummary(drive: drive)
-            }
+            // One row, so the Form draws no separator between the summary and its buttons
+            VStack(alignment: .leading, spacing: 14) {
+                NavigationLink(value: drive) {
+                    DriveSummary(drive: drive)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // No chevron, so the bar and size line up with the buttons' right edge
+                .navigationLinkIndicatorVisibility(.hidden)
 
-            if drive.isConnected {
-                HStack {
-                    Spacer()
-                    Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
-                        .disabled(indexManager.isIndexing)
-                    Button("Show in Finder", action: revealInFinder)
-                    Button("Eject", action: ejectDrive)
-                        .help("Eject drive")
+                if drive.isConnected {
+                    HStack {
+                        Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
+                            .disabled(indexManager.isIndexing)
+                        Button("Show in Finder", action: revealInFinder)
+                        Spacer()
+                        Button("Eject", action: ejectDrive)
+                            .help("Eject drive")
+                    }
                 }
             }
+            .padding(.vertical, 8)
         }
     }
 
@@ -243,13 +251,16 @@ struct DriveSummary: View {
     let drive: DriveInfo
 
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 12) {
             LabeledContent {
                 if drive.totalCapacity > 0 {
                     Text(drive.formattedTotal)
                 }
             } label: {
                 HStack {
+                    Image(nsImage: drive.finderIcon)
+                        .resizable()
+                        .frame(width: 24, height: 24)
                     Text(drive.name)
                         .lineLimit(1)
                     ConnectionChip(isConnected: drive.isConnected)
@@ -257,13 +268,17 @@ struct DriveSummary: View {
             }
 
             if drive.totalCapacity > 0 {
-                ProgressView(value: drive.usedPercentage, total: 100)
-                    .tint(fullnessColor)
+                UsageBar(fraction: drive.usedPercentage / 100, color: fullnessColor)
+                    .accessibilityLabel("\(drive.formattedUsed) of \(drive.formattedTotal) used")
             }
 
-            Text(details)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text(details)
+                Spacer()
+                Text("Last scanned \(drive.formattedLastScan)")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -275,7 +290,6 @@ struct DriveSummary: View {
         if drive.fileCount > 0 {
             parts.append("\(drive.fileCount.formatted()) files")
         }
-        parts.append("Last scanned \(drive.formattedLastScan)")
         return parts.joined(separator: " · ")
     }
 
@@ -288,6 +302,28 @@ struct DriveSummary: View {
         case 50...: return .yellow
         default: return .green
         }
+    }
+}
+
+/// Thin capacity bar in the plain system color.
+/// ponytail: drawn because ProgressView/Gauge wash their tint out in dark mode and can't change height
+private struct UsageBar: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        Capsule()
+            .fill(.quaternary)
+            .overlay(alignment: .leading) {
+                GeometryReader { geometry in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: geometry.size.width * min(max(fraction, 0), 1))
+                }
+            }
+            .frame(height: 6)
+            .accessibilityElement()
+            .accessibilityValue("\(Int((fraction * 100).rounded())) percent")
     }
 }
 
