@@ -56,7 +56,13 @@ actor DatabaseManager {
     private let dbPath: String
     private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    private init() {
+    /// - Parameter path: a database file other than the app's (tests)
+    init(path: String? = nil) {
+        if let path = path {
+            dbPath = path
+            return
+        }
+
         // Store database in Application Support directory
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
