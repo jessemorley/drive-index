@@ -8,18 +8,28 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// "Connected" / "Disconnected" chip for the drive header and drives list. Sized by the surrounding font.
+/// Chip tinted with a system color, or grey when `color` is nil. Sized by the surrounding font.
 /// ponytail: macOS has no status-chip control; capsule tinted with hierarchical system colors
+struct StatusChip: View {
+    let title: String
+    let color: Color?
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundStyle(color ?? .secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background((color ?? .gray).quaternary, in: .capsule)
+    }
+}
+
+/// "Connected" / "Disconnected" chip for the drive header and drives list
 struct ConnectionChip: View {
     let isConnected: Bool
 
     var body: some View {
-        Text(isConnected ? "Connected" : "Disconnected")
-            .font(.caption)
-            .foregroundStyle(isConnected ? Color.green : Color.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(isConnected ? Color.green.quaternary : Color.gray.quaternary, in: .capsule)
+        StatusChip(title: isConnected ? "Connected" : "Disconnected", color: isConnected ? .green : nil)
     }
 }
 

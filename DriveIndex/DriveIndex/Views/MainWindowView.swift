@@ -72,6 +72,8 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .duplicates:
             DuplicatesView()
+        case .captureOne:
+            CaptureOneView()
         }
     }
 }
