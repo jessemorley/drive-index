@@ -33,10 +33,8 @@ struct SettingsNavigationSidebarRow: View {
     var body: some View {
         Label {
             Text(item.title)
-                .font(DesignSystem.Typography.body)
         } icon: {
             Image(systemName: item.icon)
-                .font(.system(size: DesignSystem.Sidebar.iconSize, weight: .medium))
                 .symbolRenderingMode(.hierarchical)
         }
     }

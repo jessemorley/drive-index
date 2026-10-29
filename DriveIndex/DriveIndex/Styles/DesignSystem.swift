@@ -97,7 +97,6 @@ struct DesignSystem {
         static let maxWidth: CGFloat = 250
         static let itemHeight: CGFloat = 28
         static let sectionSpacing: CGFloat = 16
-        static let iconSize: CGFloat = 16
     }
 
     // MARK: - Toolbar
