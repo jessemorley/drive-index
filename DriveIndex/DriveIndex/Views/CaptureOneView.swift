@@ -158,6 +158,8 @@ struct CaptureOneView: View {
     @State private var deleteProgress: [String: Double] = [:]
     /// Sessions whose Delete button is showing "Deleted" before the card goes
     @State private var flashingDeleted: Set<String> = []
+    /// Emptied cards, faded out before they're removed
+    @State private var fadedCards: Set<String> = []
     @State private var isDeleting = false
     /// Bytes freed so far, per tab, across launches
     @AppStorage("captureOne.freed.settings") private var freedSettings = 0
@@ -287,6 +289,7 @@ struct CaptureOneView: View {
             reveal: { revealInFinder($0) }
         )
         .equatable()
+        .opacity(fadedCards.contains(group.id) ? 0 : 1)
     }
 
     // MARK: - Data
@@ -300,10 +303,8 @@ struct CaptureOneView: View {
             let (maskSets, folders, files) = try await (masks, settings, sessionFiles)
             let trashEntries = try await SessionTrashItem.load(drives: drives, sessionFiles: files)
 
-            // A safe old Settings folder takes its mask backups with it, so they aren't listed twice
-            let leaving = Set(folders.filter { $0.status == .safe }.map(\.id))
             let items = folders.map(CleanupRow.Item.settings)
-                + maskSets.filter { !leaving.contains("\($0.driveUUID)/\($0.settingsPath)") }.map(CleanupRow.Item.masks)
+                + maskSets.map(CleanupRow.Item.masks)
                 + trashEntries.map(CleanupRow.Item.trash)
 
             rows = items.map { item in
@@ -391,14 +392,23 @@ struct CaptureOneView: View {
         for task in finishing { await task.value }
         // Hold the last "Deleted" a moment, then everything that went leaves at once
         try? await Task.sleep(for: .milliseconds(700))
+        // Fade the emptied cards out first, then close the gap, so the cards below don't slide under a fading one
+        let emptied = Set((groups ?? []).filter { $0.rows.allSatisfy { deleted.contains($0.id) } }.map(\.id))
+        withAnimation(.easeOut(duration: 0.25)) { fadedCards = emptied }
+        try? await Task.sleep(for: .milliseconds(250))
         withAnimation(.easeOut(duration: 0.25)) {
             // Drop what went rather than rescanning every drive
-            self.rows?.removeAll { deleted.contains($0.id) }
+            // Mask backups inside a deleted Settings folder went with it
+            self.rows?.removeAll { row in
+                if case .masks(let set) = row.item, deleted.contains("settings:\(set.driveUUID)/\(set.settingsPath)") { return true }
+                return deleted.contains(row.id)
+            }
             regroup()
         } completion: {
             // Only now: clearing during the fade would flip "Deleted" back to "Delete…"
             deleteProgress = [:]
             flashingDeleted = []
+            fadedCards = []
         }
         isDeleting = false
         deleteFailures = failed
