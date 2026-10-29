@@ -23,6 +23,8 @@ struct NavigationSidebar: View {
                     .tag(NavigationItem.drives)
                 NavigationSidebarRow(item: .duplicates)
                     .tag(NavigationItem.duplicates)
+                NavigationSidebarRow(item: .maskBackups)
+                    .tag(NavigationItem.maskBackups)
             } header: {
                 Text("Index")
             }

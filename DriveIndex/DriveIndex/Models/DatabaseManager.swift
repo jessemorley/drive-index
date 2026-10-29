@@ -1667,6 +1667,40 @@ actor DatabaseManager {
         return files
     }
 
+    // MARK: - Capture One
+
+    /// Capture One mask backups ("IMG.HEIC.comask.backup", "...backup_3"). The live ".comask" files are
+    /// excluded from the index by default, so callers check for those on disk.
+    func getMaskBackups() throws -> [(driveUUID: String, relativePath: String, size: Int64)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT drive_uuid, relative_path, size
+            FROM files
+            WHERE is_directory = 0 AND name GLOB '*.comask.backup*'
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var results: [(String, String, Int64)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 0))
+            let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+            let size = sqlite3_column_int64(stmt, 2)
+            results.append((driveUUID, relativePath, size))
+        }
+
+        return results
+    }
+
     // MARK: - Database Optimization
 
     /// Run PRAGMA optimize to update query statistics and merge FTS5 segments
