@@ -121,7 +121,7 @@ struct DuplicatesView: View {
                 VStack {
                     ForEach(group.files, id: \.id) { file in
                         Divider()
-                        copyRow(file, in: group)
+                        copyRow(file)
                     }
                 }
                 .padding(.top, 6)
@@ -232,7 +232,7 @@ struct DuplicatesView: View {
         return a == b ? "Compare “\(a)” Folders" : "Compare “\(a)” and “\(b)”"
     }
 
-    private func copyRow(_ file: DuplicateFile, in group: DuplicateGroup) -> some View {
+    private func copyRow(_ file: DuplicateFile) -> some View {
         let drive = driveMonitor.drives.first { $0.id == file.driveUUID }
         let connected = drive?.isConnected ?? false
         return HStack {
@@ -269,15 +269,6 @@ struct DuplicatesView: View {
                 .disabled(!connected)
             Button("Move to Trash") { moveToTrash(file) }
                 .disabled(!connected)
-            if kind == .folders {
-                Menu("Compare Parent Folder With") {
-                    ForEach(group.files.filter { $0.id != file.id }, id: \.id) { other in
-                        Button("\(other.driveName): \(parentLocation(other).relativePath)") {
-                            comparing = FolderPair(a: parentLocation(file), b: parentLocation(other))
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -317,11 +308,6 @@ struct DuplicatesView: View {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([driveURL.appendingPathComponent(file.relativePath)])
-    }
-
-    private func parentLocation(_ folder: DuplicateFile) -> FolderLocation {
-        FolderLocation(driveUUID: folder.driveUUID, driveName: folder.driveName,
-                       relativePath: (folder.relativePath as NSString).deletingLastPathComponent)
     }
 
     /// Two Open panels, for any two folders
