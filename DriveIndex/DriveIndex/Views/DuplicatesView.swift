@@ -29,6 +29,16 @@ struct DuplicatesView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @AppStorage("duplicates.sort") private var sort: DuplicateSort = .wasted
+    @AppStorage("duplicates.excludeLocal") private var excludeLocal = false
+
+    /// The groups shown: without this Mac's copies, a group needs two copies on drives
+    private var shownGroups: [DuplicateGroup] {
+        guard excludeLocal, let mac = driveMonitor.drives.first(where: \.isLocal) else { return groups }
+        return groups.compactMap { group in
+            let files = group.files.filter { $0.driveUUID != mac.id }
+            return files.count > 1 ? DuplicateGroup(name: group.name, size: group.size, count: files.count, files: files) : nil
+        }
+    }
 
     var body: some View {
         content
@@ -41,6 +51,12 @@ struct DuplicatesView: View {
                     }
                     .pickerStyle(.menu)
                     .help("Sort duplicates")
+                }
+                if let mac = driveMonitor.drives.first(where: \.isLocal) {
+                    ToolbarItem(id: "excludeLocal", placement: .automatic) {
+                        Toggle("Exclude \(mac.name)", systemImage: "laptopcomputer", isOn: $excludeLocal)
+                            .help("Hide copies on \(mac.name)")
+                    }
                 }
                 ToolbarItem(id: "refresh", placement: .automatic) {
                     Button("Refresh", systemImage: "arrow.clockwise") {
@@ -60,13 +76,13 @@ struct DuplicatesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage {
             ContentUnavailableView("Couldn't Load Duplicates", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
-        } else if groups.isEmpty {
+        } else if shownGroups.isEmpty {
             ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("Files with identical contents will appear here"))
         } else {
             ScrollView {
                 // Lazy: there can be thousands of groups
                 LazyVStack {
-                    ForEach(groups, id: \.cardID) { group in
+                    ForEach(shownGroups, id: \.cardID) { group in
                         card(group)
                     }
                 }
