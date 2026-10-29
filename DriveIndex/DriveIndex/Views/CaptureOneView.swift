@@ -603,7 +603,7 @@ private struct SessionCard: View, Equatable {
                     }
                     .help("Delete this session's safe items")
             } else if !connected {
-                Text("Connect \(driveName) to check")
+                Text("Connect \(driveName)")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Nothing safe to remove")
