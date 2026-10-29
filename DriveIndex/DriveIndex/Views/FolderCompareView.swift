@@ -149,11 +149,9 @@ struct FolderCompareView: View {
             }
             .frame(height: 8)
             .clipShape(Capsule())
-            HStack {
-                legend("Shared: \(percent(shared))", .tertiary)
-                Spacer()
-                legend("Only here: \(percent(unique))", color)
-            }
+            Text("\(percent(unique)) unique files")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -198,15 +196,6 @@ struct FolderCompareView: View {
                 ForEach(copyFailures.prefix(5), id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
             }
         }
-    }
-
-    private func legend(_ title: String, _ style: some ShapeStyle) -> some View {
-        Label {
-            Text(title)
-        } icon: {
-            Image(systemName: "circle.fill").foregroundStyle(style)
-        }
-        .font(.caption)
     }
 
     /// A titled card of rows, divided like the duplicate cards
@@ -260,13 +249,17 @@ struct FolderCompareView: View {
             card("Only here: ^[\(files.count) file](inflect: true), \(formatted(total(files)))", entries, id: \.id) { entry in
                 if entry.folder.isEmpty {
                     let file = entry.files[0]
-                    row(file.path, size: file.size, note: file.elsewhere.map(safeNote), at: root?.appending(path: file.path))
+                    row(file.path, size: file.size, note: file.elsewhere.map(safeNote), at: root?.appending(path: file.path)) {
+                        trash(file.path, on: side, removing: [file.path])
+                    }
                 } else {
                     let safe = entry.files.filter { $0.elsewhere != nil }
                     let note = safe.count == entry.files.count
                         ? safeNote(safe[0].elsewhere!)
                         : safe.isEmpty ? nil : "\(safe.count) of \(entry.files.count) files safe elsewhere"
-                    row(entry.folder, isFolder: true, size: total(entry.files), note: note, at: root?.appending(path: entry.folder))
+                    row(entry.folder, isFolder: true, size: total(entry.files), note: note, at: root?.appending(path: entry.folder)) {
+                        trash(entry.folder, on: side, removing: Set(entry.files.map(\.path)))
+                    }
                 }
             }
         }
@@ -285,7 +278,8 @@ struct FolderCompareView: View {
     }
 
     /// A file, or a folder of files, only one side has
-    private func row(_ name: String, isFolder: Bool = false, size: Int64, note: String?, at url: URL?) -> some View {
+    private func row(_ name: String, isFolder: Bool = false, size: Int64, note: String?, at url: URL?,
+                     moveToTrash: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Label {
@@ -311,6 +305,9 @@ struct FolderCompareView: View {
         .contextMenu {
             Button("Reveal in Finder") { reveal(url.map { [$0] }) }
                 .disabled(url == nil)
+            Divider()
+            Button("Move to Trash", action: moveToTrash)
+                .disabled(url == nil || copying != nil || checking)
         }
     }
 
@@ -405,6 +402,20 @@ struct FolderCompareView: View {
         case .complete(.a): [.b]
         case .complete(.b): [.a]
         case .neither: []
+        }
+    }
+
+    /// Trashes a file or folder in one of the compared folders, the same way as a duplicate copy,
+    /// and drops its files from the list once it's gone from disk
+    private func trash(_ path: String, on side: FolderComparison.Side, removing paths: Set<String>) {
+        let folder = side == .a ? pair.a : pair.b
+        guard let url = folder.url(in: driveMonitor.drives)?.appending(path: path) else { return NSSound.beep() }
+        onTrash(FolderLocation(driveUUID: folder.driveUUID, driveName: folder.driveName,
+                               relativePath: folder.relativePath.isEmpty ? path : "\(folder.relativePath)/\(path)"))
+        guard !FileManager.default.fileExists(atPath: url.path) else { return }
+        withAnimation {
+            if side == .a { result?.onlyA.removeAll { paths.contains($0.path) } }
+            else { result?.onlyB.removeAll { paths.contains($0.path) } }
         }
     }
 
