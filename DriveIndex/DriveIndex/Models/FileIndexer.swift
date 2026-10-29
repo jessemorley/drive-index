@@ -488,6 +488,9 @@ actor FileIndexer {
             }
         }
 
+        // Every finished scan counts as "last scanned"; "last updated" below only moves on changes
+        try await database.updateLastCheckedDate(for: driveUUID, date: Date())
+
         // Update drive metadata only if changes occurred
         if newCount > 0 || modifiedCount > 0 || deletedCount > 0 {
             let fileCount = try await database.getFileCount(for: driveUUID)
