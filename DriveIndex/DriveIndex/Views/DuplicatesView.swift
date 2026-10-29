@@ -166,24 +166,34 @@ struct DuplicatesView: View {
         }
     }
 
-    /// Opens Folder Compare on the copies' parent folders; with more than two copies, pick the pair
+    /// Opens Folder Compare above the copies: a click takes the highest level whose folders still share
+    /// a name on both sides (a session, not its Capture folder), and the menu lists every level. With
+    /// more than two copies, the menu lists each pair at its highest level.
     @ViewBuilder
     private func compareParentsButton(_ group: DuplicateGroup) -> some View {
         let pairs = group.files.indices.flatMap { i in group.files[(i + 1)...].map { (group.files[i], $0) } }
         if pairs.count == 1 {
-            Button("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
-                comparing = FolderPair(a: parentLocation(pairs[0].0), b: parentLocation(pairs[0].1))
+            let levels = compareLevels(pairs[0].0, pairs[0].1)
+            Menu("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
+                ForEach(levels.indices.reversed(), id: \.self) { i in
+                    Button(levelTitle(levels[i])) { comparing = levels[i] }
+                }
+            } primaryAction: {
+                comparing = levels.last
             }
             .labelStyle(.iconOnly)
+            .menuStyle(.button)
             .buttonStyle(.borderless)
+            .fixedSize()
             .foregroundStyle(.orange)
-            .help("Compare the folders these copies are in")
+            .help("Compare the folders above these copies; hold for other levels")
         } else {
             Menu("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
                 ForEach(pairs.indices, id: \.self) { i in
                     let (a, b) = pairs[i]
-                    Button("\(a.driveName) and \(b.driveName): \(parentLocation(a).relativePath), \(parentLocation(b).relativePath)") {
-                        comparing = FolderPair(a: parentLocation(a), b: parentLocation(b))
+                    let pair = compareLevels(a, b).last!
+                    Button("\(a.driveName) and \(b.driveName): \(pair.a.relativePath), \(pair.b.relativePath)") {
+                        comparing = pair
                     }
                 }
             }
@@ -193,8 +203,33 @@ struct DuplicatesView: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .foregroundStyle(.orange)
-            .help("Compare the folders these copies are in")
+            .help("Compare the folders above these copies")
         }
+    }
+
+    /// The folders above two copies, nearest first: their parents, then each level up while both
+    /// sides' folders share a name, stopping at either drive's root
+    private func compareLevels(_ a: DuplicateFile, _ b: DuplicateFile) -> [FolderPair] {
+        func parent(_ path: String) -> String { (path as NSString).deletingLastPathComponent }
+        func name(_ path: String) -> String { (path as NSString).lastPathComponent }
+        func pair(_ pathA: String, _ pathB: String) -> FolderPair {
+            FolderPair(a: FolderLocation(driveUUID: a.driveUUID, driveName: a.driveName, relativePath: pathA),
+                       b: FolderLocation(driveUUID: b.driveUUID, driveName: b.driveName, relativePath: pathB))
+        }
+        var (pathA, pathB) = (parent(a.relativePath), parent(b.relativePath))
+        var levels = [pair(pathA, pathB)]
+        while true {
+            let (upA, upB) = (parent(pathA), parent(pathB))
+            guard !upA.isEmpty, !upB.isEmpty, name(upA) == name(upB) else { break }
+            (pathA, pathB) = (upA, upB)
+            levels.append(pair(pathA, pathB))
+        }
+        return levels
+    }
+
+    private func levelTitle(_ pair: FolderPair) -> String {
+        let (a, b) = (pair.a.name, pair.b.name)
+        return a == b ? "Compare “\(a)” Folders" : "Compare “\(a)” and “\(b)”"
     }
 
     private func copyRow(_ file: DuplicateFile, in group: DuplicateGroup) -> some View {
