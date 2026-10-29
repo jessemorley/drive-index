@@ -222,8 +222,11 @@ actor FSEventsMonitor {
         FSEventStreamRelease(stream)
         eventStreams[driveUUID] = nil
 
-        // Release context (no callbacks run after FSEventStreamInvalidate)
-        streamContexts[driveUUID]?.release()
+        // Invalidate doesn't wait for a callback already running on main, so release the context
+        // on main too: it runs after any callback in flight
+        if let context = streamContexts[driveUUID] {
+            DispatchQueue.main.async { context.release() }
+        }
         streamContexts[driveUUID] = nil
 
         print("✅ FSEvents monitoring stopped for: \(driveUUID)")
