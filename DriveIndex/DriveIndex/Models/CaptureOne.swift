@@ -66,6 +66,72 @@ enum CaptureOne {
     static func mountPaths(_ drives: [DriveInfo]) -> [String: URL] {
         Dictionary(drives.filter(\.isConnected).map { ($0.id, URL(fileURLWithPath: $0.path)) }) { first, _ in first }
     }
+
+    static func diskSize(of folder: URL) -> Int64 {
+        var total: Int64 = 0
+        let enumerator = FileManager.default.enumerator(atPath: folder.path)
+        while let relative = enumerator?.nextObject() as? String {
+            total += Int64((try? folder.appending(path: relative).resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return total
+    }
+}
+
+// MARK: - Folders outside sessions
+
+/// A "CaptureOne" folder with no session file above it: Capture One writes one into every folder
+/// it browses, so outside a session it's settings and previews nobody opened as a project. Any
+/// edits made while browsing go with it; the user treats these as junk.
+struct LooseCaptureOneFolder: Identifiable {
+    let driveUUID: String
+    /// ".../CaptureOne"
+    let path: String
+    /// Unknown until the drive is connected
+    var size: Int64?
+    var status: CleanupStatus = .unverified
+
+    var id: String { "\(driveUUID)/\(path)" }
+    var shootPath: String { path.split(separator: "/").dropLast().joined(separator: "/") }
+
+    /// Every indexed "CaptureOne" folder outside a session, checked on connected drives
+    static func load(drives: [DriveInfo], sessionFiles: [String: String]) async throws -> [LooseCaptureOneFolder] {
+        let mountPaths = CaptureOne.mountPaths(drives)
+        return try await DatabaseManager.shared.getCaptureOneFolders().compactMap { row in
+            var folder = LooseCaptureOneFolder(driveUUID: row.driveUUID, path: row.path)
+            guard CaptureOne.session(driveUUID: row.driveUUID, shootPath: folder.shootPath, files: sessionFiles).file == nil
+            else { return nil }
+            if let drive = mountPaths[row.driveUUID] {
+                let url = drive.appending(path: row.path)
+                // Gone from disk but still indexed: the next scan drops it
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                folder.size = CaptureOne.diskSize(of: url)
+                folder.status = isInSession(row.path, on: drive) ? .hold : .safe
+            }
+            return folder
+        }
+    }
+
+    /// Whether any folder from the drive root down to the one holding `path` has a session file,
+    /// read on disk rather than from the index
+    static func isInSession(_ path: String, on drive: URL) -> Bool {
+        var parts = path.split(separator: "/").dropLast()
+        while true {
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: drive.appending(path: parts.joined(separator: "/")).path)) ?? []
+            if names.contains(where: { $0.hasSuffix(".cosessiondb") }) { return true }
+            if parts.isEmpty { return false }
+            parts.removeLast()
+        }
+    }
+
+    /// Deletes the folder for good, checking first that it's still a "CaptureOne" folder outside
+    /// any session, and isn't a symlink.
+    func delete(on drive: URL) async -> Bool {
+        let url = drive.appending(path: path)
+        guard url.lastPathComponent == "CaptureOne", !Self.isInSession(path, on: drive),
+              (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false
+        else { return false }
+        return (try? FileManager.default.removeItem(at: url)) != nil
+    }
 }
 
 // MARK: - Mask backups
@@ -258,12 +324,14 @@ struct OldSettingsFolder: Identifiable {
         return (files, newestSettings ?? folderDate)
     }
 
-    /// Deletes the folder for good, after comparing it with its siblings again on disk.
-    func delete(on drive: URL) async -> Bool {
+    /// Deletes the folder for good, after comparing it with its siblings again on disk. `force`
+    /// deletes it even with unique files, but never the folder being kept.
+    func delete(on drive: URL, force: Bool = false) async -> Bool {
         let siblings = (try? FileManager.default.contentsOfDirectory(atPath: drive.appending(path: captureOnePath).path)) ?? []
         let paths = siblings.filter { Self.version(of: $0) != nil }.map { "\(captureOnePath)/\($0)" }
         let url = drive.appending(path: path)
-        guard Self.check(paths, driveUUID: driveUUID, on: drive).first(where: { $0.path == path })?.status == .safe,
+        guard let current = Self.check(paths, driveUUID: driveUUID, on: drive).first(where: { $0.path == path }),
+              force || current.status == .safe,
               (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == false
         else { return false }
         return (try? FileManager.default.removeItem(at: url)) != nil
@@ -318,19 +386,10 @@ struct SessionTrashItem: Identifiable {
                 // Gone from disk but still indexed: the next scan drops it
                 guard FileManager.default.fileExists(atPath: url.path) else { return nil }
                 item.status = .safe
-                if item.isDirectory { item.size = diskSize(of: url) }
+                if item.isDirectory { item.size = CaptureOne.diskSize(of: url) }
             }
             return item
         }
-    }
-
-    private static func diskSize(of folder: URL) -> Int64 {
-        var total: Int64 = 0
-        let enumerator = FileManager.default.enumerator(atPath: folder.path)
-        while let relative = enumerator?.nextObject() as? String {
-            total += Int64((try? folder.appending(path: relative).resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-        }
-        return total
     }
 
     /// Deletes the entry for good, checking first that it still sits directly in a

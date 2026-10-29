@@ -146,6 +146,22 @@ struct OldSettingsFolderTests {
         #expect(!FileManager.default.fileExists(atPath: drive.appending(path: "S/CaptureOne/Settings1670").path))
         #expect(FileManager.default.fileExists(atPath: drive.appending(path: "S/CaptureOne/Settings1680/a.jpg.cos").path))
     }
+
+    // Forcing deletes an old folder with unique files, but never the one being kept
+    @Test func forceNeverTakesTheKeptFolder() async throws {
+        let drive = try makeDrive()
+        defer { try? FileManager.default.removeItem(at: drive) }
+        try write(["a.jpg.cos", "unique.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1670"), modified: Date() - 3600)
+        try write(["a.jpg.cos"], in: drive.appending(path: "S/CaptureOne/Settings1680"), modified: Date())
+
+        let kept = OldSettingsFolder(driveUUID: "A", path: "S/CaptureOne/Settings1680", status: .safe)
+        #expect(await kept.delete(on: drive, force: true) == false)
+
+        let old = OldSettingsFolder(driveUUID: "A", path: "S/CaptureOne/Settings1670", status: .hold)
+        #expect(await old.delete(on: drive) == false)
+        #expect(await old.delete(on: drive, force: true) == true)
+        #expect(FileManager.default.fileExists(atPath: drive.appending(path: "S/CaptureOne/Settings1680/a.jpg.cos").path))
+    }
 }
 
 struct SessionTrashTests {
@@ -171,5 +187,23 @@ struct SessionTrashTests {
         try Data().write(to: drive.appending(path: "Session/Session.cosessiondb"))
         #expect(await entry.delete(on: drive) == true)
         #expect(!FileManager.default.fileExists(atPath: drive.appending(path: "Session/Trash/IMG.jpeg").path))
+    }
+}
+
+struct LooseCaptureOneFolderTests {
+    // The delete step looks for a session file above on disk rather than trusting the index
+    @Test func deleteRefusesInsideASession() async throws {
+        let drive = try makeDrive()
+        defer { try? FileManager.default.removeItem(at: drive) }
+        try write(["a.jpg.cos"], in: drive.appending(path: "Jobs/Shoot/Capture/CaptureOne/Settings1680"), modified: Date())
+        let folder = LooseCaptureOneFolder(driveUUID: "A", path: "Jobs/Shoot/Capture/CaptureOne", status: .safe)
+
+        try Data().write(to: drive.appending(path: "Jobs/Shoot/Shoot.cosessiondb"))
+        #expect(await folder.delete(on: drive) == false)
+        #expect(FileManager.default.fileExists(atPath: drive.appending(path: "Jobs/Shoot/Capture/CaptureOne").path))
+
+        try FileManager.default.removeItem(at: drive.appending(path: "Jobs/Shoot/Shoot.cosessiondb"))
+        #expect(await folder.delete(on: drive) == true)
+        #expect(!FileManager.default.fileExists(atPath: drive.appending(path: "Jobs/Shoot/Capture/CaptureOne").path))
     }
 }

@@ -12,12 +12,14 @@ struct CleanupRow: Identifiable {
     enum Item {
         case masks(MaskBackupSet)
         case settings(OldSettingsFolder)
+        case loose(LooseCaptureOneFolder)
         case trash(SessionTrashItem)
 
         var driveUUID: String {
             switch self {
             case .masks(let set): set.driveUUID
             case .settings(let folder): folder.driveUUID
+            case .loose(let folder): folder.driveUUID
             case .trash(let entry): entry.driveUUID
             }
         }
@@ -26,6 +28,7 @@ struct CleanupRow: Identifiable {
             switch self {
             case .masks(let set): set.shootPath
             case .settings(let folder): folder.shootPath
+            case .loose(let folder): folder.shootPath
             case .trash(let entry): entry.sessionFolder
             }
         }
@@ -33,11 +36,14 @@ struct CleanupRow: Identifiable {
 
     let item: Item
     let session: CaptureOneSession
+    /// An old Settings folder the user chose to delete despite its unique files; counts as safe
+    var forced = false
 
     var id: String {
         switch item {
         case .masks(let set): "masks:\(set.id)"
         case .settings(let folder): "settings:\(folder.id)"
+        case .loose(let folder): "loose:\(folder.id)"
         case .trash(let entry): "trash:\(entry.id)"
         }
     }
@@ -45,7 +51,7 @@ struct CleanupRow: Identifiable {
     var tab: CaptureOneTab {
         switch item {
         case .masks: .masks
-        case .settings: .settings
+        case .settings, .loose: .settings
         case .trash: .trash
         }
     }
@@ -53,15 +59,17 @@ struct CleanupRow: Identifiable {
     var isFolder: Bool {
         switch item {
         case .masks: false
-        case .settings: true
+        case .settings, .loose: true
         case .trash(let entry): entry.isDirectory
         }
     }
 
     var status: CleanupStatus {
-        switch item {
+        if forced { return .safe }
+        return switch item {
         case .masks(let set): set.status
         case .settings(let folder): folder.status
+        case .loose(let folder): folder.status
         case .trash(let entry): entry.status
         }
     }
@@ -70,6 +78,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.imageName
         case .settings(let folder): folder.name
+        case .loose: "CaptureOne"
         case .trash(let entry): entry.name
         }
     }
@@ -85,6 +94,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")"
         case .settings(let folder): "Replaced by \(folder.kept.joined(separator: " and "))"
+        case .loose: "Not in a session"
         case .trash(let entry): entry.name == "CaptureOne" ? "Settings and previews" : ""
         }
     }
@@ -93,6 +103,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.size
         case .settings(let folder): folder.size ?? 0
+        case .loose(let folder): folder.size ?? 0
         case .trash(let entry): entry.size
         }
     }
@@ -100,6 +111,7 @@ struct CleanupRow: Identifiable {
     /// nil when unknown (an old Settings folder on a disconnected drive)
     var sizeText: String? {
         if case .settings(let folder) = item, folder.size == nil { return nil }
+        if case .loose(let folder) = item, folder.size == nil { return nil }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 
@@ -108,6 +120,7 @@ struct CleanupRow: Identifiable {
         case (.safe, _): "Safe"
         case (.hold, .masks): "Keep: no live mask"
         case (.hold, .trash): "Keep"
+        case (.hold, .loose): "Keep: in a session"
         case (.hold, .settings(let folder)): folder.orphans == 0 ? "Keep: unreadable" : "\(folder.orphans) unique file\(folder.orphans == 1 ? "" : "s")"
         case (.unverified, _): "Not checked"
         }
@@ -118,6 +131,7 @@ struct CleanupRow: Identifiable {
         switch item {
         case .masks(let set): set.backupPaths
         case .settings(let folder): [folder.path]
+        case .loose(let folder): [folder.path]
         case .trash(let entry): [entry.path]
         }
     }
@@ -207,7 +221,14 @@ struct CaptureOneView: View {
                     Task { await delete(rows) }
                 }
             } message: { rows in
-                if rows.contains(where: { $0.tab == .trash }) {
+                let unique = rows.filter(\.forced).reduce(0) { total, row in
+                    if case .settings(let folder) = row.item { total + folder.orphans } else { total }
+                }
+                if unique > 0 {
+                    Text("\(unique) file\(unique == 1 ? " is" : "s are") found nowhere else, so any edits in \(unique == 1 ? "it" : "them") are lost. They're deleted right away and can't be recovered.")
+                } else if rows.contains(where: { if case .loose = $0.item { true } else { false } }) {
+                    Text("Capture One makes a CaptureOne folder in every folder it browses. These aren't in any session, so they hold only settings and previews from browsing; any edits made there are lost. They're deleted right away and can't be recovered.")
+                } else if rows.contains(where: { $0.tab == .trash }) {
                     Text("These are files you deleted in Capture One, waiting in the session's Trash. They're deleted right away and can't be recovered.")
                 } else {
                     Text("Everything in them also exists in the newer settings or the live masks. They're deleted right away and can't be recovered.")
@@ -235,7 +256,8 @@ struct CaptureOneView: View {
                     }
                     section("Sessions", groups.filter { $0.session.file != nil && !unchecked($0) })
                     section("Not Checked", groups.filter { $0.session.file != nil && unchecked($0) })
-                    section("Folders", groups.filter { $0.session.file == nil })
+                    let folders = groups.filter { $0.session.file == nil }
+                    section("Folders", folders, deleteAll: tab == .settings ? folders.flatMap { $0.rows.filter { $0.status == .safe } } : [])
                 }
                 .padding()
             }
@@ -260,15 +282,23 @@ struct CaptureOneView: View {
     // MARK: - Cards
 
     @ViewBuilder
-    private func section(_ title: String, _ groups: [SessionGroup]) -> some View {
+    private func section(_ title: String, _ groups: [SessionGroup], deleteAll: [CleanupRow] = []) -> some View {
         if !groups.isEmpty {
             Section {
                 ForEach(groups) { card($0) }
             } header: {
-                Text(title)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top)
+                HStack {
+                    Text(title)
+                        .font(.headline)
+                    Spacer()
+                    if !deleteAll.isEmpty {
+                        Button("Delete All \(formatted(Self.safeSize(deleteAll)))", systemImage: "trash") { pendingDelete = deleteAll }
+                            .controlSize(.small)
+                            .buttonBorderShape(.capsule)
+                            .help("Delete the CaptureOne folders of every folder here that isn't a session")
+                    }
+                }
+                .padding(.top)
             }
         }
     }
@@ -301,9 +331,14 @@ struct CaptureOneView: View {
             async let settings = OldSettingsFolder.load(drives: drives)
             async let sessionFiles = CaptureOne.sessionFiles()
             let (maskSets, folders, files) = try await (masks, settings, sessionFiles)
-            let trashEntries = try await SessionTrashItem.load(drives: drives, sessionFiles: files)
+            async let trash = SessionTrashItem.load(drives: drives, sessionFiles: files)
+            async let loose = LooseCaptureOneFolder.load(drives: drives, sessionFiles: files)
+            let (trashEntries, looseFolders) = try await (trash, loose)
 
-            let items = folders.map(CleanupRow.Item.settings)
+            // A loose CaptureOne folder takes its old Settings folders with it, so they aren't listed twice
+            let looseIDs = Set(looseFolders.map(\.id))
+            let items = folders.filter { !looseIDs.contains("\($0.driveUUID)/\($0.path.split(separator: "/").dropLast().joined(separator: "/"))") }.map(CleanupRow.Item.settings)
+                + looseFolders.map(CleanupRow.Item.loose)
                 + maskSets.map(CleanupRow.Item.masks)
                 + trashEntries.map(CleanupRow.Item.trash)
 
@@ -398,10 +433,10 @@ struct CaptureOneView: View {
         try? await Task.sleep(for: .milliseconds(250))
         withAnimation(.easeOut(duration: 0.25)) {
             // Drop what went rather than rescanning every drive
-            // Mask backups inside a deleted Settings folder went with it
+            // Anything inside a deleted folder (mask backups in a Settings folder, say) went with it
+            let deletedFolders = rows.filter { $0.isFolder && deleted.contains($0.id) }.flatMap { row in row.paths.map { "\(row.item.driveUUID)/\($0)/" } }
             self.rows?.removeAll { row in
-                if case .masks(let set) = row.item, deleted.contains("settings:\(set.driveUUID)/\(set.settingsPath)") { return true }
-                return deleted.contains(row.id)
+                deleted.contains(row.id) || row.paths.contains { path in deletedFolders.contains { "\(row.item.driveUUID)/\(path)".hasPrefix($0) } }
             }
             regroup()
         } completion: {
@@ -443,6 +478,9 @@ struct CaptureOneView: View {
             removed = result.deleted
             complete = result.failed.isEmpty
         case .settings(let folder):
+            complete = await folder.delete(on: driveURL, force: row.forced)
+            if complete { removed = [folder.path] }
+        case .loose(let folder):
             complete = await folder.delete(on: driveURL)
             if complete { removed = [folder.path] }
         case .trash(let entry):
@@ -586,6 +624,18 @@ private struct SessionCard: View, Equatable {
         Divider()
         Button("Delete Safe Items") { delete(safe) }
             .disabled(safe.isEmpty)
+        // For when the unique files don't matter: every old Settings folder, held ones too
+        let held = group.rows.contains { if case .settings = $0.item { $0.status == .hold } else { false } }
+        if held {
+            Button("Delete All Old Settings…") {
+                delete(group.rows.compactMap { row in
+                    guard case .settings = row.item, row.status != .unverified else { return nil }
+                    var row = row
+                    row.forced = true
+                    return row
+                })
+            }
+        }
     }
 
     private func itemRow(_ row: CleanupRow) -> some View {
@@ -617,8 +667,6 @@ private struct SessionCard: View, Equatable {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { reveal(row) }
         .contextMenu {
-            Button("Delete") { delete([row]) }
-                .disabled(row.status != .safe)
             Button("Reveal in Finder") { reveal(row) }
                 .disabled(row.status == .unverified)
         }

@@ -1763,6 +1763,36 @@ actor DatabaseManager {
         return results
     }
 
+    /// Every folder named "CaptureOne"
+    func getCaptureOneFolders() throws -> [(driveUUID: String, path: String)] {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = """
+            SELECT drive_uuid, relative_path
+            FROM files
+            WHERE is_directory = 1 AND name = 'CaptureOne'
+        """
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var results: [(String, String)] = []
+
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let driveUUID = String(cString: sqlite3_column_text(stmt, 0))
+            let path = String(cString: sqlite3_column_text(stmt, 1))
+            results.append((driveUUID, path))
+        }
+
+        return results
+    }
+
     /// Folders that look like Capture One "CaptureOne/Settings<version>" folders. Callers check the
     /// parent is exactly "CaptureOne" and that it's a direct child.
     func getSettingsFolders() throws -> [(driveUUID: String, path: String)] {
