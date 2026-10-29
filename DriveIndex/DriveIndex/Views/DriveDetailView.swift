@@ -29,7 +29,12 @@ struct DriveDetailView: View {
                     StorageVisualizationView(drive: drive)
                         .id(drive.id)
                 }
+            }
 
+            // This Mac shows the folders it indexes instead of a file tree
+            if drive.isLocal {
+                LocalFoldersSection()
+            } else if drive.fileCount > 0 {
                 Section("Files") {
                     FileBrowserView(drive: drive)
                         .id(drive.id)  // Force new view instance for each drive
@@ -41,7 +46,7 @@ struct DriveDetailView: View {
                     HStack {
                         Spacer()
                         Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
-                            .disabled(indexManager.isIndexing)
+                            .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
                         Button("Show in Finder", action: revealInFinder)
                         if !drive.isLocal {
                             Button("Eject", action: ejectDrive)
@@ -148,6 +153,70 @@ struct DriveDetailView: View {
     private func ejectDrive() {
         if let driveURL = driveMonitor.getDriveURL(for: drive) {
             try? NSWorkspace.shared.unmountAndEjectDevice(at: driveURL)
+        }
+    }
+}
+
+// MARK: - Local Folders
+
+/// The folders indexed on this Mac. Only folders on the startup disk: one elsewhere would be
+/// indexed under this Mac.
+struct LocalFoldersSection: View {
+    @EnvironmentObject var driveMonitor: DriveMonitor
+
+    var body: some View {
+        Section {
+            ForEach(driveMonitor.localFolders, id: \.self) { path in
+                LabeledContent {
+                    Button("Remove") {
+                        save(driveMonitor.localFolders.filter { $0 != path })
+                    }
+                } label: {
+                    Label {
+                        Text((path as NSString).lastPathComponent)
+                        Text(path)
+                    } icon: {
+                        Image(nsImage: NSWorkspace.shared.listIcon(name: path, isDirectory: true))
+                    }
+                }
+            }
+            Button("Add Folder…", action: addFolders)
+        } header: {
+            Text("Local Folders")
+        } footer: {
+            Text("Folders on this Mac to index for search, duplicates and Capture One. Nothing else on the Mac is scanned. Rescan after changing these.")
+        }
+    }
+
+    private func addFolders() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.prompt = "Add"
+        guard panel.runModal() == .OK,
+              let startupDisk = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
+        else { return }
+        let folders = driveMonitor.localFolders
+        let added = panel.urls.filter { isMounted($0, uuid: startupDisk) }.map(\.path)
+        if added.count < panel.urls.count { NSSound.beep() }
+        save(folders + added.filter { !folders.contains($0) })
+    }
+
+    /// Removing the last folder drops the Mac's index
+    private func save(_ folders: [String]) {
+        driveMonitor.localFolders = folders
+        Task {
+            do {
+                try await LocalFolders.save(folders)
+                if folders.isEmpty, let mac = driveMonitor.drives.first(where: \.isLocal) {
+                    try await driveMonitor.deleteDrive(mac.id)
+                } else {
+                    await driveMonitor.loadDrives()
+                }
+            } catch {
+                print("Error saving local folders: \(error)")
+            }
         }
     }
 }

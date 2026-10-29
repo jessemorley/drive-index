@@ -62,8 +62,8 @@ struct DriveInfo: Identifiable, Equatable, Hashable {
     var isLocal: Bool { path == "/" }
 }
 
-/// Folders indexed on this Mac's startup disk, absolute paths. The disk is never walked whole,
-/// and isn't listed as a drive until one is added.
+/// Folders indexed on this Mac's startup disk, absolute paths. The disk is never walked whole:
+/// with none set it's listed but not indexed.
 enum LocalFolders {
     static func load() async -> [String] {
         let value = (try? await DatabaseManager.shared.getSetting("local_folders")) ?? nil
@@ -85,6 +85,8 @@ enum LocalFolders {
 @MainActor
 class DriveMonitor: ObservableObject {
     @Published var drives: [DriveInfo] = []
+    /// LocalFolders, as of the last loadDrives()
+    @Published var localFolders: [String] = []
     @Published var pendingDrive: (url: URL, uuid: String, name: String)?
     @Published var showTrackingDialog = false
     private let database = DatabaseManager.shared
@@ -258,7 +260,7 @@ class DriveMonitor: ObservableObject {
 
             var mountedDriveUUIDs: Set<String> = []
             var updatedDrives: [DriveInfo] = []
-            let hasLocalFolders = await !LocalFolders.load().isEmpty
+            localFolders = await LocalFolders.load()
 
             // Process currently mounted drives
             for url in mountedURLs {
@@ -273,8 +275,8 @@ class DriveMonitor: ObservableObject {
                         .volumeUUIDStringKey
                     ])
 
-                    // Only show external drives, and this Mac once it has local folders
-                    guard values.volumeIsInternal == false || (url.path == "/" && hasLocalFolders) else {
+                    // Only show external drives, and this Mac
+                    guard values.volumeIsInternal == false || url.path == "/" else {
                         continue
                     }
 
@@ -350,8 +352,11 @@ class DriveMonitor: ObservableObject {
                 }
             }
 
-            // Sort by connection status (connected first) then by name
+            // This Mac first, then connected drives, then by name
             updatedDrives.sort { drive1, drive2 in
+                if drive1.isLocal != drive2.isLocal {
+                    return drive1.isLocal
+                }
                 if drive1.isConnected != drive2.isConnected {
                     return drive1.isConnected
                 }
@@ -422,6 +427,11 @@ class DriveMonitor: ObservableObject {
                 continue
             }
         }
+    }
+
+    /// This Mac has nothing to scan until it has local folders
+    func canScan(_ drive: DriveInfo) -> Bool {
+        drive.isConnected && !(drive.isLocal && localFolders.isEmpty)
     }
 
     func getDriveURL(for driveInfo: DriveInfo) -> URL? {

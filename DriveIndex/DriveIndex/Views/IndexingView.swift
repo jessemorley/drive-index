@@ -14,7 +14,6 @@ struct IndexingView: View {
     @State private var excludedDirectories: [String] = []
     @State private var excludedExtensions: [String] = []
     @State private var excludedDrives: [DriveMetadata] = []
-    @State private var localFolders: [String] = []
     @State private var fsEventsEnabled: Bool = true
     @State private var fsEventsBufferDelay: Double = 10.0
     @State private var minDuplicateFileSize: Double = 5.0  // Default 5 MB
@@ -70,28 +69,6 @@ struct IndexingView: View {
                         Text("How long to wait after file changes before triggering a scan")
                     }
                 }
-            }
-
-            Section {
-                ForEach(localFolders, id: \.self) { path in
-                    LabeledContent {
-                        Button("Remove") {
-                            saveLocalFolders(localFolders.filter { $0 != path })
-                        }
-                    } label: {
-                        Label {
-                            Text((path as NSString).lastPathComponent)
-                            Text(path)
-                        } icon: {
-                            Image(nsImage: NSWorkspace.shared.listIcon(name: path, isDirectory: true))
-                        }
-                    }
-                }
-                Button("Add Folder…", action: addLocalFolders)
-            } header: {
-                Text("Local Folders")
-            } footer: {
-                Text("Folders on this Mac to index for search, duplicates and Capture One. Nothing else on the Mac is scanned. Scan it from Drives after changing these.")
             }
 
             Section("Duplicate Detection") {
@@ -196,10 +173,8 @@ struct IndexingView: View {
         }
 
         await loadExcludedDrives()
-        let folders = await LocalFolders.load()
 
         await MainActor.run {
-            localFolders = folders
             excludedDirectories = dirs
             excludedExtensions = exts
             fsEventsEnabled = fsEnabled
@@ -236,38 +211,6 @@ struct IndexingView: View {
                 }
             } catch {
                 print("Error saving settings: \(error)")
-            }
-        }
-    }
-
-    /// Folders on the startup disk only: one elsewhere would be indexed under this Mac
-    private func addLocalFolders() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = true
-        panel.prompt = "Add"
-        guard panel.runModal() == .OK,
-              let startupDisk = try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
-        else { return }
-        let added = panel.urls.filter { isMounted($0, uuid: startupDisk) }.map(\.path)
-        if added.count < panel.urls.count { NSSound.beep() }
-        saveLocalFolders(localFolders + added.filter { !localFolders.contains($0) })
-    }
-
-    /// Lists this Mac as a drive while it has folders; removing the last one drops its index
-    private func saveLocalFolders(_ folders: [String]) {
-        localFolders = folders
-        Task {
-            do {
-                try await LocalFolders.save(folders)
-                if folders.isEmpty, let mac = driveMonitor.drives.first(where: \.isLocal) {
-                    try await driveMonitor.deleteDrive(mac.id)
-                } else {
-                    await driveMonitor.loadDrives()
-                }
-            } catch {
-                print("Error saving local folders: \(error)")
             }
         }
     }
