@@ -37,6 +37,9 @@ struct FolderCompareView: View {
         return (a, b)
     }
 
+    /// The first run, before there's anything to show
+    private var isLoading: Bool { result == nil && errorMessage == nil }
+
     /// Reruns on disk when a drive connects
     private var connected: [Bool] {
         [pair.a, pair.b].map { $0.url(in: driveMonitor.drives) != nil }
@@ -46,9 +49,12 @@ struct FolderCompareView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 columns { side in
-                    VStack(spacing: 16) {
-                        header(side)
-                        if let result { availability(side, result) }
+                    GroupBox {
+                        VStack(spacing: 16) {
+                            header(side)
+                            if let result { availability(side, result) }
+                        }
+                        .padding(8)
                     }
                 }
                 if let errorMessage {
@@ -57,26 +63,28 @@ struct FolderCompareView: View {
                     copyControls(result)
                     let listing = result.listingFolders()
                     columns { side in
-                        filesList(side == .a ? result.onlyA : result.onlyB, side == .a ? listing.a : listing.b,
+                        filesList(side, side == .a ? result.onlyA : result.onlyB, side == .a ? listing.a : listing.b,
                                   root: side == .a ? urls?.0 : urls?.1)
                     }
                     changedList(result.changed)
                     movedList(result.moved)
-                } else {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("Comparing… \(progress.files) files, \(formatted(progress.bytes)) hashed")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
                 }
             }
             .padding()
         }
+        .overlay {
+            if isLoading {
+                ProgressView {
+                    Text("Comparing… \(progress.files) files, \(formatted(progress.bytes)) hashed")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
         .frame(minWidth: 760, idealWidth: 860, minHeight: 480, idealHeight: 680)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button(result == nil && errorMessage == nil || copying != nil ? "Cancel" : "Done") { dismiss() }
+                Button(isLoading || copying != nil ? "Cancel" : "Done") { dismiss() }
             }
         }
         .task(id: connected) { await run() }
@@ -93,7 +101,7 @@ struct FolderCompareView: View {
         }
     }
 
-    /// The drive, the folder, and the trash button when this side is the one that can go
+    /// The drive and the folder, dimmed until the first comparison is done
     private func header(_ side: FolderComparison.Side) -> some View {
         let folder = side == .a ? pair.a : pair.b
         let drive = driveMonitor.drives.first { $0.id == folder.driveUUID }
@@ -102,19 +110,16 @@ struct FolderCompareView: View {
                 Image(nsImage: drive.finderIcon)
                     .resizable()
                     .frame(width: 64, height: 64)
+                    // ponytail: no system dimmed style for an image; matches the tertiary text
+                    .opacity(isLoading ? 0.4 : 1)
             }
             Text(folder.driveName)
                 .font(.headline)
+                .foregroundStyle(isLoading ? .tertiary : .primary)
             Text(folder.relativePath.isEmpty ? "/" : folder.relativePath)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isLoading ? .tertiary : .secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
-                Button("Move “\(folder.name)” to Trash", role: .destructive) {
-                    onTrash(folder)
-                    dismiss()
-                }
-            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -218,13 +223,26 @@ struct FolderCompareView: View {
         }
     }
 
-    /// The files only this side has: folders first (expandable), then the loose files
+    /// The files only this side has: folders first (expandable), then the loose files. With none,
+    /// the trash button for this folder, when the other side has everything.
     @ViewBuilder
-    private func filesList(_ files: [FolderComparison.File], _ listing: [String: String], root: URL?) -> some View {
+    private func filesList(_ side: FolderComparison.Side, _ files: [FolderComparison.File], _ listing: [String: String],
+                           root: URL?) -> some View {
         if files.isEmpty {
-            Text("Nothing only here")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
+            // The side with nothing of its own is the one that can go
+            VStack(spacing: 12) {
+                Text("Nothing only here")
+                    .foregroundStyle(.secondary)
+                if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
+                    let folder = side == .a ? pair.a : pair.b
+                    Button("Move “\(folder.name)” to Trash", role: .destructive) {
+                        onTrash(folder)
+                        dismiss()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         } else {
             let groups = Dictionary(grouping: files) { listing[$0.path] ?? "" }
             let folders = groups.keys.filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
