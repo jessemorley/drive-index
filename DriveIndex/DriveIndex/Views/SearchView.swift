@@ -95,13 +95,14 @@ struct SearchView: View {
             TableColumn("Drive", value: \.driveName) { file in
                 // Offline drives greyed out, as in the sidebar
                 Text(file.driveName)
-                    .foregroundStyle(file.isConnected ? .primary : .tertiary)
+                    .foregroundStyle(file.isConnected ? .secondary : .tertiary)
             }
             .width(min: 80, ideal: 100)
             .customizationID("drive")
             TableColumn("Location", value: \.relativePath, comparator: .localizedStandard) { file in
                 let folder = (file.relativePath as NSString).deletingLastPathComponent
                 Text(folder)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(folder)
@@ -110,12 +111,14 @@ struct SearchView: View {
             .customizationID("location")
             TableColumn("Size", value: \.size) { file in
                 Text(file.formattedSize)
+                    .foregroundStyle(.secondary)
             }
             .width(min: 60, ideal: 70)
             .customizationID("size")
             .alignment(.trailing)
             TableColumn("Kind", value: \.kind) { file in
                 Text(file.kind)
+                    .foregroundStyle(.secondary)
             }
             .width(min: 80, ideal: 110)
             .customizationID("kind")
