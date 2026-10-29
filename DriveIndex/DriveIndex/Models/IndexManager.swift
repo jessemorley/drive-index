@@ -28,9 +28,10 @@ class IndexManager: ObservableObject {
     private var indexingTask: Task<Void, Never>?
     private var hashingTask: Task<Void, Never>?
 
-    // Drive and kind of the current scan, so an FSEvents request can't narrow a mount scan
+    // Drive and folders of the running scan (nil folders = mount scan), so a newer request
+    // for the same drive can take over its work instead of dropping it
     private var indexingUUID: String?
-    private var indexingIsMountScan = false
+    private var indexingChangedPaths: Set<String>?
 
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
@@ -93,17 +94,18 @@ class IndexManager: ObservableObject {
     }
 
     func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil) async {
-        // FSEvents during a mount scan of the same drive: restart the mount scan, which covers
-        // those changes too (an FSEvents-only scan would miss changes made while unmounted)
-        var changedPaths = changedPaths
-        if changedPaths != nil, isIndexing, indexingUUID == uuid, indexingIsMountScan {
-            changedPaths = nil
+        // A scan of the same drive is still running: the new scan covers its folders too, or
+        // becomes a mount scan if either is one (an FSEvents-only scan would miss changes made
+        // while unmounted). Otherwise the cancelled scan's folders would wait for the next mount.
+        var changedPaths = changedPaths.map(Set.init)
+        if indexingUUID == uuid {
+            changedPaths = indexingChangedPaths.flatMap { running in changedPaths?.union(running) }
         }
 
         // Cancel existing indexing if any
         indexingTask?.cancel()
         indexingUUID = uuid
-        indexingIsMountScan = changedPaths == nil
+        indexingChangedPaths = changedPaths
 
         do {
             let values = try url.resourceValues(forKeys: [.volumeNameKey])
@@ -118,11 +120,17 @@ class IndexManager: ObservableObject {
             print("Starting to index drive: \(driveName)")
 
             indexingTask = Task {
+                // Finished or failed: nothing left for a newer request to take over.
+                // A cancelled scan leaves this to the scan that replaced it.
+                defer {
+                    if !Task.isCancelled { indexingUUID = nil }
+                }
+
                 do {
                     try await fileIndexer.indexDrive(
                         driveURL: url,
                         driveUUID: uuid,
-                        changedPaths: changedPaths
+                        changedPaths: changedPaths.map(Array.init)
                     ) { [weak self] progress in
                         Task { @MainActor in
                             self?.currentProgress = progress
