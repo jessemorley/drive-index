@@ -37,106 +37,35 @@ struct AppearanceView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
-                // Theme Selection
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Theme")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        HStack {
-                            Text("Appearance")
-                                .font(DesignSystem.Typography.callout)
-
-                            Spacer()
-
-                            Picker("Theme", selection: $appTheme) {
-                                ForEach(AppTheme.allCases) { theme in
-                                    Label(theme.rawValue, systemImage: theme.icon)
-                                        .tag(theme)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                            .onChange(of: appTheme) { _, newValue in
-                                applyTheme(newValue)
-                            }
-                        }
-
-                        Text("Auto mode follows your system appearance settings")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
+        Form {
+            Section("Theme") {
+                Picker(selection: $appTheme) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Label(theme.rawValue, systemImage: theme.icon)
+                            .tag(theme)
                     }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                } label: {
+                    Text("Appearance")
+                    Text("Auto mode follows your system appearance settings")
                 }
-
-                // Startup
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Startup")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        HStack {
-                            Text("Launch at Login")
-                                .font(DesignSystem.Typography.callout)
-
-                            Spacer()
-
-                            Toggle(isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin)) {
-                                EmptyView()
-                            }
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                        }
-
-                        Text("Keep DriveIndex running in the menu bar so drives are indexed as they mount.")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                .pickerStyle(.segmented)
+                .onChange(of: appTheme) { _, newValue in
+                    applyTheme(newValue)
                 }
-
-                // Info callout
-                HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
-                    VStack(spacing: 0) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.blue)
-                            .font(DesignSystem.Typography.title2)
-                    }
-                    .frame(width: 24)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                        Text("Appearance Settings")
-                            .font(DesignSystem.Typography.caption)
-                            .fontWeight(.semibold)
-
-                        Text("Theme changes apply immediately. The Dock icon appears only while a DriveIndex window is open.")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                    }
-                }
-                .padding(DesignSystem.Spacing.large)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .frame(maxWidth: 600)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
-            .padding(.vertical, DesignSystem.Spacing.large)
+
+            Section {
+                Toggle(isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin)) {
+                    Text("Launch at Login")
+                    Text("Keep DriveIndex running in the menu bar so drives are indexed as they mount.")
+                }
+            } header: {
+                Text("Startup")
+            } footer: {
+                Text("Theme changes apply immediately. The Dock icon appears only while a DriveIndex window is open.")
+            }
         }
+        .formStyle(.grouped)
         .navigationTitle("Appearance")
     }
 
