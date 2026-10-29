@@ -13,7 +13,7 @@ struct DriveIndexApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // Empty scene - all UI handled by AppDelegate's floating panel
+        // Empty scene - all UI handled by AppDelegate's windows
         // We need at least one scene for the app to run
         Settings {
             EmptyView()
@@ -25,7 +25,7 @@ struct DriveIndexApp: App {
                     NSApplication.shared.orderFrontStandardAboutPanel(
                         options: [
                             NSApplication.AboutPanelOptionKey.credits: NSAttributedString(
-                                string: "Fast indexing for external drives\n\nDatabase: SQLite with FTS5\nPlatform: macOS 13+\nArchitecture: Swift + SwiftUI",
+                                string: "Fast indexing for external drives\n\nDatabase: SQLite with FTS5\nPlatform: macOS 27+\nArchitecture: Swift + SwiftUI",
                                 attributes: [
                                     NSAttributedString.Key.font: NSFont.systemFont(ofSize: 11),
                                     NSAttributedString.Key.foregroundColor: NSColor.secondaryLabelColor

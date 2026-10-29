@@ -43,7 +43,7 @@ struct AboutWindow: View {
                 VStack(spacing: DesignSystem.Spacing.xSmall) {
                     AboutInfoRow(label: "Database", value: "SQLite with FTS5")
                     Divider()
-                    AboutInfoRow(label: "Platform", value: "macOS 13+")
+                    AboutInfoRow(label: "Platform", value: "macOS 27+")
                     Divider()
                     AboutInfoRow(label: "Architecture", value: "Swift + SwiftUI")
                 }

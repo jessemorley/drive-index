@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import ServiceManagement
 
 enum AppTheme: String, CaseIterable, Identifiable {
     case light = "Light"
@@ -33,7 +34,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
 
 struct AppearanceView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .auto
-    @AppStorage("showDockIcon") private var showDockIcon: Bool = true
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         ScrollView {
@@ -75,32 +76,29 @@ struct AppearanceView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
 
-                // Dock Icon
+                // Startup
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Dock Icon")
+                    Text("Startup")
                         .font(DesignSystem.Typography.headline)
                         .fontWeight(.semibold)
                         .padding(.horizontal, DesignSystem.Spacing.large)
 
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
                         HStack {
-                            Text("Show Dock icon")
+                            Text("Launch at Login")
                                 .font(DesignSystem.Typography.callout)
 
                             Spacer()
 
-                            Toggle(isOn: $showDockIcon) {
+                            Toggle(isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin)) {
                                 EmptyView()
                             }
                             .labelsHidden()
                             .toggleStyle(.switch)
                             .controlSize(.small)
-                            .onChange(of: showDockIcon) { _, newValue in
-                                updateDockIconVisibility(newValue)
-                            }
                         }
 
-                        Text("Hide the Dock icon to run DriveIndex as a menu bar-only app. Requires app restart to take full effect.")
+                        Text("Keep DriveIndex running in the menu bar so drives are indexed as they mount.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
@@ -124,7 +122,7 @@ struct AppearanceView: View {
                             .font(DesignSystem.Typography.caption)
                             .fontWeight(.semibold)
 
-                        Text("Theme changes apply immediately. Dock icon changes take full effect after restarting the app.")
+                        Text("Theme changes apply immediately. The Dock icon appears only while a DriveIndex window is open.")
                             .font(DesignSystem.Typography.caption2)
                             .foregroundStyle(DesignSystem.Colors.secondaryText)
                     }
@@ -142,12 +140,18 @@ struct AppearanceView: View {
         .navigationTitle("Appearance")
     }
 
-    private func updateDockIconVisibility(_ show: Bool) {
-        if show {
-            NSApp.setActivationPolicy(.regular)
-        } else {
-            NSApp.setActivationPolicy(.accessory)
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            print("⚠️ Launch at Login: \(error)")
         }
+        // Reflect what the system actually did (it may need approval in System Settings)
+        launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     private func applyTheme(_ theme: AppTheme) {

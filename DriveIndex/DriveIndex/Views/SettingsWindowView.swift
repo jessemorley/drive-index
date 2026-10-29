@@ -67,8 +67,6 @@ struct SettingsWindowView: View {
         switch item {
         case .appearance:
             AppearanceView()
-        case .shortcuts:
-            ShortcutView()
         case .indexing:
             IndexingView()
                 .environmentObject(driveMonitor)
@@ -78,8 +76,6 @@ struct SettingsWindowView: View {
         case .advanced:
             AdvancedView()
                 .environmentObject(driveMonitor)
-        case .raycast:
-            RaycastView()
         }
     }
 

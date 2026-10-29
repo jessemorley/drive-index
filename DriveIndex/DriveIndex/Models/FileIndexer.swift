@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 
 struct IndexProgress {
     let filesProcessed: Int
@@ -197,8 +198,13 @@ actor FileIndexer {
         driveURL: URL,
         driveUUID: String,
         changedPaths: [String]? = nil,
+        cursor: FSEventsCursor? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
+        // FSEvents position this scan covers: given for changed folders, now for a whole-drive scan
+        // (events during the scan get replayed next time, which is harmless)
+        let cursor = changedPaths == nil ? fseventsCursorNow(for: driveURL.path) : cursor
+
         // Determine scan type based on whether this drive has been indexed before
         let driveMetadata = try await database.getDriveMetadata(driveUUID)
         let shouldUseDelta = driveMetadata?.lastScanDate != nil
@@ -214,6 +220,16 @@ actor FileIndexer {
         } else {
             print("Starting full index of drive: \(driveURL.path) (first time)")
             try await indexDriveFull(driveURL: driveURL, driveUUID: driveUUID, onProgress: onProgress)
+        }
+
+        // Only a finished scan moves the cursor (both scans throw on cancellation). Without one
+        // (no event store), the next mount runs a full mount scan.
+        if let cursor = cursor {
+            do {
+                try await database.setFSEventsCursor(for: driveUUID, cursor)
+            } catch {
+                print("⚠️ Failed to save FSEvents cursor: \(error)")
+            }
         }
     }
 
@@ -261,6 +277,14 @@ actor FileIndexer {
             try await database.insertBatch(batch)
         }
 
+        // A cancelled scan is partial: leave lastScanDate unset so the next scan is full again
+        try Task.checkCancellation()
+
+        // So is one whose drive was unmounted mid-walk
+        guard isMounted(driveURL, uuid: driveUUID) else {
+            throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: driveURL.path])
+        }
+
         // Update drive metadata
         let fileCount = try await database.getFileCount(for: driveUUID)
         try await database.updateLastScanDate(for: driveUUID, date: Date())
@@ -301,14 +325,6 @@ actor FileIndexer {
         changedPaths: [String]? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
-        // Fetch existing files from database
-        let existingFiles = try await database.getExistingFiles(driveUUID: driveUUID)
-        print("📊 Delta scan: \(existingFiles.count) existing files in database")
-
-        // Fetch existing directories for incremental scan optimization
-        let existingDirectories = try await database.getExistingDirectories(driveUUID: driveUUID)
-        print("📁 Directory cache: \(existingDirectories.count) directories")
-
         // Build directories to scan from FSEvents paths if available
         let directoriesFromFSEvents: Set<String>?
         if let paths = changedPaths {
@@ -316,32 +332,26 @@ actor FileIndexer {
             var dirs = Set<String>()
 
             for path in paths {
-                // Convert absolute path to relative path
-                guard path.hasPrefix(basePath) else { continue }
+                // Each FSEvents path is the changed folder itself, e.g. "/Volumes/X/a/b/"
+                guard path == basePath || path.hasPrefix(basePath + "/") else { continue }
 
-                let relativePath = String(path.dropFirst(basePath.count + 1))
+                // Convert to relative folder path; "" = root directory
+                let folderPath = String(path.dropFirst(basePath.count))
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                dirs.insert(folderPath)
 
-                // Extract parent directory path
-                if let lastSlash = relativePath.lastIndex(of: "/") {
-                    let parentPath = String(relativePath[..<lastSlash])
-                    dirs.insert(parentPath)
-
-                    // Add all ancestor paths
-                    var components = parentPath.split(separator: "/")
-                    while !components.isEmpty {
-                        components.removeLast()
-                        if !components.isEmpty {
-                            dirs.insert(components.joined(separator: "/"))
-                        }
+                // Add all ancestor paths so the walk can reach the folder
+                var components = folderPath.split(separator: "/")
+                while !components.isEmpty {
+                    components.removeLast()
+                    if !components.isEmpty {
+                        dirs.insert(components.joined(separator: "/"))
                     }
-                } else {
-                    // File in root directory - need to scan root
-                    dirs.insert("")  // Empty string = root directory
                 }
             }
 
             directoriesFromFSEvents = dirs
-            print("🎯 FSEvents: \(paths.count) changed files → scanning \(dirs.count) directories")
+            print("🎯 FSEvents: \(paths.count) changed folders → scanning \(dirs.count) directories")
         } else {
             directoriesFromFSEvents = nil
             // Show initial progress message during directory change detection
@@ -351,6 +361,21 @@ actor FileIndexer {
                 isComplete: false
             ))
         }
+
+        // Fetch existing files from database. For FSEvents scans, only the files directly
+        // inside the folders the walk reads (it always reads the root): those are exactly the
+        // rows it can visit, so anything left unvisited really was deleted.
+        let existingFiles = try await database.getExistingFiles(
+            driveUUID: driveUUID,
+            inFolders: directoriesFromFSEvents.map { $0.union([""]) }
+        )
+        print("📊 Delta scan: \(existingFiles.count) existing files in database")
+
+        // Fetch existing directories for incremental scan optimization (unused when FSEvents names the folders)
+        let existingDirectories = directoriesFromFSEvents == nil
+            ? try await database.getExistingDirectories(driveUUID: driveUUID)
+            : nil
+        print("📁 Directory cache: \(existingDirectories?.count ?? 0) directories")
 
         var filesProcessed = 0
         var insertBatch: [FileEntry] = []
@@ -366,6 +391,10 @@ actor FileIndexer {
         // Get base path for relative paths
         let basePath = driveURL.path
 
+        // Skipped folders are reported from the walk's thread while this loop runs: collect them
+        // under a lock and merge once the walk has finished
+        let skipped = OSAllocatedUnfairLock(initialState: (count: 0, paths: Set<String>()))
+
         // Walk directory tree (with directory caching or FSEvents optimization)
         let fileStream = walkDirectory(
             at: driveURL,
@@ -374,9 +403,9 @@ actor FileIndexer {
             cachedDirectories: existingDirectories,
             existingFiles: existingFiles,
             directoriesFromFSEvents: directoriesFromFSEvents,
-            onDirectorySkipped: { skippedDirectories += 1 },
+            onDirectorySkipped: { skipped.withLock { $0.count += 1 } },
             onFilesMarkedVisited: { paths in
-                visitedPaths.formUnion(paths)
+                skipped.withLock { $0.paths.formUnion(paths) }
             }
         )
 
@@ -440,6 +469,19 @@ actor FileIndexer {
             try await database.updateFilesBatch(updateBatch)
         }
 
+        // A cancelled scan's stream ends early with nothing visited: never sweep it
+        try Task.checkCancellation()
+
+        // So does a drive unmounted mid-walk: the sweep would delete everything it didn't reach
+        guard isMounted(driveURL, uuid: driveUUID) else {
+            throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: driveURL.path])
+        }
+
+        // The stream has finished, so the walk has made its last report
+        let skippedState = skipped.withLock { $0 }
+        skippedDirectories = skippedState.count
+        visitedPaths.formUnion(skippedState.paths)
+
         // Mark-and-sweep: find deleted files
         let deletedPaths = Set(existingFiles.keys).subtracting(visitedPaths)
         let deletedCount = deletedPaths.count
@@ -455,6 +497,9 @@ actor FileIndexer {
                 try await database.deleteFiles(driveUUID: driveUUID, relativePaths: batch)
             }
         }
+
+        // Every finished scan counts as "last scanned"; "last updated" below only moves on changes
+        try await database.updateLastCheckedDate(for: driveUUID, date: Date())
 
         // Update drive metadata only if changes occurred
         if newCount > 0 || modifiedCount > 0 || deletedCount > 0 {
@@ -559,7 +604,7 @@ actor FileIndexer {
         }
     }
     
-    private static func enumerateFiles(
+    static func enumerateFiles(
         at url: URL,
         basePath: String,
         driveUUID: String,
@@ -573,6 +618,21 @@ actor FileIndexer {
         continuation: AsyncStream<FileEntry>.Continuation
     ) {
         let fileManager = FileManager.default
+
+        func relative(_ url: URL) -> String {
+            let fullPath = url.path
+            return fullPath.hasPrefix(basePath) ? String(fullPath.dropFirst(basePath.count + 1)) : fullPath
+        }
+
+        // Rows the walk won't reach but must not be swept: the path and everything under it
+        func markSubtreeVisited(_ relativePath: String) {
+            guard let existing = existingFiles else { return }
+            let dirPrefix = relativePath + "/"
+            let pathsToMark = existing.keys.filter { $0 == relativePath || $0.hasPrefix(dirPrefix) }
+            if !pathsToMark.isEmpty {
+                onFilesMarkedVisited?(pathsToMark)
+            }
+        }
 
         let resourceKeys: Set<URLResourceKey> = [
             .nameKey,
@@ -593,6 +653,9 @@ actor FileIndexer {
             includingPropertiesForKeys: Array(resourceKeys),
             options: options,
             errorHandler: { url, error in
+                // Unreadable isn't deleted: keep what the index has under it
+                markSubtreeVisited(relative(url))
+
                 // Skip permission denied errors silently
                 let nsError = error as NSError
                 if nsError.domain == NSCocoaErrorDomain &&
@@ -723,43 +786,27 @@ actor FileIndexer {
                     relativePath = fullPath
                 }
 
-                if !dirsToScan.contains(relativePath) {
+                // Folders not yet in the database (renamed or moved in) are walked fully:
+                // FSEvents only reports their parent
+                if !dirsToScan.contains(relativePath), existingFiles?[relativePath] != nil {
                     // This directory and all its ancestors are unchanged - skip it
                     enumerator.skipDescendants()
                     onDirectorySkipped?()
 
                     // Mark all files in this directory as visited
-                    if let existing = existingFiles {
-                        var pathsToMark: [String] = []
-                        let dirPrefix = relativePath + "/"
-                        for (filePath, _) in existing {
-                            if filePath == relativePath || filePath.hasPrefix(dirPrefix) {
-                                pathsToMark.append(filePath)
-                            }
-                        }
-                        if !pathsToMark.isEmpty {
-                            onFilesMarkedVisited?(pathsToMark)
-                        }
-                    }
+                    markSubtreeVisited(relativePath)
 
                     continue
                 }
             }
+
+            let relativePath = relative(fileURL)
 
             do {
                 let values = try fileURL.resourceValues(forKeys: resourceKeys)
 
                 guard let name = values.name else {
                     continue
-                }
-
-                // Calculate relative path
-                let fullPath = fileURL.path
-                let relativePath: String
-                if fullPath.hasPrefix(basePath) {
-                    relativePath = String(fullPath.dropFirst(basePath.count + 1))
-                } else {
-                    relativePath = fullPath
                 }
 
                 let entry = FileEntry(
@@ -776,7 +823,9 @@ actor FileIndexer {
                 continuation.yield(entry)
 
             } catch {
-                // Skip files we can't read
+                // Skip files we can't read, but keep their rows: the walk may still descend into
+                // an unreadable folder, and sweeping it would delete its visited children too
+                onFilesMarkedVisited?([relativePath])
                 continue
             }
         }
@@ -813,4 +862,9 @@ actor FileIndexer {
             return false
         }
     }
+}
+
+/// Whether the drive is still mounted at url. A fresh URL, so no cached resource value answers
+func isMounted(_ url: URL, uuid: String) -> Bool {
+    (try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.volumeUUIDStringKey]))?.volumeUUIDString == uuid
 }

@@ -25,9 +25,12 @@ struct DriveMetadata {
     let lastSeen: Date
     let totalCapacity: Int64
     let usedCapacity: Int64
+    /// Last scan that changed the index ("last updated"); the caches are keyed on it
     let lastScanDate: Date?
     let fileCount: Int
     let isExcluded: Bool
+    /// Last completed scan, changes or not ("last scanned")
+    var lastCheckedDate: Date? = nil
 }
 
 struct DuplicateGroup: Identifiable {
@@ -56,7 +59,13 @@ actor DatabaseManager {
     private let dbPath: String
     private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-    private init() {
+    /// - Parameter path: a database file other than the app's (tests)
+    init(path: String? = nil) {
+        if let path = path {
+            dbPath = path
+            return
+        }
+
         // Store database in Application Support directory
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
@@ -146,7 +155,6 @@ actor DatabaseManager {
         // Performance optimizations
         try execute("PRAGMA journal_mode = WAL")
         try execute("PRAGMA synchronous = NORMAL")
-        try execute("PRAGMA cache_size = 10000")
         try execute("PRAGMA temp_store = MEMORY")
     }
 
@@ -229,6 +237,61 @@ actor DatabaseManager {
         }
     }
 
+    /// Migrate existing drives table to add the FSEvents history cursor (NULL until a scan saves one)
+    private func migrateAddFSEventsColumns() throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(drives)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasLastId = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if String(cString: sqlite3_column_text(stmt, 1)) == "fsevents_last_id" {
+                hasLastId = true
+                break
+            }
+        }
+
+        if !hasLastId {
+            try execute("ALTER TABLE drives ADD COLUMN fsevents_last_id INTEGER")
+            try execute("ALTER TABLE drives ADD COLUMN fsevents_volume_uuid TEXT")
+        }
+    }
+
+    /// Migrate existing drives table to add the last completed scan date (NULL until a scan finishes)
+    private func migrateAddLastCheckedColumn() throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let pragmaSQL = "PRAGMA table_info(drives)"
+        guard sqlite3_prepare_v2(db, pragmaSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var hasColumn = false
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if String(cString: sqlite3_column_text(stmt, 1)) == "last_checked_date" {
+                hasColumn = true
+                break
+            }
+        }
+
+        if !hasColumn {
+            try execute("ALTER TABLE drives ADD COLUMN last_checked_date INTEGER")
+        }
+    }
+
     private func createSchema() throws {
         // Main files table
         try execute("""
@@ -305,6 +368,12 @@ actor DatabaseManager {
 
         // Migrate files table to add hash columns if they don't exist
         try migrateAddHashColumns()
+
+        // Migrate drives table to add the FSEvents history cursor if it doesn't exist
+        try migrateAddFSEventsColumns()
+
+        // Migrate drives table to add the last completed scan date if it doesn't exist
+        try migrateAddLastCheckedColumn()
 
         // Settings table
         try execute("""
@@ -501,7 +570,8 @@ actor DatabaseManager {
 
     /// Get existing files for a drive to support delta indexing
     /// Returns a dictionary mapping relative_path to (id, modified_at)
-    func getExistingFiles(driveUUID: String) throws -> [String: (id: Int64, modifiedAt: Date?)] {
+    /// - Parameter folders: If given, only files directly inside these folders ("" = root)
+    func getExistingFiles(driveUUID: String, inFolders folders: Set<String>? = nil) throws -> [String: (id: Int64, modifiedAt: Date?)] {
         var stmt: OpaquePointer?
         defer {
             if stmt != nil {
@@ -509,26 +579,47 @@ actor DatabaseManager {
             }
         }
 
-        let selectSQL = "SELECT id, relative_path, modified_at FROM files WHERE drive_uuid = ?"
+        // Folder query: index range [folder/, folder0) then drop deeper paths.
+        // A range (not LIKE) stays case-sensitive and ignores % and _ in folder names,
+        // so no extra rows are loaded (delta indexing would delete them as unseen).
+        let selectSQL = folders == nil
+            ? "SELECT id, relative_path, modified_at FROM files WHERE drive_uuid = ?1"
+            : """
+                SELECT id, relative_path, modified_at FROM files
+                WHERE drive_uuid = ?1 AND relative_path >= ?2 AND relative_path < ?3
+                  AND instr(substr(relative_path, length(?2) + 1), '/') = 0
+              """
 
         guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
         }
 
-        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
-
         var results: [String: (id: Int64, modifiedAt: Date?)] = [:]
 
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = sqlite3_column_int64(stmt, 0)
-            let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+        // One pass per folder, or a single pass over the whole drive
+        let passes: [String?] = folders.map { Array($0) } ?? [nil]
+        for folder in passes {
+            sqlite3_reset(stmt)
+            sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-            var modifiedAt: Date?
-            if sqlite3_column_type(stmt, 2) != SQLITE_NULL {
-                modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+            if let folder = folder {
+                let prefix = folder.isEmpty ? "" : folder + "/"
+                let upperBound = folder.isEmpty ? "\u{10FFFF}" : folder + "0"  // "0" sorts right after "/"
+                sqlite3_bind_text(stmt, 2, (prefix as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(stmt, 3, (upperBound as NSString).utf8String, -1, SQLITE_TRANSIENT)
             }
 
-            results[relativePath] = (id: id, modifiedAt: modifiedAt)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                let id = sqlite3_column_int64(stmt, 0)
+                let relativePath = String(cString: sqlite3_column_text(stmt, 1))
+
+                var modifiedAt: Date?
+                if sqlite3_column_type(stmt, 2) != SQLITE_NULL {
+                    modifiedAt = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+                }
+
+                results[relativePath] = (id: id, modifiedAt: modifiedAt)
+            }
         }
 
         return results
@@ -640,6 +731,8 @@ actor DatabaseManager {
     }
 
     /// Delete files by relative paths (for delta indexing when files are removed)
+    /// Also deletes everything under each path, since a scoped delta scan never loads a
+    /// deleted folder's contents (e.g. a folder moved to the Trash only reports its parent)
     func deleteFiles(driveUUID: String, relativePaths: [String]) throws {
         guard !relativePaths.isEmpty else { return }
 
@@ -647,15 +740,21 @@ actor DatabaseManager {
 
         do {
             let deleteSQL = "DELETE FROM files WHERE drive_uuid = ? AND relative_path = ?"
+            let deleteSubtreeSQL = "DELETE FROM files WHERE drive_uuid = ? AND relative_path >= ? AND relative_path < ?"
 
             var stmt: OpaquePointer?
+            var subtreeStmt: OpaquePointer?
             defer {
                 if stmt != nil {
                     sqlite3_finalize(stmt)
                 }
+                if subtreeStmt != nil {
+                    sqlite3_finalize(subtreeStmt)
+                }
             }
 
-            guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK else {
+            guard sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK,
+                  sqlite3_prepare_v2(db, deleteSubtreeSQL, -1, &subtreeStmt, nil) == SQLITE_OK else {
                 try? execute("ROLLBACK")
                 throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
             }
@@ -664,15 +763,22 @@ actor DatabaseManager {
                 sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
                 sqlite3_bind_text(stmt, 2, (relativePath as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-                let result = sqlite3_step(stmt)
-                guard result == SQLITE_DONE else {
-                    let errorMsg = String(cString: sqlite3_errmsg(db))
-                    print("❌ SQLite error during delete: \(errorMsg)")
-                    try? execute("ROLLBACK")
-                    throw DatabaseError.executeFailed(errorMsg)
-                }
+                // Range [path/, path0) = everything under path ("0" sorts right after "/")
+                sqlite3_bind_text(subtreeStmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(subtreeStmt, 2, (relativePath + "/" as NSString).utf8String, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_text(subtreeStmt, 3, (relativePath + "0" as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
-                sqlite3_reset(stmt)
+                for s in [stmt, subtreeStmt] {
+                    let result = sqlite3_step(s)
+                    guard result == SQLITE_DONE else {
+                        let errorMsg = String(cString: sqlite3_errmsg(db))
+                        print("❌ SQLite error during delete: \(errorMsg)")
+                        try? execute("ROLLBACK")
+                        throw DatabaseError.executeFailed(errorMsg)
+                    }
+
+                    sqlite3_reset(s)
+                }
             }
 
             try execute("COMMIT")
@@ -834,10 +940,16 @@ actor DatabaseManager {
             }
         }
 
+        // Update in place rather than INSERT OR REPLACE, so the FSEvents cursor columns survive
         let upsertSQL = """
-            INSERT OR REPLACE INTO drives
+            INSERT INTO drives
             (uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uuid) DO UPDATE SET
+                name = excluded.name, last_seen = excluded.last_seen,
+                total_capacity = excluded.total_capacity, used_capacity = excluded.used_capacity,
+                last_scan_date = excluded.last_scan_date, file_count = excluded.file_count,
+                is_excluded = excluded.is_excluded
         """
 
         guard sqlite3_prepare_v2(db, upsertSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -880,7 +992,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded, last_checked_date
             FROM drives WHERE uuid = ?
         """
 
@@ -908,6 +1020,11 @@ actor DatabaseManager {
         let fileCount = Int(sqlite3_column_int(stmt, 6))
         let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
+        var lastCheckedDate: Date?
+        if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+            lastCheckedDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 8)))
+        }
+
         return DriveMetadata(
             uuid: uuidStr,
             name: name,
@@ -916,7 +1033,8 @@ actor DatabaseManager {
             usedCapacity: usedCapacity,
             lastScanDate: lastScanDate,
             fileCount: fileCount,
-            isExcluded: isExcluded
+            isExcluded: isExcluded,
+            lastCheckedDate: lastCheckedDate
         )
     }
 
@@ -929,7 +1047,7 @@ actor DatabaseManager {
         }
 
         let selectSQL = """
-            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded
+            SELECT uuid, name, last_seen, total_capacity, used_capacity, last_scan_date, file_count, is_excluded, last_checked_date
             FROM drives
             ORDER BY last_seen DESC
         """
@@ -955,6 +1073,11 @@ actor DatabaseManager {
             let fileCount = Int(sqlite3_column_int(stmt, 6))
             let isExcluded = sqlite3_column_int(stmt, 7) != 0
 
+            var lastCheckedDate: Date?
+            if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+                lastCheckedDate = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 8)))
+            }
+
             results.append(DriveMetadata(
                 uuid: uuid,
                 name: name,
@@ -963,7 +1086,8 @@ actor DatabaseManager {
                 usedCapacity: usedCapacity,
                 lastScanDate: lastScanDate,
                 fileCount: fileCount,
-                isExcluded: isExcluded
+                isExcluded: isExcluded,
+                lastCheckedDate: lastCheckedDate
             ))
         }
 
@@ -978,7 +1102,7 @@ actor DatabaseManager {
             }
         }
 
-        let updateSQL = "UPDATE drives SET last_scan_date = ? WHERE uuid = ?"
+        let updateSQL = "UPDATE drives SET last_scan_date = ?1, last_checked_date = ?1 WHERE uuid = ?2"
 
         guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
             throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
@@ -986,6 +1110,83 @@ actor DatabaseManager {
 
         sqlite3_bind_int64(stmt, 1, Int64(date.timeIntervalSince1970))
         sqlite3_bind_text(stmt, 2, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    func updateLastCheckedDate(for driveUUID: String, date: Date) throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let updateSQL = "UPDATE drives SET last_checked_date = ? WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_int64(stmt, 1, Int64(date.timeIntervalSince1970))
+        sqlite3_bind_text(stmt, 2, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))
+        }
+    }
+
+    /// FSEvents history cursor: the last event ID a finished scan covered, and the volume's event-store UUID
+    func getFSEventsCursor(for driveUUID: String) throws -> FSEventsCursor? {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let selectSQL = "SELECT fsevents_last_id, fsevents_volume_uuid FROM drives WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        sqlite3_bind_text(stmt, 1, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+
+        guard sqlite3_step(stmt) == SQLITE_ROW,
+              sqlite3_column_type(stmt, 0) != SQLITE_NULL,
+              sqlite3_column_type(stmt, 1) != SQLITE_NULL else {
+            return nil
+        }
+
+        return (UInt64(bitPattern: sqlite3_column_int64(stmt, 0)), String(cString: sqlite3_column_text(stmt, 1)))
+    }
+
+    /// Save (or clear, with nil) the FSEvents history cursor. Both columns change together.
+    func setFSEventsCursor(for driveUUID: String, _ cursor: FSEventsCursor?) throws {
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let updateSQL = "UPDATE drives SET fsevents_last_id = ?, fsevents_volume_uuid = ? WHERE uuid = ?"
+
+        guard sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        if let cursor = cursor {
+            sqlite3_bind_int64(stmt, 1, Int64(bitPattern: cursor.id))
+            sqlite3_bind_text(stmt, 2, (cursor.storeUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 1)
+            sqlite3_bind_null(stmt, 2)
+        }
+        sqlite3_bind_text(stmt, 3, (driveUUID as NSString).utf8String, -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw DatabaseError.executeFailed(String(cString: sqlite3_errmsg(db)))

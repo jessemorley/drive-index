@@ -25,7 +25,7 @@ struct MainWindowView: View {
                     max: DesignSystem.Sidebar.maxWidth
                 )
         } detail: {
-            // Detail view - no ZStack wrapper to preserve toolbar transparency
+            // Detail view
             Group {
                 if let selectedItem = selectedItem {
                     detailView(for: selectedItem)
@@ -36,7 +36,7 @@ struct MainWindowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Indexing progress overlay using safeAreaInset instead of ZStack
+                // Indexing progress overlay; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
                 if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
                     Group {
                         if let pending = indexManager.pendingChanges {
@@ -65,14 +65,6 @@ struct MainWindowView: View {
                 selectedItem = .search
             }
         }
-        .onChange(of: selectedItem) { oldValue, newValue in
-            // Open Settings window when Settings is selected
-            if newValue == .settings {
-                NotificationCenter.default.post(name: .openSettingsWindow, object: nil)
-                // Revert selection back to previous item
-                selectedItem = oldValue ?? .drives
-            }
-        }
     }
 
     @ViewBuilder
@@ -91,13 +83,6 @@ struct MainWindowView: View {
                 .environmentObject(indexManager)
         case .duplicates:
             DuplicatesView()
-        case .indexingTest:
-            IndexingView()
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
-        case .settings:
-            // Settings window is opened via notification, this should never be reached
-            EmptyView()
         }
     }
 }

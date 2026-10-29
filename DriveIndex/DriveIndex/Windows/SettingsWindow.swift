@@ -46,7 +46,7 @@ class SettingsWindow: NSWindow {
         toolbarStyle = .unified
 
         // Window behavior
-        isReleasedWhenClosed = false // Reuse window instance
+        isReleasedWhenClosed = false // AppDelegate drops its reference on close
         isMovableByWindowBackground = false
 
         // Set minimum size for settings window
@@ -63,7 +63,6 @@ class SettingsWindow: NSWindow {
 
         // Hide toolbar customization button
         toolbar?.isVisible = true
-        toolbar?.showsBaselineSeparator = false
     }
 
     // MARK: - Public Methods
