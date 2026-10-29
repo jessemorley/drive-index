@@ -2,10 +2,16 @@
 //  DuplicatesView.swift
 //  DriveIndex
 //
-//  Files with identical content (same hash), one card per file, one row per copy
+//  Files with identical content (same hash), or folders with identical contents; one card per file
+//  or folder, one row per copy
 //
 
 import SwiftUI
+
+enum DuplicateKind: String, CaseIterable {
+    case files = "Files"
+    case folders = "Folders"
+}
 
 enum DuplicateSort: String, CaseIterable {
     case wasted = "Wasted Space"
@@ -29,6 +35,7 @@ struct DuplicatesView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @AppStorage("duplicates.sort") private var sort: DuplicateSort = .wasted
+    @AppStorage("duplicates.kind") private var kind: DuplicateKind = .files
     @AppStorage("duplicates.excludeLocal") private var excludeLocal = false
 
     /// The groups shown: without this Mac's copies, a group needs two copies on drives
@@ -45,6 +52,13 @@ struct DuplicatesView: View {
             .navigationTitle("Duplicates")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "duplicates-toolbar") {
+                ToolbarItem(id: "kind", placement: .automatic) {
+                    Picker("Show", selection: $kind) {
+                        ForEach(DuplicateKind.allCases, id: \.self) { Text($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Show duplicate files or folders")
+                }
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Picker("Sort By", selection: $sort) {
                         ForEach(DuplicateSort.allCases, id: \.self) { Text($0.rawValue) }
@@ -65,19 +79,19 @@ struct DuplicatesView: View {
                     .help("Refresh duplicates")
                 }
             }
-            .task { await loadGroups() }
+            .task(id: kind) { await loadGroups() }
             .onChange(of: sort) { groups = sorted(groups) }
     }
 
     @ViewBuilder
     private var content: some View {
         if isLoading {
-            ProgressView("Finding duplicates...")
+            ProgressView(kind == .files ? "Finding duplicates..." : "Comparing folders...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage {
             ContentUnavailableView("Couldn't Load Duplicates", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
         } else if shownGroups.isEmpty {
-            ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("Files with identical contents will appear here"))
+            ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("\(kind.rawValue) with identical contents will appear here"))
         } else {
             ScrollView {
                 // Lazy: there can be thousands of groups
@@ -127,7 +141,7 @@ struct DuplicatesView: View {
             Label {
                 Text(group.name)
             } icon: {
-                Image(nsImage: NSWorkspace.shared.listIcon(name: group.name, isDirectory: false))
+                Image(nsImage: NSWorkspace.shared.listIcon(name: group.name, isDirectory: kind == .folders))
             }
             .lineLimit(1)
             .truncationMode(.middle)
@@ -187,7 +201,9 @@ struct DuplicatesView: View {
         isLoading = true
         errorMessage = nil
         do {
-            groups = sorted(try await DatabaseManager.shared.getDuplicateGroups())
+            groups = sorted(try await kind == .files
+                ? DatabaseManager.shared.getDuplicateGroups()
+                : DatabaseManager.shared.getDuplicateFolderGroups())
         } catch {
             errorMessage = error.localizedDescription
         }

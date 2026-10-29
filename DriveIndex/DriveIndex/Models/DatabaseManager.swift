@@ -7,6 +7,7 @@
 
 import Foundation
 import SQLite3
+import CryptoKit
 
 struct FileEntry {
     let id: Int64?
@@ -50,6 +51,103 @@ struct DuplicateFile {
     let driveName: String
     let relativePath: String
     let modifiedAt: Date?
+}
+
+/// One indexed file or folder, as read for folder duplicates
+struct FolderScanRow {
+    let id: Int64
+    let driveUUID: String
+    let driveName: String
+    let relativePath: String
+    let size: Int64
+    let hash: String?
+    let isDirectory: Bool
+    let modifiedAt: Date?
+}
+
+extension DuplicateGroup {
+    /// Folders whose contents are identical: the same names, sizes and hashes all the way down
+    /// (files too small to be hashed compare by name and size). Only the highest identical level
+    /// is kept: a group is dropped when every folder in it sits inside another identical folder.
+    static func folders(from rows: [FolderScanRow], minSize: Int64) -> [DuplicateGroup] {
+        struct Key: Hashable { let drive: String; let path: String }
+        struct Folder {
+            var id: Int64?
+            var modifiedAt: Date?
+            var entries: [String] = []  // "name\tcontent", sorted before hashing
+            var size: Int64 = 0
+            var signature = ""
+        }
+
+        func parent(_ path: String) -> String? {
+            guard !path.isEmpty else { return nil }
+            return path.lastIndex(of: "/").map { String(path[..<$0]) } ?? ""
+        }
+        func name(_ path: String) -> String {
+            path.lastIndex(of: "/").map { String(path[path.index(after: $0)...]) } ?? path
+        }
+
+        var folders: [Key: Folder] = [:]
+        var driveNames: [String: String] = [:]
+        for row in rows {
+            driveNames[row.driveUUID] = row.driveName
+            if row.isDirectory {
+                folders[Key(drive: row.driveUUID, path: row.relativePath), default: Folder()].id = row.id
+                folders[Key(drive: row.driveUUID, path: row.relativePath)]?.modifiedAt = row.modifiedAt
+            } else if let folder = parent(row.relativePath) {
+                let key = Key(drive: row.driveUUID, path: folder)
+                folders[key, default: Folder()].entries.append("\(name(row.relativePath))\t\(row.hash ?? "size:\(row.size)")")
+                folders[key]?.size += row.size
+            }
+        }
+        // Local folders are indexed without their ancestors' rows
+        for key in Array(folders.keys) {
+            var path = parent(key.path)
+            while let p = path, folders[Key(drive: key.drive, path: p)] == nil {
+                folders[Key(drive: key.drive, path: p)] = Folder()
+                path = parent(p)
+            }
+        }
+
+        // Deepest first, so each folder is finished before it's added to its parent
+        func depth(_ path: String) -> Int { path.isEmpty ? 0 : path.count(where: { $0 == "/" }) + 1 }
+        for key in folders.keys.sorted(by: { depth($0.path) > depth($1.path) }) {
+            var folder = folders[key]!
+            folder.signature = SHA256.hash(data: Data(folder.entries.sorted().joined(separator: "\n").utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            folders[key] = folder
+            if let p = parent(key.path) {
+                let parentKey = Key(drive: key.drive, path: p)
+                folders[parentKey]?.entries.append("\(name(key.path))/\t\(folder.signature)")
+                folders[parentKey]?.size += folder.size
+            }
+        }
+
+        // Drive roots aren't folders anyone would compare
+        let identical = Dictionary(grouping: folders.filter { !$0.key.path.isEmpty && $0.value.size >= max(minSize, 1) },
+                                   by: \.value.signature)
+            .values.filter { $0.count > 1 }
+        let duplicated = Set(identical.flatMap { $0.map(\.key) })
+
+        var syntheticID: Int64 = 0  // folders without a row of their own still need a unique id
+        return identical
+            .filter { group in
+                !group.allSatisfy { entry in
+                    parent(entry.key.path).map { duplicated.contains(Key(drive: entry.key.drive, path: $0)) } ?? false
+                }
+            }
+            .map { group in
+                let copies = group.map { key, folder in
+                    DuplicateFile(id: folder.id ?? { syntheticID -= 1; return syntheticID }(),
+                                  driveUUID: key.drive,
+                                  driveName: driveNames[key.drive] ?? "",
+                                  relativePath: key.path,
+                                  modifiedAt: folder.modifiedAt)
+                }
+                .sorted { ($0.driveName, $0.relativePath) < ($1.driveName, $1.relativePath) }
+                return DuplicateGroup(name: name(copies[0].relativePath), size: group[0].value.size, count: copies.count, files: copies)
+            }
+    }
 }
 
 actor DatabaseManager {
@@ -1665,6 +1763,45 @@ actor DatabaseManager {
         }
 
         return files
+    }
+
+    /// Folders with identical contents, as groups whose "files" are the folders
+    func getDuplicateFolderGroups() throws -> [DuplicateGroup] {
+        let minSize = Int64(try getSetting("min_duplicate_file_size") ?? "") ?? 5_242_880
+
+        var stmt: OpaquePointer?
+        defer {
+            if stmt != nil {
+                sqlite3_finalize(stmt)
+            }
+        }
+
+        let sql = """
+            SELECT f.id, f.drive_uuid, d.name, f.relative_path, f.size, f.hash, f.is_directory, f.modified_at
+            FROM files f
+            JOIN drives d ON d.uuid = f.drive_uuid
+        """
+
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            throw DatabaseError.prepareFailed(String(cString: sqlite3_errmsg(db)))
+        }
+
+        var rows: [FolderScanRow] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            rows.append(FolderScanRow(
+                id: sqlite3_column_int64(stmt, 0),
+                driveUUID: String(cString: sqlite3_column_text(stmt, 1)),
+                driveName: String(cString: sqlite3_column_text(stmt, 2)),
+                relativePath: String(cString: sqlite3_column_text(stmt, 3)),
+                size: sqlite3_column_int64(stmt, 4),
+                hash: sqlite3_column_text(stmt, 5).map { String(cString: $0) },
+                isDirectory: sqlite3_column_int(stmt, 6) != 0,
+                modifiedAt: sqlite3_column_type(stmt, 7) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 7)))
+            ))
+        }
+
+        return DuplicateGroup.folders(from: rows, minSize: minSize)
     }
 
     // MARK: - Capture One
