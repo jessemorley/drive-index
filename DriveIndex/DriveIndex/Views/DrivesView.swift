@@ -399,7 +399,8 @@ struct DriveDetailCard: View {
             await driveMonitor.unexcludeDrive(drive.id)
         }
 
-        // Trigger drive rescan
+        // Trigger drive rescan (no changed paths = full mount scan)
+        // ponytail: history can miss non-Mac writes; Rescan forces a full mount scan
         if let driveURL = driveMonitor.getDriveURL(for: drive) {
             Task {
                 await indexManager.indexDrive(url: driveURL, uuid: drive.id)

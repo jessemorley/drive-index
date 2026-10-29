@@ -69,7 +69,7 @@ Phase 3 results (Debug build, Jesse T72 mounted): 18 MB after launching with no 
 
 Same rules as Phase 3: commit each item separately with a before/after number, and get approval before each commit. Do the items in this order. Item 1 is quick; items 3 and 4 are the large ones.
 
-1. **Loose ends from Phase 3.**
+1. **Loose ends from Phase 3.** Done in `d16171c` (build warnings 7 → 5).
    - The About text says "macOS 13+" in `DriveIndexApp.swift` and `Views/AboutWindow.swift`. Change it to "macOS 27+".
    - `.claude/CLAUDE.md` says the main window uses `.safeAreaInset` to keep the toolbar transparent. On macOS 27 a `ZStack` keeps it transparent too (checked by eye in Phase 3). The inset is kept so the indexing overlay pushes content up instead of covering the last rows. Update the note.
    - Delete the `toolbar?.showsBaselineSeparator = false` lines in `Windows/MainWindow.swift` and `Windows/SettingsWindow.swift`. The property was deprecated in macOS 15 ("No longer supported"), so the line does nothing. Check by eye that the toolbars look unchanged.
@@ -77,7 +77,7 @@ Same rules as Phase 3: commit each item separately with a before/after number, a
    - Delete the leftover test folder `/Volumes/Jesse T72/_dittest_offline`. This is done by hand, not by the agent.
    - Number for the commit: build warnings before → after.
 
-2. **Replace the `print` calls with `os.Logger`.** There are 119. Most are in `DatabaseManager` (33), `IndexManager` (17), `FileIndexer` (15), `FSEventsMonitor` (15), `DriveMonitor` (13) and `HashWorker` (12).
+2. **Replace the `print` calls with `os.Logger`.** There are 122 after item 3. Most are in `DatabaseManager` (33), `FSEventsMonitor` (18), `IndexManager` (17), `FileIndexer` (16), `DriveMonitor` (12) and `HashWorker` (12).
    - Add one `Logger(subsystem: "<bundle id>", category: "<type>")` per file, as a `private let` at file scope. Don't write a wrapper.
    - Errors and failed recovery → `.error`. Unexpected but handled → `.warning`. Mount, scan start and finish, and scan counts → `.info`. Per-event and per-batch noise ("Buffering N FSEvents", "upsertDriveMetadata called") → `.debug`, or delete it.
    - Delete prints that only repeat the line before them.
@@ -102,6 +102,19 @@ Same rules as Phase 3: commit each item separately with a before/after number, a
      - Remount with no changes: rows loaded is about 0.
      - Before relaunching, compare the row count with the count before the test.
    - **Numbers:** rows loaded per mount (~93k → changed folders only); memory 2 minutes after a remount (45–72 MB →); time from mount until the scan finishes.
+   - **Done** in PRs #2–#5, which form a stack on `golden-gate`. Results (Debug build, Jesse T72, before = the `golden-gate` build):
+     - Rows loaded per remount: 92,987, loaded twice because an FSEvents event restarted the scan → 10–17.
+     - Time from mount until the scan finishes: 19.2 s → about 1 s. Most of the second is spent waiting for fseventsd to open the drive's event store.
+     - Memory 2 minutes after a remount: 40 MB → 41 MB, unchanged.
+     - All the tests above pass. A launch with the drive connected also replays history.
+   - **Found during the work:**
+     - `upsertDriveMetadata` used `INSERT OR REPLACE`, which would have reset the cursor on every mount. It now uses `ON CONFLICT DO UPDATE`.
+     - A newer FSEvents scan dropped the folders of the scan it cancelled. It now scans the union of both (#3).
+     - Right after a mount, `FSEventsCopyUUIDForDevice` returns nil for 0.9–3.2 s. The app now waits up to 10 s when the drive has `/.fseventsd`.
+     - `FSEventsGetLastEventIdForDeviceBeforeTime` takes a POSIX time. Passed a `CFAbsoluteTime`, it returns 0.
+     - History isn't delivered in event-ID order and can include file paths. The cursor uses the highest ID, and file paths are mapped to their folders.
+     - A data race on `visitedPaths` in `indexDriveDelta`, already on `golden-gate`, crashed a mount scan that found 512 changed folders (#5).
+   - **By hand:** delete the test files `/Volumes/Jesse T72/_dittest_history/` and `/Volumes/Jesse T72/_dittest_root_new.txt`.
 
 4. **Swift 6 and `@Observable`.** `SWIFT_VERSION = 5.0` in both configurations. Only two classes are `ObservableObject` (`DriveMonitor`, `IndexManager`), with 23 `@StateObject` / `@ObservedObject` / `@EnvironmentObject` uses across the views.
    - **4a. Strict concurrency, still on Swift 5.** Set `SWIFT_STRICT_CONCURRENCY = complete` and fix the warnings. Expect most of them in the FSEvents C callback, the `DispatchQueue` hops and the `[weak self]` captures already flagged (`IndexManager.swift:126`, `:267`). Don't use `@unchecked Sendable` or `nonisolated(unsafe)` unless a comment explains why it's safe. Commit with the warning count before → after.

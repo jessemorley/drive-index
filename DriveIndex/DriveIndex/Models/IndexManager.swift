@@ -14,6 +14,41 @@ struct PendingChanges {
     let changeCount: Int
 }
 
+/// Scan work owed per drive: the folders to scan (nil = mount scan) and the cursor they reach.
+/// Work stays here until its scan finishes, so a scan cancelled by a newer request (for any
+/// drive) is never dropped: otherwise a later scan of that drive could save a cursor past it.
+struct OwedScans {
+    struct Work {
+        var url: URL
+        var changedPaths: Set<String>?
+        var cursor: FSEventsCursor?
+    }
+
+    private(set) var work: [String: Work] = [:]
+
+    /// Merge a request into the drive's owed work and return what its scan now covers: the
+    /// union of folders, or a mount scan if either is one (an FSEvents-only scan would miss
+    /// changes made while unmounted)
+    mutating func add(uuid: String, url: URL, changedPaths: Set<String>?, cursor: FSEventsCursor?) -> Work {
+        var new = Work(url: url, changedPaths: changedPaths, cursor: cursor)
+        if let owed = work[uuid] {
+            new.changedPaths = owed.changedPaths.flatMap { owed in changedPaths?.union(owed) }
+            // The union covers both requests' events, so it reaches the later cursor
+            if let owedCursor = owed.cursor, owedCursor.id > cursor?.id ?? 0 {
+                new.cursor = owedCursor
+            }
+        }
+        // A mount scan reads its own cursor when it starts
+        if new.changedPaths == nil { new.cursor = nil }
+        work[uuid] = new
+        return new
+    }
+
+    mutating func remove(uuid: String) {
+        work[uuid] = nil
+    }
+}
+
 @MainActor
 class IndexManager: ObservableObject {
     @Published var currentProgress: IndexProgress?
@@ -28,10 +63,8 @@ class IndexManager: ObservableObject {
     private var indexingTask: Task<Void, Never>?
     private var hashingTask: Task<Void, Never>?
 
-    // Drive and folders of the running scan (nil folders = mount scan), so a newer request
-    // for the same drive can take over its work instead of dropping it
-    private var indexingUUID: String?
-    private var indexingChangedPaths: Set<String>?
+    // Work of the running scan and of scans it replaced, until each finishes
+    private var owedScans = OwedScans()
 
     // Cumulative changes since last PRAGMA optimize
     private var changesSinceLastOptimize: Int = 0
@@ -84,28 +117,27 @@ class IndexManager: ObservableObject {
                 return
             }
 
-            // Extract changed paths from FSEvents if available
+            // Extract changed paths from FSEvents if available, and the cursor they reach
             let changedPaths = userInfo["changedPaths"] as? [String]
+            var cursor: FSEventsCursor?
+            if let id = userInfo["eventId"] as? UInt64, let storeUUID = userInfo["storeUUID"] as? String {
+                cursor = (id, storeUUID)
+            }
 
             Task {
-                await self.indexDrive(url: driveURL, uuid: driveUUID, changedPaths: changedPaths)
+                await self.indexDrive(url: driveURL, uuid: driveUUID, changedPaths: changedPaths, cursor: cursor)
             }
         }
     }
 
-    func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil) async {
-        // A scan of the same drive is still running: the new scan covers its folders too, or
-        // becomes a mount scan if either is one (an FSEvents-only scan would miss changes made
-        // while unmounted). Otherwise the cancelled scan's folders would wait for the next mount.
-        var changedPaths = changedPaths.map(Set.init)
-        if indexingUUID == uuid {
-            changedPaths = indexingChangedPaths.flatMap { running in changedPaths?.union(running) }
-        }
+    func indexDrive(url: URL, uuid: String, changedPaths: [String]? = nil, cursor: FSEventsCursor? = nil) async {
+        // This scan also covers any work still owed for the drive (a cancelled scan's folders)
+        let work = owedScans.add(uuid: uuid, url: url, changedPaths: changedPaths.map(Set.init), cursor: cursor)
+        let changedPaths = work.changedPaths
+        let cursor = work.cursor
 
-        // Cancel existing indexing if any
+        // Cancel existing indexing if any; its work stays owed and runs after this scan
         indexingTask?.cancel()
-        indexingUUID = uuid
-        indexingChangedPaths = changedPaths
 
         do {
             let values = try url.resourceValues(forKeys: [.volumeNameKey])
@@ -120,17 +152,21 @@ class IndexManager: ObservableObject {
             print("Starting to index drive: \(driveName)")
 
             indexingTask = Task {
-                // Finished or failed: nothing left for a newer request to take over.
+                // Finished or failed: the drive owes nothing, so run another drive's owed scan.
                 // A cancelled scan leaves this to the scan that replaced it.
                 defer {
-                    if !Task.isCancelled { indexingUUID = nil }
+                    if !Task.isCancelled {
+                        owedScans.remove(uuid: uuid)
+                        runNextOwedScan()
+                    }
                 }
 
                 do {
                     try await fileIndexer.indexDrive(
                         driveURL: url,
                         driveUUID: uuid,
-                        changedPaths: changedPaths.map(Array.init)
+                        changedPaths: changedPaths.map(Array.init),
+                        cursor: cursor
                     ) { [weak self] progress in
                         Task { @MainActor in
                             self?.currentProgress = progress
@@ -239,6 +275,22 @@ class IndexManager: ObservableObject {
         } catch {
             print("Error getting drive name: \(error)")
             isIndexing = false
+        }
+    }
+
+    /// Start the scan owed for another drive, if any. A drive unmounted since is dropped: its
+    /// cursor never moved past the owed work, so its next mount catches up (and scanning a
+    /// missing mount point would sweep its whole index).
+    private func runNextOwedScan() {
+        for (uuid, next) in owedScans.work {
+            guard isMounted(next.url, uuid: uuid) else {
+                owedScans.remove(uuid: uuid)
+                continue
+            }
+            Task {
+                await indexDrive(url: next.url, uuid: uuid, changedPaths: next.changedPaths.map(Array.init), cursor: next.cursor)
+            }
+            return
         }
     }
 
