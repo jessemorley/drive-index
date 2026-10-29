@@ -116,11 +116,10 @@ struct FolderCompareView: View {
         var onlyA: Int64 = 0
         var both: Int64 = 0
         var onlyB: Int64 = 0
-        var total: Int64 { onlyA + both + onlyB }
     }
 
-    /// One bar per top-level subfolder; those entirely in both share one row.
-    /// ponytail: changed files aren't drawn; they're listed below
+    /// One bar for the whole pair, then the size only on each side per top-level subfolder; those
+    /// entirely in both share one row
     private func strip(_ result: FolderComparison) -> some View {
         var rows: [String: StripRow] = [:]
         func top(_ path: String) -> String { path.contains("/") ? String(path.prefix { $0 != "/" }) : "" }
@@ -139,11 +138,37 @@ struct FolderCompareView: View {
             shown.append(StripRow(id: "\(inBoth.count) folders, all in both", both: inBoth.reduce(0) { $0 + $1.both }))
         }
 
-        return Section {
+        // By file count; changed files are neither shared nor on one side only
+        let shared = result.both.count + result.moved.count
+        let counts = (onlyA: result.onlyA.count, shared: shared, onlyB: result.onlyB.count)
+        let fileTotal = max(counts.onlyA + counts.shared + counts.onlyB, 1)
+        func percent(_ n: Int) -> String {
+            (Double(n) / Double(fileTotal)).formatted(.percent.precision(.fractionLength(0...1)))
+        }
+
+        return Section("Availability") {
+            VStack(alignment: .leading) {
+                GeometryReader { geometry in
+                    let scale = geometry.size.width / CGFloat(fileTotal)
+                    HStack(spacing: 0) {
+                        Rectangle().fill(.blue).frame(width: CGFloat(counts.onlyA) * scale)
+                        Rectangle().fill(.tertiary).frame(width: CGFloat(counts.shared) * scale)
+                        Rectangle().fill(.orange).frame(width: CGFloat(counts.onlyB) * scale)
+                    }
+                }
+                .frame(height: 8)
+                .clipShape(Capsule())
+                HStack {
+                    legend("Only in \(name(.a)): \(percent(counts.onlyA))", .blue)
+                    Spacer()
+                    legend("Shared: \(percent(counts.shared))", .tertiary)
+                    Spacer()
+                    legend("Only in \(name(.b)): \(percent(counts.onlyB))", .orange)
+                }
+            }
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                 GridRow {
                     Text("Folder")
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                     Text("Only in \(name(.a))").gridColumnAlignment(.trailing)
                     Text("Only in \(name(.b))").gridColumnAlignment(.trailing)
                 }
@@ -154,29 +179,11 @@ struct FolderCompareView: View {
                         Text(row.id.isEmpty ? "Loose files" : row.id)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .frame(maxWidth: 200, alignment: .leading)
-                        GeometryReader { geometry in
-                            let scale = geometry.size.width / CGFloat(max(row.total, 1))
-                            HStack(spacing: 0) {
-                                Rectangle().fill(.blue).frame(width: CGFloat(row.onlyA) * scale)
-                                Rectangle().fill(.tertiary).frame(width: CGFloat(row.both) * scale)
-                                Rectangle().fill(.orange).frame(width: CGFloat(row.onlyB) * scale)
-                            }
-                        }
-                        .frame(height: 6)
-                        .clipShape(Capsule())
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Text(row.onlyA > 0 ? formatted(row.onlyA) : "")
                         Text(row.onlyB > 0 ? formatted(row.onlyB) : "")
                     }
                 }
-            }
-        } header: {
-            HStack {
-                Text("Availability")
-                Spacer()
-                legend("Only in \(name(.a))", .blue)
-                legend("In both", .tertiary)
-                legend("Only in \(name(.b))", .orange)
             }
         }
     }
