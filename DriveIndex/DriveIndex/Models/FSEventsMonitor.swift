@@ -111,13 +111,6 @@ actor FSEventsMonitor {
         }
         print("🔍 Starting FSEvents monitoring for: \(driveURL.path) (UUID: \(driveUUID))")
 
-        // Check if drive is excluded
-        let isExcluded = try await database.isDriveExcluded(uuid: driveUUID)
-        guard !isExcluded else {
-            print("⏭️ Skipping FSEvents for excluded drive: \(driveUUID)")
-            return false
-        }
-
         // Event IDs are relative to the drive, so they stay valid across Macs and remounts
         var info = stat()
         guard stat(driveURL.path, &info) == 0 else {
@@ -133,6 +126,14 @@ actor FSEventsMonitor {
         for _ in 0..<33 where storeUUID == nil && hasEventStore {
             try await Task.sleep(nanoseconds: 300_000_000)
             storeUUID = fseventsStoreUUID(device: info.st_dev)
+        }
+
+        // Check exclusion after the last await: "Don't Track" during the wait above would otherwise
+        // find no stream to stop, and this one would index the declined drive
+        let isExcluded = try await database.isDriveExcluded(uuid: driveUUID)
+        guard !isExcluded else {
+            print("⏭️ Skipping FSEvents for excluded drive: \(driveUUID)")
+            return false
         }
 
         // Replay history only from a cursor saved for this same event store
