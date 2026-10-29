@@ -85,6 +85,24 @@ struct FolderComparisonTests {
         #expect(result.verdict == .identical)
     }
 
+    /// Listed under the highest folder the other side lacks, else under the file's own folder
+    @Test func listedUnderHighestMissingFolder() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        try pair.write(pair.a, "Images/shared.jpg", "shared")
+        try pair.write(pair.b, "Images/shared.jpg", "shared")
+        try pair.write(pair.b, "Images/Photocopy-Textures/Set 1/t1.jpg", "t1")
+        try pair.write(pair.b, "Images/Photocopy-Textures/t2.jpg", "t2")
+        try pair.write(pair.b, "Images/loose.jpg", "loose")
+        try pair.write(pair.a, "top.zip", "top")
+
+        let listing = try await pair.compare().listingFolders()
+        #expect(listing.b == ["Images/Photocopy-Textures/Set 1/t1.jpg": "Images/Photocopy-Textures",
+                              "Images/Photocopy-Textures/t2.jpg": "Images/Photocopy-Textures",
+                              "Images/loose.jpg": "Images"])
+        #expect(listing.a == ["top.zip": ""])
+    }
+
     /// The index skips Capture One sidecars; on disk they count
     @Test func sidecarOnlyInBMakesAIncomplete() async throws {
         let pair = Pair()

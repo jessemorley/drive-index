@@ -49,9 +49,10 @@ struct FolderCompareView: View {
                 }
             } else if let result {
                 summary(result)
-                strip(result)
-                filesSection("Only in \(name(.a))", result.onlyA, root: urls?.0)
-                filesSection("Only in \(name(.b))", result.onlyB, root: urls?.1)
+                let listing = result.listingFolders()
+                strip(result, listing)
+                filesSection("Only in \(name(.a))", result.onlyA, listing.a, root: urls?.0)
+                filesSection("Only in \(name(.b))", result.onlyB, listing.b, root: urls?.1)
                 changedSection(result.changed)
                 movedSection(result.moved)
             } else {
@@ -114,28 +115,26 @@ struct FolderCompareView: View {
     private struct StripRow: Identifiable {
         var id: String
         var onlyA: Int64 = 0
-        var both: Int64 = 0
         var onlyB: Int64 = 0
     }
 
-    /// One bar for the whole pair, then the size only on each side per top-level subfolder; those
-    /// entirely in both share one row
-    private func strip(_ result: FolderComparison) -> some View {
+    /// One bar for the whole pair, then the size only on each side per folder (as listed below);
+    /// top-level folders with nothing on one side only share one row
+    private func strip(_ result: FolderComparison, _ listing: (a: [String: String], b: [String: String])) -> some View {
         var rows: [String: StripRow] = [:]
-        func top(_ path: String) -> String { path.contains("/") ? String(path.prefix { $0 != "/" }) : "" }
-        for file in result.onlyA { rows[top(file.path), default: StripRow(id: top(file.path))].onlyA += file.size }
-        for file in result.onlyB { rows[top(file.path), default: StripRow(id: top(file.path))].onlyB += file.size }
-        for file in result.both { rows[top(file.path), default: StripRow(id: top(file.path))].both += file.size }
-        for move in result.moved { rows[top(move.path), default: StripRow(id: top(move.path))].both += move.size }
+        for file in result.onlyA { let id = listing.a[file.path] ?? ""; rows[id, default: StripRow(id: id)].onlyA += file.size }
+        for file in result.onlyB { let id = listing.b[file.path] ?? ""; rows[id, default: StripRow(id: id)].onlyB += file.size }
 
-        let inBoth = rows.values.filter { $0.onlyA == 0 && $0.onlyB == 0 }
         // Folders by name, loose files last
-        var shown = rows.values.filter { $0.onlyA > 0 || $0.onlyB > 0 }
+        var shown = rows.values
             .sorted { ($0.id.isEmpty ? 1 : 0, $0.id.lowercased()) < ($1.id.isEmpty ? 1 : 0, $1.id.lowercased()) }
+        func top(_ path: String) -> String? { path.contains("/") ? String(path.prefix { $0 != "/" }) : nil }
+        let inBoth = Set((result.both.map(\.path) + result.moved.map(\.path)).compactMap(top))
+            .subtracting(rows.keys.compactMap { $0.isEmpty ? nil : String($0.prefix { $0 != "/" }) })
         if inBoth.count == 1 {
-            shown.append(inBoth[0])
+            shown.append(StripRow(id: inBoth.first!))
         } else if !inBoth.isEmpty {
-            shown.append(StripRow(id: "\(inBoth.count) folders, all in both", both: inBoth.reduce(0) { $0 + $1.both }))
+            shown.append(StripRow(id: "\(inBoth.count) folders, all in both"))
         }
 
         // By file count; changed files are neither shared nor on one side only
@@ -197,11 +196,11 @@ struct FolderCompareView: View {
         .font(.caption)
     }
 
-    /// Folders first (by top-level subfolder, expandable), then the loose files
+    /// Folders first (expandable), then the loose files
     @ViewBuilder
-    private func filesSection(_ title: String, _ files: [FolderComparison.File], root: URL?) -> some View {
+    private func filesSection(_ title: String, _ files: [FolderComparison.File], _ listing: [String: String], root: URL?) -> some View {
         if !files.isEmpty {
-            let groups = Dictionary(grouping: files) { $0.path.contains("/") ? String($0.path.prefix { $0 != "/" }) : "" }
+            let groups = Dictionary(grouping: files) { listing[$0.path] ?? "" }
             let folders = groups.keys.filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             Section("\(title): ^[\(files.count) file](inflect: true), \(formatted(total(files)))") {
                 ForEach(folders, id: \.self) { folder in
@@ -215,7 +214,7 @@ struct FolderCompareView: View {
                             Label {
                                 Text(folder)
                             } icon: {
-                                Image(nsImage: NSWorkspace.shared.listIcon(name: folder, isDirectory: true))
+                                Image(nsImage: NSWorkspace.shared.listIcon(name: (folder as NSString).lastPathComponent, isDirectory: true))
                             }
                         }
                     }

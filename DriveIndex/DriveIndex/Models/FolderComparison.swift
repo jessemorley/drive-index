@@ -87,6 +87,34 @@ struct FolderComparison {
     var changed: [Changed] = []
     var moved: [Moved] = []
 
+    /// Where to list each file only one side has: under the highest folder the other side doesn't
+    /// have at all, else under its own folder ("" at the top level). Keyed by path.
+    func listingFolders() -> (a: [String: String], b: [String: String]) {
+        func parent(_ path: String) -> String { (path as NSString).deletingLastPathComponent }
+        func folders(_ side: Side) -> Set<String> {
+            let only = side == .a ? onlyA : onlyB
+            let paths = both.map(\.path) + changed.map(\.path) + only.map(\.path)
+                + moved.map { $0.side == side ? $0.path : $0.otherPath }
+            var folders: Set<String> = []
+            for path in paths {
+                var folder = parent(path)
+                while !folder.isEmpty, folders.insert(folder).inserted { folder = parent(folder) }
+            }
+            return folders
+        }
+        func listing(_ files: [File], otherFolders: Set<String>) -> [String: String] {
+            Dictionary(files.map { file in
+                var folder = ""
+                for name in parent(file.path).split(separator: "/") {
+                    folder = folder.isEmpty ? String(name) : "\(folder)/\(name)"
+                    if !otherFolders.contains(folder) { break }
+                }
+                return (file.path, folder)
+            }) { first, _ in first }
+        }
+        return (listing(onlyA, otherFolders: folders(.b)), listing(onlyB, otherFolders: folders(.a)))
+    }
+
     var verdict: Verdict {
         let aHasAll = onlyB.isEmpty && changed.allSatisfy { $0.newer == .a }
         let bHasAll = onlyA.isEmpty && changed.allSatisfy { $0.newer == .b }
