@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftUI
 import SQLite3
 
 // MARK: - Storage Category
@@ -25,16 +24,6 @@ enum StorageCategory: String, CaseIterable {
         case .documents: return "Documents"
         case .system: return "System"
         case .other: return "Other"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .apps: return .blue
-        case .media: return .pink
-        case .documents: return .purple
-        case .system: return .gray
-        case .other: return .orange
         }
     }
 

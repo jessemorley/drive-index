@@ -27,26 +27,21 @@ struct StorageVisualizationView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.medium) {
+        Group {
             if isLoading {
                 HStack {
-                    Spacer()
                     ProgressView()
                         .controlSize(.small)
                     Text("Analysing storage...")
-                        .font(AppTypography.capacityInfo)
-                        .foregroundColor(.secondary)
-                    Spacer()
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, Spacing.medium)
+                .frame(maxWidth: .infinity)
             } else if let breakdown = breakdown {
-                StorageBreakdownView(breakdown: breakdown)
+                StorageBreakdownView(driveName: drive.name, breakdown: breakdown)
             } else {
                 Text("Unable to analyze storage")
-                    .font(AppTypography.capacityInfo)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, Spacing.medium)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
             }
         }
         .task {
@@ -91,39 +86,24 @@ struct StorageVisualizationView: View {
 
 // MARK: - Storage Breakdown View
 
+/// Laid out like System Settings > General > Storage.
 private struct StorageBreakdownView: View {
+    let driveName: String
     let breakdown: StorageBreakdown
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.small) {
-            // Header with capacity info
+        VStack(alignment: .leading) {
             HStack {
-                Text(breakdown.formattedUsed)
-                    .font(AppTypography.capacityInfo)
-                Text("of")
-                    .font(AppTypography.capacityInfo)
-                    .foregroundColor(.secondary)
-                Text(breakdown.formattedTotal)
-                    .font(AppTypography.capacityInfo)
-
+                Text(driveName)
                 Spacer()
-
-                Text(breakdown.formattedAvailable)
-                    .font(AppTypography.capacityInfo)
-                Text("available")
-                    .font(AppTypography.capacityInfo)
-                    .foregroundColor(.secondary)
+                Text("\(breakdown.formattedUsed) of \(breakdown.formattedTotal) used")
+                    .foregroundStyle(.secondary)
             }
 
-            // Horizontal segmented bar
             StorageBar(breakdown: breakdown)
 
-            // Category legend (horizontal)
             CategoryLegend(categories: breakdown.categories)
         }
-        .padding(Spacing.medium)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(12)
     }
 }
 
@@ -131,28 +111,38 @@ private struct StorageBreakdownView: View {
 
 private struct StorageBar: View {
     let breakdown: StorageBreakdown
-    let height: CGFloat = 20
+    // ponytail: drawn chart, no system control for it; height and radius match System Settings > Storage
+    private let height: CGFloat = 22
 
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 1) {
-                // Category segments
                 ForEach(breakdown.categories) { category in
                     Rectangle()
                         .fill(category.category.color)
                         .frame(width: geometry.size.width * category.percentage)
                 }
 
-                // Available space
                 if breakdown.availablePercentage > 0 {
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
+                        .fill(.quaternary)
+                        .overlay {
+                            // Hidden when the free segment is too narrow for its label
+                            ViewThatFits {
+                                Text(breakdown.formattedAvailable)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Color.clear
+                            }
+                        }
                         .frame(width: geometry.size.width * breakdown.availablePercentage)
                 }
             }
         }
         .frame(height: height)
-        .cornerRadius(6)
+        .clipShape(.rect(cornerRadius: 5))
+        .accessibilityElement()
+        .accessibilityLabel("\(breakdown.formattedUsed) of \(breakdown.formattedTotal) used, \(breakdown.formattedAvailable) available")
     }
 }
 
@@ -162,20 +152,19 @@ private struct CategoryLegend: View {
     let categories: [StorageBreakdown.CategoryData]
 
     var body: some View {
-        HStack(spacing: Spacing.medium) {
+        HStack {
             ForEach(categories) { category in
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(category.category.color)
-                        .frame(width: 6, height: 6)
-
+                Label {
                     Text(category.category.displayName)
-                        .font(AppTypography.capacityInfo)
-                        .foregroundColor(.secondary)
+                } icon: {
+                    Image(systemName: "circle.fill")
+                        .imageScale(.small)
+                        .foregroundStyle(category.category.color)
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
 }
 
@@ -193,4 +182,20 @@ extension StorageBreakdown {
     var formattedAvailable: String {
         ByteCountFormatter.string(fromByteCount: availableSpace, countStyle: .file)
     }
+}
+
+#Preview {
+    let tb: Int64 = 1_000_000_000_000
+    let parts: [(StorageCategory, Double)] = [(.media, 0.30), (.documents, 0.10), (.apps, 0.05), (.system, 0.03), (.other, 0.07)]
+    StorageBreakdownView(
+        driveName: "Jesse T72",
+        breakdown: StorageBreakdown(
+            driveUUID: "preview",
+            totalCapacity: 2 * tb,
+            usedCapacity: Int64(2 * Double(tb) * 0.55),
+            categories: parts.map { .init(category: $0.0, size: Int64(2 * Double(tb) * $0.1), fileCount: 0, percentage: $0.1) }
+        )
+    )
+    .padding()
+    .frame(width: 440)
 }
