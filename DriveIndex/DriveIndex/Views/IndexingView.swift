@@ -48,246 +48,99 @@ struct IndexingView: View {
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
-                // Automatic Indexing
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Automatic Indexing")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
+        Form {
+            Section("Automatic Indexing") {
+                Toggle("Enable automatic indexing", isOn: $fsEventsEnabled)
+                    .onChange(of: fsEventsEnabled) { _, newValue in
+                        autoSaveFSEventsEnabled(newValue)
+                    }
 
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        HStack {
-                            Text("Enable automatic indexing")
-                                .font(DesignSystem.Typography.callout)
-
-                            Spacer()
-
-                            Toggle(isOn: $fsEventsEnabled) {
-                                EmptyView()
+                if fsEventsEnabled {
+                    LabeledContent {
+                        Slider(value: $fsEventsBufferDelay, in: 5...60, step: 5)
+                            .onChange(of: fsEventsBufferDelay) { _, newValue in
+                                debouncedAutoSaveBufferDelay(newValue)
                             }
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                            .onChange(of: fsEventsEnabled) { _, newValue in
-                                autoSaveFSEventsEnabled(newValue)
-                            }
-                        }
-
-                        if fsEventsEnabled {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                                HStack {
-                                    Text("Event buffer delay:")
-                                        .font(DesignSystem.Typography.callout)
-                                        .foregroundStyle(DesignSystem.Colors.secondaryText)
-
-                                    Spacer()
-
-                                    Text("\(Int(fsEventsBufferDelay))s")
-                                        .font(.system(.callout, design: .monospaced))
-                                        .foregroundStyle(DesignSystem.Colors.primaryText)
-                                        .frame(width: 40, alignment: .trailing)
-                                }
-
-                                Slider(value: $fsEventsBufferDelay, in: 5...60, step: 5)
-                                    .onChange(of: fsEventsBufferDelay) { _, newValue in
-                                        debouncedAutoSaveBufferDelay(newValue)
-                                    }
-
-                                Text("How long to wait after file changes before triggering a scan")
-                                    .font(DesignSystem.Typography.caption2)
-                                    .foregroundStyle(DesignSystem.Colors.secondaryText)
-                            }
-                            .padding(.top, DesignSystem.Spacing.small)
-                        }
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-                // Duplicate Detection
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Duplicate Detection")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                            HStack {
-                                Text("Minimum file size:")
-                                    .font(DesignSystem.Typography.callout)
-                                    .foregroundStyle(DesignSystem.Colors.secondaryText)
-
-                                Spacer()
-
-                                Text("\(Int(minDuplicateFileSize)) MB")
-                                    .font(.system(.callout, design: .monospaced))
-                                    .foregroundStyle(DesignSystem.Colors.primaryText)
-                                    .frame(width: 60, alignment: .trailing)
-                            }
-
-                            Slider(value: $minDuplicateFileSize, in: 1...50, step: 1)
-                                .onChange(of: minDuplicateFileSize) { _, newValue in
-                                    debouncedAutoSaveMinDuplicateSize(newValue)
-                                }
-
-                            Text("Only detect duplicates for files larger than this size. Smaller threshold = more thorough but slower. Larger = faster but may miss small duplicates.")
-                                .font(DesignSystem.Typography.caption2)
-                                .foregroundStyle(DesignSystem.Colors.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-                // Excluded Directories
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Excluded Directories")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        TagInputView(
-                            tags: $excludedDirectories,
-                            placeholder: "Type directory name and press comma or return..."
-                        )
-                        .onChange(of: excludedDirectories) { _, _ in
-                            markAsChanged()
-                        }
-
-                        Button(action: {
-                            excludedDirectories = defaultExcludedDirectories
-                            markAsChanged()
-                        }) {
-                            Label("Restore Defaults", systemImage: "arrow.counterclockwise")
-                                .font(DesignSystem.Typography.caption)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.blue)
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-                // Excluded Extensions
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Excluded Extensions")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        TagInputView(
-                            tags: $excludedExtensions,
-                            placeholder: "Type extension and press comma or return..."
-                        )
-                        .onChange(of: excludedExtensions) { _, _ in
-                            markAsChanged()
-                        }
-
-                        Button(action: {
-                            excludedExtensions = defaultExcludedExtensions
-                            markAsChanged()
-                        }) {
-                            Label("Restore Defaults", systemImage: "arrow.counterclockwise")
-                                .font(DesignSystem.Typography.caption)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.blue)
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-                // Excluded Drives
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    Text("Excluded Drives")
-                        .font(DesignSystem.Typography.headline)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                        if excludedDrives.isEmpty {
-                            Text("No excluded drives")
-                                .font(DesignSystem.Typography.caption)
-                                .foregroundStyle(DesignSystem.Colors.secondaryText)
-                                .italic()
-                                .padding(.vertical, DesignSystem.Spacing.small)
-                        } else {
-                            VStack(spacing: DesignSystem.Spacing.small) {
-                                ForEach(excludedDrives, id: \.uuid) { drive in
-                                    HStack {
-                                        Image(systemName: "externaldrive")
-                                            .foregroundStyle(DesignSystem.Colors.secondaryText)
-                                            .font(DesignSystem.Typography.caption)
-
-                                        Text(drive.name)
-                                            .font(DesignSystem.Typography.caption)
-
-                                        Spacer()
-
-                                        Button("Include") {
-                                            Task {
-                                                await driveMonitor.unexcludeDrive(drive.uuid)
-                                                await loadExcludedDrives()
-                                            }
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
-                                        .font(DesignSystem.Typography.caption)
-                                    }
-                                    .padding(.vertical, DesignSystem.Spacing.xSmall)
-                                }
-                            }
-                        }
-                    }
-                    .padding(DesignSystem.Spacing.large)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-
-                // Info callout
-                HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
-                    VStack(spacing: 0) {
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.blue)
-                            .font(DesignSystem.Typography.title2)
-                    }
-                    .frame(width: 24)
-
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                        Text("Changes take effect on next scan")
-                            .font(DesignSystem.Typography.caption)
-                            .fontWeight(.semibold)
-
-                        Text("Existing indexed files won't be removed, only new scans will respect these settings.")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundStyle(DesignSystem.Colors.secondaryText)
+                        Text("\(Int(fsEventsBufferDelay))s")
+                            .monospacedDigit()
+                            .fixedSize()
+                    } label: {
+                        Text("Event buffer delay")
+                        Text("How long to wait after file changes before triggering a scan")
                     }
                 }
-                .padding(DesignSystem.Spacing.large)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.blue.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .frame(maxWidth: 600)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, DesignSystem.Spacing.sectionPadding)
-            .padding(.vertical, DesignSystem.Spacing.large)
+
+            Section("Duplicate Detection") {
+                LabeledContent {
+                    Slider(value: $minDuplicateFileSize, in: 1...50, step: 1)
+                        .onChange(of: minDuplicateFileSize) { _, newValue in
+                            debouncedAutoSaveMinDuplicateSize(newValue)
+                        }
+                    Text("\(Int(minDuplicateFileSize)) MB")
+                        .monospacedDigit()
+                        .fixedSize()
+                } label: {
+                    Text("Minimum file size")
+                    Text("Only detect duplicates for files larger than this size. Smaller threshold = more thorough but slower. Larger = faster but may miss small duplicates.")
+                }
+            }
+
+            Section("Excluded Directories") {
+                TagInputView(
+                    tags: $excludedDirectories,
+                    placeholder: "Type directory name and press comma or return..."
+                )
+                .onChange(of: excludedDirectories) { _, _ in
+                    markAsChanged()
+                }
+
+                Button("Restore Defaults") {
+                    excludedDirectories = defaultExcludedDirectories
+                    markAsChanged()
+                }
+            }
+
+            Section("Excluded Extensions") {
+                TagInputView(
+                    tags: $excludedExtensions,
+                    placeholder: "Type extension and press comma or return..."
+                )
+                .onChange(of: excludedExtensions) { _, _ in
+                    markAsChanged()
+                }
+
+                Button("Restore Defaults") {
+                    excludedExtensions = defaultExcludedExtensions
+                    markAsChanged()
+                }
+            }
+
+            Section {
+                if excludedDrives.isEmpty {
+                    Text("No excluded drives")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(excludedDrives, id: \.uuid) { drive in
+                        LabeledContent {
+                            Button("Include") {
+                                Task {
+                                    await driveMonitor.unexcludeDrive(drive.uuid)
+                                    await loadExcludedDrives()
+                                }
+                            }
+                        } label: {
+                            Label(drive.name, systemImage: "externaldrive")
+                        }
+                    }
+                }
+            } header: {
+                Text("Excluded Drives")
+            } footer: {
+                Text("Changes take effect on the next scan. Existing indexed files won't be removed, only new scans will respect these settings.")
+            }
         }
+        .formStyle(.grouped)
         .navigationTitle("Indexing")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

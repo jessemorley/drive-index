@@ -25,26 +25,26 @@ struct NavigationSidebar: View {
                     .tag(NavigationItem.duplicates)
             } header: {
                 Text("Index")
-                    .font(.system(size: 11))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
 
             // Drives section (dynamic)
             Section {
                 ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
-                    NavigationSidebarRow(item: .drive(drive))
+                    NavigationSidebarRow(item: .drive(drive), onEject: drive.isConnected ? { eject(drive) } : nil)
                         .tag(NavigationItem.drive(drive))
                 }
             } header: {
                 Text("Drives")
-                    .font(.system(size: 11))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(DesignSystem.Colors.secondaryText)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("DriveIndex")
+    }
+
+    private func eject(_ drive: DriveInfo) {
+        if let driveURL = driveMonitor.getDriveURL(for: drive) {
+            try? NSWorkspace.shared.unmountAndEjectDevice(at: driveURL)
+        }
     }
 }
 
@@ -52,26 +52,54 @@ struct NavigationSidebar: View {
 
 struct NavigationSidebarRow: View {
     let item: NavigationItem
+    /// Shows a Finder-style eject button at the trailing edge (connected drives only)
+    var onEject: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 8) {
-            Label {
-                Text(item.title)
-                    .font(DesignSystem.Typography.body)
-            } icon: {
-                Image(systemName: item.icon)
-                    .font(.system(size: DesignSystem.Sidebar.iconSize, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
+        HStack {
+            // Disconnected drives are greyed out; everything else keeps the sidebar default
+            if isDisconnectedDrive {
+                label.foregroundStyle(.secondary)
+            } else {
+                label
             }
 
-            // Show connection status badge for drive items
-            if case .drive(let driveInfo) = item {
+            if let onEject {
                 Spacer()
-                Circle()
-                    .fill(driveInfo.isConnected ? Color.green : Color.gray.opacity(0.5))
-                    .frame(width: 6, height: 6)
+                EjectButton(title: item.title, action: onEject)
             }
         }
+    }
+
+    private var label: some View {
+        Label {
+            Text(item.title)
+        } icon: {
+            Image(systemName: item.icon)
+                .symbolRenderingMode(.hierarchical)
+        }
+    }
+
+    private var isDisconnectedDrive: Bool {
+        if case .drive(let driveInfo) = item { return !driveInfo.isConnected }
+        return false
+    }
+}
+
+/// Finder-style sidebar eject: small, secondary, brightens on hover.
+private struct EjectButton: View {
+    let title: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button("Eject \(title)", systemImage: "eject.fill", action: action)
+            .labelStyle(.iconOnly)
+            .imageScale(.small)  // Finder's sidebar eject is smaller than the row icon
+            .buttonStyle(.borderless)
+            .foregroundStyle(isHovered ? .primary : .secondary)
+            .onHover { isHovered = $0 }
+            .help("Eject \"\(title)\"")
     }
 }
 

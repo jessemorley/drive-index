@@ -14,7 +14,8 @@ struct SearchView: View {
     @State private var searchResults: [FileDisplayItem] = []
     @State private var isSearching = false
     @State private var selectedDriveFilter: String? = nil
-    @State private var hoveredFileID: Int64?
+    @State private var selection: FileDisplayItem.ID?
+    @State private var sortOrder = [KeyPathComparator(\FileDisplayItem.name, comparator: .localizedStandard)]
 
     private let searchManager = SearchManager()
 
@@ -55,94 +56,77 @@ struct SearchView: View {
         return searchResults.filter { $0.driveUUID == driveId }
     }
 
-    // MARK: - Empty State
+    // MARK: - Empty States
 
     private var emptyStateView: some View {
-        VStack(spacing: DesignSystem.Spacing.xxLarge) {
-            Spacer()
-
-            VStack(spacing: DesignSystem.Spacing.large) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 72))
-                    .foregroundColor(.gray)
-                    .opacity(0.5)
-
-                Text("Search Your Drives")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-
-                Text("Use the search bar above to find files across all indexed drives")
-                    .font(DesignSystem.Typography.subheadline)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-            }
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView(
+            "Search Your Drives",
+            systemImage: "magnifyingglass",
+            description: Text("Use the search bar above to find files across all indexed drives")
+        )
     }
-
-    // MARK: - Loading View
 
     private var loadingView: some View {
-        VStack(spacing: DesignSystem.Spacing.large) {
-            ProgressView()
-                .controlSize(.large)
-
-            Text("Searching...")
-                .font(DesignSystem.Typography.subheadline)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ProgressView("Searching...")
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - No Results View
-
     private var noResultsView: some View {
-        VStack(spacing: DesignSystem.Spacing.large) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundColor(.gray)
-                .opacity(0.5)
-
-            VStack(spacing: DesignSystem.Spacing.small) {
-                Text("No Results Found")
-                    .font(DesignSystem.Typography.headline)
-
-                Text("Try different keywords or check your spelling")
-                    .font(DesignSystem.Typography.caption)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ContentUnavailableView.search(text: searchText)
     }
 
     // MARK: - Search Results View
 
     private var searchResultsView: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredResults, id: \.id) { file in
-                    FileRow(
-                        file: file,
-                        isHovered: hoveredFileID == file.id
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        revealInFinder(file)
+        Table(filteredResults.sorted(using: sortOrder), selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Name", value: \.name, comparator: .localizedStandard) { file in
+                HStack {
+                    Label {
+                        Text(file.name)
+                    } icon: {
+                        Image(nsImage: NSWorkspace.shared.listIcon(name: file.name, isDirectory: file.isDirectory))
                     }
-                    .onHover { isHovering in
-                        hoveredFileID = isHovering ? file.id : nil
-                    }
-
-                    if file.id != filteredResults.last?.id {
-                        Divider()
-                            .padding(.leading, DesignSystem.Spacing.cardPadding)
-                    }
+                    Text(file.relativePath)
+                        .foregroundStyle(.secondary)
+                        .truncationMode(.middle)
                 }
+                .lineLimit(1)
+                .help(file.relativePath)
             }
+            TableColumn("Size", value: \.size) { file in
+                Text(file.formattedSize)
+                    .foregroundStyle(.secondary)
+            }
+            .width(ideal: 80)
+            TableColumn("Kind", value: \.kind) { file in
+                Text(file.kind)
+                    .foregroundStyle(.secondary)
+            }
+            .width(ideal: 120)
+            TableColumn("Drive", value: \.driveName) { file in
+                // Offline drives greyed out, as in the sidebar
+                Text(file.driveName)
+                    .foregroundStyle(file.isConnected ? .secondary : .tertiary)
+            }
+            .width(ideal: 120)
+            TableColumn("Date Modified") { file in
+                Text(file.formattedDate)
+                    .foregroundStyle(.secondary)
+            }
+            .width(ideal: 130)
         }
+        .alternatingRowBackgrounds(.disabled)
+        .contextMenu(forSelectionType: FileDisplayItem.ID.self) { ids in
+            if let file = file(for: ids) {
+                Button("Reveal in Finder") { revealInFinder(file) }
+            }
+        } primaryAction: { ids in
+            if let file = file(for: ids) { revealInFinder(file) }
+        }
+    }
+
+    private func file(for ids: Set<FileDisplayItem.ID>) -> FileDisplayItem? {
+        ids.first.flatMap { id in searchResults.first { $0.id == id } }
     }
 
     // MARK: - Toolbar Items

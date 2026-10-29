@@ -17,7 +17,7 @@ struct TagInputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FlowLayout(spacing: Spacing.xSmall) {
+            FlowLayout(spacing: 4) {
                 // Display existing tags
                 ForEach(tags, id: \.self) { tag in
                     TagChip(text: tag, onRemove: {
@@ -28,7 +28,6 @@ struct TagInputView: View {
                 // Input field for new tags
                 TextField(tags.isEmpty ? placeholder : "", text: $currentInput)
                     .textFieldStyle(.plain)
-                    .font(AppTypography.technicalData)
                     .frame(minWidth: 120, maxWidth: .infinity)
                     .focused($isInputFocused)
                     .onSubmit {
@@ -41,14 +40,11 @@ struct TagInputView: View {
                         }
                     }
             }
-            .padding(Spacing.small)
+            .padding(6)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(NSColor.textBackgroundColor))
-            .cornerRadius(8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-            )
+            // ponytail: SwiftUI has no token field; drawn to match a bordered text field
+            .background(Color(nsColor: .textBackgroundColor), in: .rect(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
             .onTapGesture {
                 isInputFocused = true
             }
@@ -79,23 +75,19 @@ struct TagChip: View {
     let onRemove: () -> Void
 
     var body: some View {
-        HStack(spacing: Spacing.xxSmall) {
+        HStack(spacing: 2) {
             Text(text)
-                .font(AppTypography.technicalData)
-                .foregroundColor(.primary)
 
             Button(action: onRemove) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .imageScale(.small)
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             .help("Remove \(text)")
         }
-        .padding(.horizontal, Spacing.xSmall)
-        .padding(.vertical, Spacing.xSmall)
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(6)
+        .padding(4)
+        .background(.quaternary, in: .rect(cornerRadius: 4))
     }
 }
 

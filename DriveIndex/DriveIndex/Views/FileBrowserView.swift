@@ -11,7 +11,10 @@ struct FileBrowserView: View {
     let drive: DriveInfo
     private let browserManager = FileBrowserManager()
     @State private var rootItems: [FileBrowserItem]? = nil
-    @State private var expandedPaths: Set<String> = []
+    /// Children of each expanded folder, keyed by its relative path; loaded on first expand
+    @State private var childrenByPath: [String: [FileBrowserItem]] = [:]
+    @State private var selection: FileNode.ID?
+    @State private var sortOrder = [KeyPathComparator(\FileNode.name, comparator: .localizedStandard)]
     @State private var isLoading = false
     @State private var error: String?
 
@@ -25,50 +28,89 @@ struct FileBrowserView: View {
             currentScanDate: drive.lastScanDate
         )
         _rootItems = State(initialValue: cached)
+        // Never start with an empty body: a Form drops empty rows, so .task would never run
+        _isLoading = State(initialValue: cached == nil)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Files")
-                .sectionHeader()
-
+        Group {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-                    .padding()
             } else if let error = error {
                 Text("Error loading files: \(error)")
-                    .foregroundColor(.red)
-                    .font(DesignSystem.Typography.caption)
-                    .padding()
+                    .foregroundStyle(.red)
             } else if let rootItems = rootItems {
                 if rootItems.isEmpty {
                     Text("No files found")
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                        .font(DesignSystem.Typography.body)
-                        .padding()
+                        .foregroundStyle(.secondary)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(rootItems) { item in
-                                FileBrowserLevel(
-                                    item: item,
-                                    driveUUID: drive.id,
-                                    depth: 0,
-                                    expandedPaths: $expandedPaths,
-                                    browserManager: browserManager
-                                )
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 400)
-                    .card()
+                    table(rootItems)
                 }
             }
         }
         .task {
             await loadRootItems()
         }
+    }
+
+    private func table(_ rootItems: [FileBrowserItem]) -> some View {
+        Table(nodes(rootItems), children: \.children, selection: $selection, sortOrder: $sortOrder) {
+            TableColumn("Name", value: \.name, comparator: .localizedStandard) { node in
+                if let item = node.item {
+                    Label {
+                        Text(item.name)
+                    } icon: {
+                        Image(nsImage: NSWorkspace.shared.listIcon(name: item.name, isDirectory: item.isDirectory))
+                    }
+                } else {
+                    Text("Loading…")
+                        .foregroundStyle(.secondary)
+                        .onAppear { Task { await loadChildren(of: node.parentPath) } }
+                }
+            }
+            TableColumn("Size", value: \.size) { node in
+                Text(node.item?.formattedSize ?? "")
+                    .foregroundStyle(.secondary)
+            }
+            .width(ideal: 80)
+            TableColumn("Date Modified", value: \.modifiedAt) { node in
+                Text(node.item?.formattedDate ?? "")
+                    .foregroundStyle(.secondary)
+            }
+            .width(ideal: 110)
+        }
+        .alternatingRowBackgrounds(.disabled)
+        .contextMenu(forSelectionType: FileNode.ID.self) { ids in
+            if let item = file(for: ids) {
+                Button("Reveal in Finder") { revealInFinder(item) }
+            }
+        } primaryAction: { ids in
+            if let item = file(for: ids) { revealInFinder(item) }
+        }
+        // ponytail: fixed height so the Table can scroll inside the drive detail Form
+        .frame(height: 400)
+    }
+
+    /// Builds the tree from loaded data. A folder whose children aren't loaded yet gets a
+    /// "Loading…" placeholder child, which loads them when it appears (i.e. on expand).
+    private func nodes(_ items: [FileBrowserItem]) -> [FileNode] {
+        items.map { item in
+            var children: [FileNode]? = nil
+            if item.isDirectory {
+                children = childrenByPath[item.relativePath].map(nodes)
+                    ?? [FileNode(id: item.relativePath + "/\u{0}loading", item: nil, parentPath: item.relativePath, children: nil)]
+            }
+            return FileNode(id: item.relativePath, item: item, parentPath: "", children: children)
+        }
+        .sorted(using: sortOrder)
+    }
+
+    private func file(for ids: Set<FileNode.ID>) -> FileBrowserItem? {
+        guard let id = ids.first else { return nil }
+        let item = (rootItems ?? []).first { $0.relativePath == id }
+            ?? childrenByPath.values.lazy.flatMap { $0 }.first { $0.relativePath == id }
+        return item?.isDirectory == false ? item : nil
     }
 
     private func loadRootItems() async {
@@ -98,124 +140,39 @@ struct FileBrowserView: View {
             isLoading = false
         }
     }
-}
 
-// MARK: - Recursive Level Component
-
-struct FileBrowserLevel: View {
-    let item: FileBrowserItem
-    let driveUUID: String
-    let depth: Int
-    @Binding var expandedPaths: Set<String>
-    let browserManager: FileBrowserManager
-
-    @State private var children: [FileBrowserItem] = []
-    @State private var isLoadingChildren = false
-
-    private var isExpanded: Bool {
-        expandedPaths.contains(item.relativePath)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Current item row
-            Button(action: handleTap) {
-                FileTreeRow(
-                    item: item,
-                    depth: depth,
-                    isExpanded: isExpanded,
-                    onToggle: toggleExpansion
-                )
-            }
-            .buttonStyle(.plain)
-
-            // Children (if expanded)
-            if isExpanded {
-                if isLoadingChildren {
-                    HStack {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Loading...")
-                            .font(DesignSystem.Typography.caption)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-                    .padding(.leading, CGFloat(depth + 1) * 20 + 60)
-                    .padding(.vertical, DesignSystem.Spacing.small)
-                } else {
-                    ForEach(children) { child in
-                        FileBrowserLevel(
-                            item: child,
-                            driveUUID: driveUUID,
-                            depth: depth + 1,
-                            expandedPaths: $expandedPaths,
-                            browserManager: browserManager
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func handleTap() {
-        if item.isDirectory {
-            toggleExpansion()
-        } else {
-            // Reveal file in Finder
-            revealInFinder()
-        }
-    }
-
-    private func toggleExpansion() {
-        guard item.isDirectory else { return }
-
-        if isExpanded {
-            // Collapse
-            expandedPaths.remove(item.relativePath)
-        } else {
-            // Expand and load children
-            expandedPaths.insert(item.relativePath)
-            Task {
-                await loadChildren()
-            }
-        }
-    }
-
-    private func loadChildren() async {
-        guard children.isEmpty else { return }
-
-        isLoadingChildren = true
+    private func loadChildren(of path: String) async {
+        guard childrenByPath[path] == nil else { return }
 
         do {
-            children = try await browserManager.getChildren(driveUUID: driveUUID, parentPath: item.relativePath)
-            isLoadingChildren = false
+            childrenByPath[path] = try await browserManager.getChildren(driveUUID: drive.id, parentPath: path)
         } catch {
             print("Error loading children: \(error)")
-            isLoadingChildren = false
         }
     }
 
-    private func revealInFinder() {
-        // Construct full path by combining drive path with relative path
-        // Note: This requires the drive to be connected
-        let driveMonitor = DriveMonitor()
+    private func revealInFinder(_ item: FileBrowserItem) {
+        // Requires the drive to be connected
+        let fullPath = (drive.path as NSString).appendingPathComponent(item.relativePath)
 
-        Task {
-            if let drives = try? await driveMonitor.drives,
-               let matchingDrive = drives.first(where: { $0.id == driveUUID }),
-               matchingDrive.isConnected {
-                let fullPath = (matchingDrive.path as NSString).appendingPathComponent(item.relativePath)
-                let url = URL(fileURLWithPath: fullPath)
-
-                if FileManager.default.fileExists(atPath: fullPath) {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
-                } else {
-                    NSSound.beep()
-                }
-            } else {
-                NSSound.beep()
-            }
+        if drive.isConnected && FileManager.default.fileExists(atPath: fullPath) {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: fullPath)])
+        } else {
+            NSSound.beep()
         }
     }
+}
+
+/// A row in the file Table: a file or folder, or a folder's "Loading…" placeholder (`item == nil`).
+struct FileNode: Identifiable {
+    let id: String
+    let item: FileBrowserItem?
+    let parentPath: String
+    let children: [FileNode]?
+
+    var name: String { item?.name ?? "" }
+    var size: Int64 { item?.size ?? 0 }
+    var modifiedAt: Date { item?.modifiedAt ?? .distantPast }
 }
 
 // MARK: - Preview

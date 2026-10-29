@@ -57,27 +57,6 @@ struct DriveInfo: Identifiable, Equatable, Hashable {
     var isIndexed: Bool {
         lastScanDate != nil && !isExcluded
     }
-
-    /// Background color based on drive state
-    /// - Green with green outline: connected and indexed
-    /// - Grey with green outline: connected and unindexed
-    /// - Grey: not connected (regardless of indexed state)
-    var backgroundColor: Color {
-        if !isConnected {
-            return Color.secondary.opacity(0.05)
-        } else if isIndexed {
-            return Color.green.opacity(0.05)
-        } else {
-            return Color.secondary.opacity(0.05)
-        }
-    }
-
-    var borderColor: Color? {
-        if isConnected {
-            return Color.green.opacity(0.2)
-        }
-        return nil
-    }
 }
 
 @MainActor
