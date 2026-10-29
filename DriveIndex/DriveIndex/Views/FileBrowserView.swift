@@ -29,9 +29,6 @@ struct FileBrowserView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Files")
-                .sectionHeader()
-
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)

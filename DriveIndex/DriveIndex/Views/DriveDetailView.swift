@@ -12,42 +12,62 @@ struct DriveDetailView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
     @State private var showDeleteConfirmation = false
+    @State private var isPointerInWindow = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xLarge) {
-                // Drive header section
-                driveHeaderSection
+        Form {
+            Section {
+                infoRows
+                    .textSelection(.enabled)
+            } header: {
+                hero
+            }
 
-                // Storage visualization (works for offline drives via database)
-                if drive.fileCount > 0 {
-                    storageVisualizationSection
+            // Storage and files work for offline drives via the database
+            if drive.fileCount > 0 {
+                Section("Storage") {
+                    StorageVisualizationView(drive: drive)
+                        .id(drive.id)
                 }
 
-                // File browser (works for offline drives via database)
-                if drive.fileCount > 0 {
+                Section("Files") {
                     FileBrowserView(drive: drive)
                         .id(drive.id)  // Force new view instance for each drive
                 }
+            }
 
-                // Action buttons section
-                if drive.isConnected {
-                    actionButtonsSection
+            if drive.isConnected {
+                Section {
+                    HStack {
+                        Spacer()
+                        Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
+                            .disabled(indexManager.isIndexing)
+                        Button("Show in Finder", action: revealInFinder)
+                        Button("Eject", action: ejectDrive)
+                    }
                 }
             }
-            .padding(DesignSystem.Spacing.sectionPadding)
+        }
+        .formStyle(.grouped)
+        // Covers the toolbar too, so the pointer can reach the toolbar Eject button without it vanishing
+        .background {
+            Color.clear
+                .ignoresSafeArea()
+                .onHover { isPointerInWindow = $0 }
         }
         .navigationTitle(drive.name)
         .navigationSubtitle(drive.formattedTotal)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    showDeleteConfirmation = true
-                }) {
-                    Label("Delete", systemImage: "trash")
-                        .font(DesignSystem.Typography.caption)
+            if drive.isConnected && isPointerInWindow {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Eject", systemImage: "eject", action: ejectDrive)
+                        .help("Eject drive")
                 }
-                .buttonStyle(.bordered)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Delete", systemImage: "trash") {
+                    showDeleteConfirmation = true
+                }
                 .help("Remove drive from database")
             }
         }
@@ -71,106 +91,38 @@ struct DriveDetailView: View {
         }
     }
 
-    // MARK: - Header Section
+    // MARK: - Header
 
-    private var driveHeaderSection: some View {
-        HStack(alignment: .top, spacing: DesignSystem.Spacing.large) {
-            DesignSystem.icon("externaldrive.fill", size: 64)
-                .foregroundStyle(.blue)
+    private var hero: some View {
+        VStack {
+            Image(systemName: "externaldrive.fill")
+                .font(.largeTitle)
+                .imageScale(.large)
+                .foregroundStyle(.tint)
 
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                // Drive name and connection status
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                    HStack(spacing: DesignSystem.Spacing.small) {
-                        Circle()
-                            .fill(drive.isConnected ? Color.green : Color.gray)
-                            .frame(width: 10, height: 10)
+            Text(drive.name)
+                .font(.title)
+                .foregroundStyle(.primary)
 
-                        Text(drive.name)
-                            .font(DesignSystem.Typography.title)
-                    }
-
-                    Text(drive.isConnected ? "Connected" : "Disconnected")
-                        .secondaryText()
-                        .font(DesignSystem.Typography.callout)
-                }
-
-                // Information fields
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                    compactInfoRow(label: "Files Indexed", value: drive.fileCount > 0 ? "\(drive.fileCount.formatted()) files" : "Not indexed")
-                    compactInfoRow(label: "Last Scanned", value: drive.formattedLastScan)
-                    compactInfoRow(label: "UUID", value: drive.id)
-                }
-                .font(DesignSystem.Typography.caption)
+            Label {
+                Text("\(drive.formattedTotal) · \(drive.isConnected ? "Connected" : "Disconnected")")
+            } icon: {
+                Image(systemName: "circle.fill")
+                    .imageScale(.small)
+                    .foregroundStyle(drive.connectionStatusColor)
             }
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
-        .padding(DesignSystem.Spacing.cardPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(drive.backgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.card)
-                .strokeBorder(drive.borderColor ?? Color.clear, lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity)
+        .padding(.bottom)
     }
 
-    private func compactInfoRow(label: String, value: String) -> some View {
-        HStack(spacing: DesignSystem.Spacing.small) {
-            Text(label + ":")
-                .foregroundColor(.secondary)
-            Text(value)
-                .textSelection(.enabled)
-        }
-    }
-
-    // MARK: - Storage Visualization Section
-
-    private var storageVisualizationSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Storage Breakdown")
-                .sectionHeader()
-
-            StorageVisualizationView(drive: drive)
-                .id(drive.id)
-        }
-    }
-
-    // MARK: - Action Buttons Section
-
-    private var actionButtonsSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Actions")
-                .sectionHeader()
-
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                Button(action: {
-                    rescanDrive()
-                }) {
-                    Label(drive.lastScanDate == nil ? "Scan Drive" : "Rescan Drive", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(indexManager.isIndexing)
-
-                Button(action: {
-                    revealInFinder()
-                }) {
-                    Label("Reveal in Finder", systemImage: "folder")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button(action: {
-                    ejectDrive()
-                }) {
-                    Label("Eject Drive", systemImage: "eject")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(DesignSystem.Spacing.cardPadding)
-            .card()
-        }
+    @ViewBuilder
+    private var infoRows: some View {
+        LabeledContent("Files Indexed", value: drive.fileCount > 0 ? "\(drive.fileCount.formatted()) files" : "Not indexed")
+        LabeledContent("Last Scanned", value: drive.formattedLastScan)
+        LabeledContent("UUID", value: drive.id)
     }
 
     // MARK: - Actions
@@ -221,4 +173,5 @@ struct DriveDetailView: View {
         .environmentObject(DriveMonitor())
         .environmentObject(IndexManager())
     }
+    .frame(width: 480, height: 1100)  // detail column at the main window's minimum width
 }
