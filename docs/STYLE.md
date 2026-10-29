@@ -15,7 +15,7 @@ DriveIndex should look like Finder and System Settings: system controls, fonts a
 These live in `DriveIndex/Styles/AppStyle.swift` because macOS has no equivalent:
 
 - **Storage category colors** (`StorageCategory.color`): Media `.pink`, Other `.orange`, Apps `.blue`, Documents `.purple`, System `.gray`. They carry meaning in the storage bar, and because they're system colors they adapt to light mode, dark mode and Increase Contrast.
-- **Connection status chip** (`ConnectionChip`): green "Connected" or grey "Disconnected" capsule in the drive header and drives list. The sidebar and search results grey out offline drives instead.
+- **Status chip** (`StatusChip`): capsule tinted with a system color, or grey. `ConnectionChip` uses it for "Connected" / "Disconnected" in the drive header and drives list (the sidebar and search results grey out offline drives instead); the Capture One Settings tab uses it for each Settings folder version, the kept one green (orange when an old one has files it lacks).
 - **Layout widths**: sidebar 200–250 pt (`SidebarWidth`). The main window's minimum size is set in `MainWindow.swift`.
 - **File icons** (`NSWorkspace.listIcon`): Finder's own icon for each file type, at list size. Use Finder or system icons instead of hand-picked SF Symbols for files and drives.
 

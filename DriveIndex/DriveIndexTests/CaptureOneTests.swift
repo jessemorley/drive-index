@@ -137,7 +137,7 @@ struct OldSettingsFolderTests {
         try write(["c.jpg"], in: drive.appending(path: "S"), modified: old)
         let held = try #require(OldSettingsFolder.check(paths, driveUUID: "A", on: drive).first)
         #expect(held.status == .hold)
-        #expect(held.orphans == 2)
+        #expect(held.uniqueFiles == ["c.jpg.comask.backup", "c.jpg.cos"])
     }
 
     // The delete step compares the folders again rather than trusting the list it was given

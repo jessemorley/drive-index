@@ -232,14 +232,15 @@ struct OldSettingsFolder: Identifiable {
     var kept: [String] = []
     /// Unknown until the drive is connected
     var size: Int64?
-    /// Files here that no kept folder has. Zero means removing it loses nothing.
-    var orphans = 0
+    /// Files here that no kept folder has. None means removing it loses nothing.
+    var uniqueFiles: [String] = []
+    var orphans: Int { uniqueFiles.count }
     var status: CleanupStatus = .unverified
 
     var id: String { "\(driveUUID)/\(path)" }
     var name: String { String(path.split(separator: "/").last!) }
     var shootPath: String { path.split(separator: "/").dropLast(2).joined(separator: "/") }
-    private var captureOnePath: String { path.split(separator: "/").dropLast().joined(separator: "/") }
+    var captureOnePath: String { path.split(separator: "/").dropLast().joined(separator: "/") }
 
     /// "Settings1680" → [16, 8, 0], "Settings17" → [17]: two digits of major version, then one per
     /// component. Plain numeric order would put Settings1680 above Settings17. nil for other names.
@@ -312,11 +313,11 @@ struct OldSettingsFolder: Identifiable {
                 return old
             }
             old.size = contents.files.values.reduce(0, +)
-            old.orphans = contents.files.keys.filter { file in
+            old.uniqueFiles = contents.files.keys.sorted().filter { file in
                 // A mask backup whose live mask was carried forward is disposable anyway
                 !keptFiles.contains(file) && !(CaptureOne.liveMaskName(forBackup: file).map { keptFiles.contains(String($0)) } ?? false)
                     && !imageDeleted(file) && !(image(file).map(migrated.contains) ?? false)
-            }.count
+            }
             old.status = old.orphans == 0 ? .safe : .hold
             return old
         }

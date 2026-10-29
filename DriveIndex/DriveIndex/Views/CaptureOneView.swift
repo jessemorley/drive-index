@@ -7,18 +7,19 @@
 
 import SwiftUI
 
-/// One thing to remove: an image's mask backups, an old Settings folder, or an entry in a session's Trash
+/// One thing to remove: an image's mask backups, the old Settings folders of one CaptureOne folder, or an entry in a session's Trash
 struct CleanupRow: Identifiable {
     enum Item {
         case masks(MaskBackupSet)
-        case settings(OldSettingsFolder)
+        /// Every old Settings folder in one "CaptureOne" folder
+        case settings([OldSettingsFolder])
         case loose(LooseCaptureOneFolder)
         case trash(SessionTrashItem)
 
         var driveUUID: String {
             switch self {
             case .masks(let set): set.driveUUID
-            case .settings(let folder): folder.driveUUID
+            case .settings(let folders): folders[0].driveUUID
             case .loose(let folder): folder.driveUUID
             case .trash(let entry): entry.driveUUID
             }
@@ -27,7 +28,7 @@ struct CleanupRow: Identifiable {
         var shootPath: String {
             switch self {
             case .masks(let set): set.shootPath
-            case .settings(let folder): folder.shootPath
+            case .settings(let folders): folders[0].shootPath
             case .loose(let folder): folder.shootPath
             case .trash(let entry): entry.sessionFolder
             }
@@ -36,13 +37,13 @@ struct CleanupRow: Identifiable {
 
     let item: Item
     let session: CaptureOneSession
-    /// An old Settings folder the user chose to delete despite its unique files; counts as safe
+    /// Old Settings folders the user chose to delete despite their unique files; counts as safe
     var forced = false
 
     var id: String {
         switch item {
         case .masks(let set): "masks:\(set.id)"
-        case .settings(let folder): "settings:\(folder.id)"
+        case .settings(let folders): "settings:\(folders[0].driveUUID)/\(folders[0].captureOnePath)"
         case .loose(let folder): "loose:\(folder.id)"
         case .trash(let entry): "trash:\(entry.id)"
         }
@@ -68,7 +69,9 @@ struct CleanupRow: Identifiable {
         if forced { return .safe }
         return switch item {
         case .masks(let set): set.status
-        case .settings(let folder): folder.status
+        case .settings(let folders):
+            folders.contains { $0.status == .unverified } ? .unverified
+                : folders.allSatisfy { $0.status == .safe } ? .safe : .hold
         case .loose(let folder): folder.status
         case .trash(let entry): entry.status
         }
@@ -77,7 +80,8 @@ struct CleanupRow: Identifiable {
     var name: String {
         switch item {
         case .masks(let set): set.imageName
-        case .settings(let folder): folder.name
+        // The capture folder; its Settings folders show as chips
+        case .settings: location.isEmpty ? String(item.shootPath.split(separator: "/").last ?? "Drive root") : location
         case .loose: "CaptureOne"
         case .trash(let entry): entry.name
         }
@@ -93,7 +97,7 @@ struct CleanupRow: Identifiable {
     var details: String {
         switch item {
         case .masks(let set): "\(set.backupPaths.count) backup\(set.backupPaths.count == 1 ? "" : "s")"
-        case .settings(let folder): "Replaced by \(folder.kept.joined(separator: " and "))"
+        case .settings: ""
         case .loose: "Not in a session"
         case .trash(let entry): entry.name == "CaptureOne" ? "Settings and previews" : ""
         }
@@ -102,7 +106,7 @@ struct CleanupRow: Identifiable {
     var size: Int64 {
         switch item {
         case .masks(let set): set.size
-        case .settings(let folder): folder.size ?? 0
+        case .settings(let folders): folders.reduce(0) { $0 + ($1.size ?? 0) }
         case .loose(let folder): folder.size ?? 0
         case .trash(let entry): entry.size
         }
@@ -110,7 +114,7 @@ struct CleanupRow: Identifiable {
 
     /// nil when unknown (an old Settings folder on a disconnected drive)
     var sizeText: String? {
-        if case .settings(let folder) = item, folder.size == nil { return nil }
+        if case .settings(let folders) = item, folders.contains(where: { $0.size == nil }) { return nil }
         if case .loose(let folder) = item, folder.size == nil { return nil }
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
@@ -121,20 +125,37 @@ struct CleanupRow: Identifiable {
         case (.hold, .masks): "Keep: no live mask"
         case (.hold, .trash): "Keep"
         case (.hold, .loose): "Keep: in a session"
-        case (.hold, .settings(let folder)): folder.orphans == 0 ? "Keep: unreadable" : "\(folder.orphans) unique file\(folder.orphans == 1 ? "" : "s")"
+        case (.hold, .settings(let folders)):
+            folders.orphans == 0 ? "Keep: unreadable" : "\(folders.orphans) unique file\(folders.orphans == 1 ? "" : "s")"
         case (.unverified, _): "Not checked"
         }
+    }
+
+    /// Everything in a session's Trash was deleted in Capture One, and on the Settings tab the chips
+    /// already say a row is safe or has unique files; a status would only repeat that
+    var showsStatus: Bool {
+        if tab == .trash || (tab == .settings && status == .safe) { return false }
+        return !hasUniqueFiles
+    }
+
+    /// Old Settings folders with files the kept one lacks; shown as an orange chip
+    var hasUniqueFiles: Bool {
+        if case .settings(let folders) = item { status == .hold && folders.orphans > 0 } else { false }
     }
 
     /// What Reveal in Finder selects, relative to the drive
     var paths: [String] {
         switch item {
         case .masks(let set): set.backupPaths
-        case .settings(let folder): [folder.path]
+        case .settings(let folders): folders.map(\.path)
         case .loose(let folder): [folder.path]
         case .trash(let entry): [entry.path]
         }
     }
+}
+
+private extension [OldSettingsFolder] {
+    var orphans: Int { reduce(0) { $0 + $1.orphans } }
 }
 
 enum CaptureOneTab: String, CaseIterable {
@@ -222,7 +243,7 @@ struct CaptureOneView: View {
                 }
             } message: { rows in
                 let unique = rows.filter(\.forced).reduce(0) { total, row in
-                    if case .settings(let folder) = row.item { total + folder.orphans } else { total }
+                    if case .settings(let folders) = row.item { total + folders.orphans } else { total }
                 }
                 if unique > 0 {
                     Text("\(unique) file\(unique == 1 ? " is" : "s are") found nowhere else, so any edits in \(unique == 1 ? "it" : "them") are lost. They're deleted right away and can't be recovered.")
@@ -294,7 +315,6 @@ struct CaptureOneView: View {
                     if !deleteAll.isEmpty {
                         Button("Delete All \(formatted(Self.safeSize(deleteAll)))", systemImage: "trash") { pendingDelete = deleteAll }
                             .controlSize(.small)
-                            .buttonBorderShape(.capsule)
                             .help("Delete the CaptureOne folders of every folder here that isn't a session")
                     }
                 }
@@ -337,7 +357,8 @@ struct CaptureOneView: View {
 
             // A loose CaptureOne folder takes its old Settings folders with it, so they aren't listed twice
             let looseIDs = Set(looseFolders.map(\.id))
-            let items = folders.filter { !looseIDs.contains("\($0.driveUUID)/\($0.path.split(separator: "/").dropLast().joined(separator: "/"))") }.map(CleanupRow.Item.settings)
+            let byCaptureOne = Dictionary(grouping: folders) { "\($0.driveUUID)/\($0.captureOnePath)" }
+            let items = byCaptureOne.filter { !looseIDs.contains($0.key) }.values.map(CleanupRow.Item.settings)
                 + looseFolders.map(CleanupRow.Item.loose)
                 + maskSets.map(CleanupRow.Item.masks)
                 + trashEntries.map(CleanupRow.Item.trash)
@@ -477,9 +498,11 @@ struct CaptureOneView: View {
             let result = await set.delete(on: driveURL)
             removed = result.deleted
             complete = result.failed.isEmpty
-        case .settings(let folder):
-            complete = await folder.delete(on: driveURL, force: row.forced)
-            if complete { removed = [folder.path] }
+        case .settings(let folders):
+            for folder in folders where await folder.delete(on: driveURL, force: row.forced) {
+                removed.append(folder.path)
+            }
+            complete = removed.count == folders.count
         case .loose(let folder):
             complete = await folder.delete(on: driveURL)
             if complete { removed = [folder.path] }
@@ -593,7 +616,6 @@ private struct SessionCard: View, Equatable {
                 let title = "Delete \(formatted(group.safeSize))"
                 Button(title, systemImage: "trash") { delete(safe) }
                     .controlSize(.small)
-                    .buttonBorderShape(.capsule)
                     .overlay {
                         if flashingDeleted {
                             DeleteProgressFill(title: "Deleted", systemImage: "checkmark", progress: 1)
@@ -601,6 +623,8 @@ private struct SessionCard: View, Equatable {
                             DeleteProgressFill(title: title, systemImage: "trash", progress: progress)
                         }
                     }
+                    // Some of what's left here holds files found nowhere else
+                    .foregroundStyle(group.rows.contains(where: \.hasUniqueFiles) ? .orange : .primary)
                     .help("Delete this session's safe items")
             } else if !connected {
                 Text("Connect \(driveName)")
@@ -638,6 +662,15 @@ private struct SessionCard: View, Equatable {
         }
     }
 
+    /// "1 unique file in Settings1670: IMG_0914.HEIC.cos"
+    private static func uniqueFilesHelp(_ folders: [OldSettingsFolder]) -> String {
+        folders.filter { $0.orphans > 0 }.map { folder in
+            let names = folder.uniqueFiles.prefix(10).joined(separator: ", ")
+            let more = folder.orphans > 10 ? " and \(folder.orphans - 10) more" : ""
+            return "\(folder.orphans) unique file\(folder.orphans == 1 ? "" : "s") in \(folder.name): \(names)\(more)"
+        }.joined(separator: "\n")
+    }
+
     private func itemRow(_ row: CleanupRow) -> some View {
         HStack {
             Label {
@@ -647,15 +680,24 @@ private struct SessionCard: View, Equatable {
             }
             .lineLimit(1)
             .truncationMode(.middle)
-            Text(row.location)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            if case .settings(let folders) = row.item {
+                // Oldest first; the kept one green, or orange when it lacks files an old one has
+                let missing = row.hasUniqueFiles
+                ForEach(Set(folders.map(\.name) + folders[0].kept).sorted { OldSettingsFolder.version(of: $0)!.lexicographicallyPrecedes(OldSettingsFolder.version(of: $1)!) }, id: \.self) { name in
+                    let kept = folders[0].kept.contains(name)
+                    StatusChip(title: name, color: kept ? (missing ? .orange : .green) : nil)
+                        .help(kept && missing ? Self.uniqueFilesHelp(folders) : "")
+                }
+            } else {
+                Text(row.location)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             Spacer()
             Text(row.details)
                 .foregroundStyle(.secondary)
-            // Everything in a session's Trash was deleted in Capture One; a status would only repeat that
-            if row.tab != .trash {
+            if row.showsStatus {
                 Label(row.statusText, systemImage: row.status.symbol)
                     .foregroundStyle(row.status.color)
             }
@@ -728,7 +770,8 @@ private struct DeleteProgressFill: View {
                     Rectangle().frame(width: geometry.size.width * progress)
                 }
             }
-            .clipShape(.capsule)
+            // ponytail: measured, the corner of a small bordered button on macOS 27; adjust if the system shape changes
+            .clipShape(.rect(cornerRadius: 5))
             .allowsHitTesting(false)
         }
     }
