@@ -28,6 +28,8 @@ struct FileBrowserView: View {
             currentScanDate: drive.lastScanDate
         )
         _rootItems = State(initialValue: cached)
+        // Never start with an empty body: a Form drops empty rows, so .task would never run
+        _isLoading = State(initialValue: cached == nil)
     }
 
     var body: some View {
