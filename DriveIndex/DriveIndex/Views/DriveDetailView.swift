@@ -43,7 +43,9 @@ struct DriveDetailView: View {
                         Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
                             .disabled(indexManager.isIndexing)
                         Button("Show in Finder", action: revealInFinder)
-                        Button("Eject", action: ejectDrive)
+                        if !drive.isLocal {
+                            Button("Eject", action: ejectDrive)
+                        }
                     }
                 }
             }
@@ -58,7 +60,7 @@ struct DriveDetailView: View {
         .navigationTitle(drive.name)
         .navigationSubtitle(drive.formattedTotal)
         .toolbar {
-            if drive.isConnected && isPointerInWindow {
+            if drive.isConnected && !drive.isLocal && isPointerInWindow {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Eject", systemImage: "eject", action: ejectDrive)
                         .help("Eject drive")

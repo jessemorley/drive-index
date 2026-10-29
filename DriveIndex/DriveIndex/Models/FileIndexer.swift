@@ -205,6 +205,9 @@ actor FileIndexer {
         // (events during the scan get replayed next time, which is harmless)
         let cursor = changedPaths == nil ? fseventsCursorNow(for: driveURL.path) : cursor
 
+        // This Mac is walked only in its local folders; any other drive from its root
+        let roots = driveURL.path == "/" ? await LocalFolders.urls() : [driveURL]
+
         // Determine scan type based on whether this drive has been indexed before
         let driveMetadata = try await database.getDriveMetadata(driveUUID)
         let shouldUseDelta = driveMetadata?.lastScanDate != nil
@@ -214,12 +217,13 @@ actor FileIndexer {
             try await indexDriveDelta(
                 driveURL: driveURL,
                 driveUUID: driveUUID,
+                roots: roots,
                 changedPaths: changedPaths,
                 onProgress: onProgress
             )
         } else {
             print("Starting full index of drive: \(driveURL.path) (first time)")
-            try await indexDriveFull(driveURL: driveURL, driveUUID: driveUUID, onProgress: onProgress)
+            try await indexDriveFull(driveURL: driveURL, driveUUID: driveUUID, roots: roots, onProgress: onProgress)
         }
 
         // Only a finished scan moves the cursor (both scans throw on cancellation). Without one
@@ -237,6 +241,7 @@ actor FileIndexer {
     private func indexDriveFull(
         driveURL: URL,
         driveUUID: String,
+        roots: [URL],
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
         // Clear existing entries for this drive
@@ -250,7 +255,7 @@ actor FileIndexer {
         let basePath = driveURL.path
 
         // Walk directory tree
-        let fileStream = walkDirectory(at: driveURL, basePath: basePath, driveUUID: driveUUID)
+        let fileStream = walkDirectory(at: roots, basePath: basePath, driveUUID: driveUUID)
 
         for await fileEntry in fileStream {
             batch.append(fileEntry)
@@ -322,6 +327,7 @@ actor FileIndexer {
     private func indexDriveDelta(
         driveURL: URL,
         driveUUID: String,
+        roots: [URL],
         changedPaths: [String]? = nil,
         onProgress: @escaping @Sendable (IndexProgress) -> Void
     ) async throws {
@@ -397,7 +403,7 @@ actor FileIndexer {
 
         // Walk directory tree (with directory caching or FSEvents optimization)
         let fileStream = walkDirectory(
-            at: driveURL,
+            at: roots,
             basePath: basePath,
             driveUUID: driveUUID,
             cachedDirectories: existingDirectories,
@@ -571,7 +577,7 @@ actor FileIndexer {
     }
 
     private func walkDirectory(
-        at url: URL,
+        at roots: [URL],
         basePath: String,
         driveUUID: String,
         cachedDirectories: [String: Date?]? = nil,
@@ -588,7 +594,7 @@ actor FileIndexer {
             // Perform file enumeration on a background thread
             DispatchQueue.global(qos: .userInitiated).async {
                 Self.enumerateFiles(
-                    at: url,
+                    at: roots,
                     basePath: basePath,
                     driveUUID: driveUUID,
                     excludedDirs: excludedDirs,
@@ -604,8 +610,10 @@ actor FileIndexer {
         }
     }
     
+    /// Walks each root, with paths relative to basePath. Rows outside every root are never
+    /// marked visited, so removing a local folder sweeps its rows.
     static func enumerateFiles(
-        at url: URL,
+        at roots: [URL],
         basePath: String,
         driveUUID: String,
         excludedDirs: Set<String>,
@@ -618,6 +626,8 @@ actor FileIndexer {
         continuation: AsyncStream<FileEntry>.Continuation
     ) {
         let fileManager = FileManager.default
+        // "/" for this Mac: relative paths drop just the slash
+        let basePath = basePath == "/" ? "" : basePath
 
         func relative(_ url: URL) -> String {
             let fullPath = url.path
@@ -648,7 +658,7 @@ actor FileIndexer {
             .skipsPackageDescendants
         ]
 
-        guard let enumerator = fileManager.enumerator(
+        func makeEnumerator(_ url: URL) -> FileManager.DirectoryEnumerator? { fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: Array(resourceKeys),
             options: options,
@@ -665,10 +675,7 @@ actor FileIndexer {
                 print("Error enumerating \(url.path): \(error)")
                 return true
             }
-        ) else {
-            continuation.finish()
-            return
-        }
+        ) }
 
         // Incremental scan optimization: Build set of directories that need scanning
         // Use FSEvents paths if available, otherwise detect changed directories
@@ -680,11 +687,12 @@ actor FileIndexer {
             var changedDirs = Set<String>()
 
             // Quick scan: Check which directories have changed mod times
-            if let quickEnumerator = fileManager.enumerator(
-                at: url,
-                includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
-                options: [.skipsHiddenFiles, .skipsPackageDescendants]
-            ) {
+            for root in roots {
+                guard let quickEnumerator = fileManager.enumerator(
+                    at: root,
+                    includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                ) else { continue }
                 for case let itemURL as URL in quickEnumerator {
                     // Skip if excluded
                     if shouldSkip(itemURL, excludedDirs: excludedDirs, excludedExts: excludedExts) {
@@ -751,9 +759,14 @@ actor FileIndexer {
                 // No directory changes - skip enumeration entirely and mark all as visited
                 print("🎯 No directory changes detected, skipping enumeration")
 
-                // Mark all existing files as visited (nothing changed, nothing to delete)
-                if let existing = existingFiles {
-                    onFilesMarkedVisited?(Array(existing.keys))
+                // Mark existing files under the roots visited (nothing changed, nothing to delete)
+                for root in roots {
+                    let rootPath = relative(root)
+                    if rootPath.isEmpty {
+                        existingFiles.map { onFilesMarkedVisited?(Array($0.keys)) }
+                    } else {
+                        markSubtreeVisited(rootPath)
+                    }
                 }
 
                 // Skip enumeration entirely
@@ -766,67 +779,70 @@ actor FileIndexer {
         }
 
         // Process files synchronously
-        for case let fileURL as URL in enumerator {
-            // Check if should skip this file/directory
-            if shouldSkip(fileURL, excludedDirs: excludedDirs, excludedExts: excludedExts) {
-                if isDirectory(fileURL) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-
-            // Incremental scan: Skip directories that don't need scanning
-            if let dirsToScan = dirsToScan, isDirectory(fileURL) {
-                // Calculate relative path
-                let fullPath = fileURL.path
-                let relativePath: String
-                if fullPath.hasPrefix(basePath) {
-                    relativePath = String(fullPath.dropFirst(basePath.count + 1))
-                } else {
-                    relativePath = fullPath
-                }
-
-                // Folders not yet in the database (renamed or moved in) are walked fully:
-                // FSEvents only reports their parent
-                if !dirsToScan.contains(relativePath), existingFiles?[relativePath] != nil {
-                    // This directory and all its ancestors are unchanged - skip it
-                    enumerator.skipDescendants()
-                    onDirectorySkipped?()
-
-                    // Mark all files in this directory as visited
-                    markSubtreeVisited(relativePath)
-
+        for root in roots {
+            guard let enumerator = makeEnumerator(root) else { continue }
+            for case let fileURL as URL in enumerator {
+                // Check if should skip this file/directory
+                if shouldSkip(fileURL, excludedDirs: excludedDirs, excludedExts: excludedExts) {
+                    if isDirectory(fileURL) {
+                        enumerator.skipDescendants()
+                    }
                     continue
                 }
-            }
-
-            let relativePath = relative(fileURL)
-
-            do {
-                let values = try fileURL.resourceValues(forKeys: resourceKeys)
-
-                guard let name = values.name else {
+    
+                // Incremental scan: Skip directories that don't need scanning
+                if let dirsToScan = dirsToScan, isDirectory(fileURL) {
+                    // Calculate relative path
+                    let fullPath = fileURL.path
+                    let relativePath: String
+                    if fullPath.hasPrefix(basePath) {
+                        relativePath = String(fullPath.dropFirst(basePath.count + 1))
+                    } else {
+                        relativePath = fullPath
+                    }
+    
+                    // Folders not yet in the database (renamed or moved in) are walked fully:
+                    // FSEvents only reports their parent
+                    if !dirsToScan.contains(relativePath), existingFiles?[relativePath] != nil {
+                        // This directory and all its ancestors are unchanged - skip it
+                        enumerator.skipDescendants()
+                        onDirectorySkipped?()
+    
+                        // Mark all files in this directory as visited
+                        markSubtreeVisited(relativePath)
+    
+                        continue
+                    }
+                }
+    
+                let relativePath = relative(fileURL)
+    
+                do {
+                    let values = try fileURL.resourceValues(forKeys: resourceKeys)
+    
+                    guard let name = values.name else {
+                        continue
+                    }
+    
+                    let entry = FileEntry(
+                        id: nil,
+                        driveUUID: driveUUID,
+                        name: name,
+                        relativePath: relativePath,
+                        size: Int64(values.fileSize ?? 0),
+                        createdAt: values.creationDate,
+                        modifiedAt: values.contentModificationDate,
+                        isDirectory: values.isDirectory ?? false
+                    )
+    
+                    continuation.yield(entry)
+    
+                } catch {
+                    // Skip files we can't read, but keep their rows: the walk may still descend into
+                    // an unreadable folder, and sweeping it would delete its visited children too
+                    onFilesMarkedVisited?([relativePath])
                     continue
                 }
-
-                let entry = FileEntry(
-                    id: nil,
-                    driveUUID: driveUUID,
-                    name: name,
-                    relativePath: relativePath,
-                    size: Int64(values.fileSize ?? 0),
-                    createdAt: values.creationDate,
-                    modifiedAt: values.contentModificationDate,
-                    isDirectory: values.isDirectory ?? false
-                )
-
-                continuation.yield(entry)
-
-            } catch {
-                // Skip files we can't read, but keep their rows: the walk may still descend into
-                // an unreadable folder, and sweeping it would delete its visited children too
-                onFilesMarkedVisited?([relativePath])
-                continue
             }
         }
 

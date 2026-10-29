@@ -151,7 +151,7 @@ struct DriveCard: View {
                     Button("Eject") {
                         ejectDrive(drive)
                     }
-                    .disabled(!drive.isConnected)
+                    .disabled(!drive.isConnected || drive.isLocal)
                     .help("Eject drive")
                 }
             }
@@ -211,8 +211,10 @@ struct DriveDetailCard: View {
                             .disabled(indexManager.isIndexing)
                         Button("Show in Finder", action: revealInFinder)
                         Spacer()
-                        Button("Eject", action: ejectDrive)
-                            .help("Eject drive")
+                        if !drive.isLocal {
+                            Button("Eject", action: ejectDrive)
+                                .help("Eject drive")
+                        }
                     }
                 }
             }

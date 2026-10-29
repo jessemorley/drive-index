@@ -32,7 +32,7 @@ struct NavigationSidebar: View {
             // Drives section (dynamic)
             Section {
                 ForEach(driveMonitor.drives.filter { $0.isIndexed }) { drive in
-                    NavigationSidebarRow(item: .drive(drive), onEject: drive.isConnected ? { eject(drive) } : nil)
+                    NavigationSidebarRow(item: .drive(drive), onEject: drive.isConnected && !drive.isLocal ? { eject(drive) } : nil)
                         .tag(NavigationItem.drive(drive))
                 }
             } header: {
