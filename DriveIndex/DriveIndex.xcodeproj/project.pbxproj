@@ -32,6 +32,7 @@
 		86BA121F3092F42B00E616CB /* CaptureOne.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA121E3092F42B00E616CB /* CaptureOne.swift */; };
 		86BA12213092F43B00E616CB /* CaptureOneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA12203092F43B00E616CB /* CaptureOneView.swift */; };
 		86BA1245309487AC00E616CB /* DuplicatesWebPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA1244309487AC00E616CB /* DuplicatesWebPane.swift */; };
+		86BA12513096000100E616CB /* Web in Resources */ = {isa = PBXBuildFile; fileRef = 86BA12503096000100E616CB /* Web */; };
 		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
 		86F0C0A23093000100E61701 /* FolderComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F0C0A13093000100E61701 /* FolderComparison.swift */; };
 		86F0C0A43093000100E61701 /* FolderCompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F0C0A33093000100E61701 /* FolderCompareView.swift */; };
@@ -87,6 +88,7 @@
 		86BA121E3092F42B00E616CB /* CaptureOne.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOne.swift; sourceTree = "<group>"; };
 		86BA12203092F43B00E616CB /* CaptureOneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOneView.swift; sourceTree = "<group>"; };
 		86BA1244309487AC00E616CB /* DuplicatesWebPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatesWebPane.swift; sourceTree = "<group>"; };
+		86BA12503096000100E616CB /* Web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Web; sourceTree = "<group>"; };
 		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
 		86F0C0A13093000100E61701 /* FolderComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderComparison.swift; sourceTree = "<group>"; };
 		86F0C0A33093000100E61701 /* FolderCompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderCompareView.swift; sourceTree = "<group>"; };
@@ -145,6 +147,7 @@
 				1A000000 /* DriveIndexApp.swift */,
 				1A100003 /* Views */,
 				1A100004 /* Models */,
+				86BA12503096000100E616CB /* Web */,
 				1A000010 /* Info.plist */,
 				1A000011 /* DriveIndex.entitlements */,
 			);
@@ -327,6 +330,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				86BA12513096000100E616CB /* Web in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
