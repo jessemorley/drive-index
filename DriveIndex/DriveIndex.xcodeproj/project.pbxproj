@@ -31,6 +31,7 @@
 		86BA12133092D6D700E616CB /* AppStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA12123092D6D700E616CB /* AppStyle.swift */; };
 		86BA121F3092F42B00E616CB /* CaptureOne.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA121E3092F42B00E616CB /* CaptureOne.swift */; };
 		86BA12213092F43B00E616CB /* CaptureOneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA12203092F43B00E616CB /* CaptureOneView.swift */; };
+		86BA1245309487AC00E616CB /* DuplicatesWebPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA1244309487AC00E616CB /* DuplicatesWebPane.swift */; };
 		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
 		86F0C0A23093000100E61701 /* FolderComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F0C0A13093000100E61701 /* FolderComparison.swift */; };
 		86F0C0A43093000100E61701 /* FolderCompareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F0C0A33093000100E61701 /* FolderCompareView.swift */; };
@@ -85,6 +86,7 @@
 		86BA12123092D6D700E616CB /* AppStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStyle.swift; sourceTree = "<group>"; };
 		86BA121E3092F42B00E616CB /* CaptureOne.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOne.swift; sourceTree = "<group>"; };
 		86BA12203092F43B00E616CB /* CaptureOneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOneView.swift; sourceTree = "<group>"; };
+		86BA1244309487AC00E616CB /* DuplicatesWebPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatesWebPane.swift; sourceTree = "<group>"; };
 		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
 		86F0C0A13093000100E61701 /* FolderComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderComparison.swift; sourceTree = "<group>"; };
 		86F0C0A33093000100E61701 /* FolderCompareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderCompareView.swift; sourceTree = "<group>"; };
@@ -176,6 +178,7 @@
 				86B531A92EC04858007DC54C /* Components */,
 				86BA12203092F43B00E616CB /* CaptureOneView.swift */,
 				86F0C0A33093000100E61701 /* FolderCompareView.swift */,
+				86BA1244309487AC00E616CB /* DuplicatesWebPane.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -341,6 +344,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				86BA1245309487AC00E616CB /* DuplicatesWebPane.swift in Sources */,
 				86BA12213092F43B00E616CB /* CaptureOneView.swift in Sources */,
 				86F0C0A43093000100E61701 /* FolderCompareView.swift in Sources */,
 				863168312EC96F54007B6201 /* StorageVisualizationView.swift in Sources */,
