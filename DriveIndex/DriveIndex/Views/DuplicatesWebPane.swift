@@ -2,7 +2,7 @@
 //  DuplicatesWebPane.swift
 //  DriveIndex
 //
-//  The duplicates cards drawn by WebKit (Web/duplicates.html), for CSS animation. The toolbar, data
+//  The duplicates review drawn by WebKit (Web/duplicates.html), for CSS animation. The toolbar, data
 //  and actions stay in DuplicatesView; this pane only renders, posts clicks back and shows native menus
 //
 
@@ -13,12 +13,14 @@ struct DuplicatesWebPane: NSViewRepresentable {
     let sets: [FolderSet]
     let loose: [DuplicateGroup]
     let drives: [DriveInfo]
-    /// The toolbar's height: the page lays out below it but scrolls under it
+    /// The toolbar's height: the page's columns pad below it but scroll under it
     let topInset: CGFloat
     let reveal: (DuplicateFile) -> Void
     let trash: (DuplicateFile) -> Void
     let revealFolder: (FolderLocation) -> Void
     let trashFolder: (FolderSet.Member) -> Void
+    /// Every folder of the set but the one at this index
+    let trashOthers: (FolderSet, Int) -> Void
     let compare: (FolderPair) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -58,9 +60,6 @@ struct DuplicatesWebPane: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.parent = self
-        if webView.obscuredContentInsets.top != topInset {
-            webView.obscuredContentInsets = NSEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
-        }
         context.coordinator.send()
     }
 
@@ -79,6 +78,7 @@ struct DuplicatesWebPane: NSViewRepresentable {
             let id, drive, driveIcon, path, summary, verdict: String
             let safe, connected, holdsAnother: Bool
             let files, shared, changed, onlyHere, unchecked: Int
+            let missingFrom: [Int]
         }
         struct Group: Encodable {
             let id: Int64
@@ -95,6 +95,7 @@ struct DuplicatesWebPane: NSViewRepresentable {
         let groups: [Group]
         /// Groups not sent yet
         let more: Int
+        let top: CGFloat
     }
 
     /// Every set, and the first `limit` groups
@@ -106,7 +107,8 @@ struct DuplicatesWebPane: NSViewRepresentable {
                 Payload.Member(id: m.id, drive: m.folder.driveName, driveIcon: "icon://drive/\(m.folder.driveUUID)",
                                path: m.folder.relativePath, summary: "\(m.files.formatted()) files, \(bytes(m.bytes))",
                                verdict: m.verdict, safe: m.isSafeToRemove, connected: connected.contains(m.folder.driveUUID), holdsAnother: m.holdsAnother,
-                               files: m.files, shared: m.shared, changed: m.changed, onlyHere: m.onlyHere, unchecked: m.unchecked)
+                               files: m.files, shared: m.shared, changed: m.changed, onlyHere: m.onlyHere, unchecked: m.unchecked,
+                               missingFrom: m.missingFrom)
             })
         }, groups: loose.prefix(limit).map { group in
             Payload.Group(
@@ -122,7 +124,7 @@ struct DuplicatesWebPane: NSViewRepresentable {
                                  date: file.modifiedAt?.formatted(.dateTime.day().month().year()) ?? "",
                                  connected: connected.contains(file.driveUUID))
                 })
-        }, more: max(0, loose.count - limit))
+        }, more: max(0, loose.count - limit), top: topInset)
         return String(decoding: try! JSONEncoder().encode(payload), as: UTF8.self)
     }
 
@@ -202,8 +204,11 @@ struct DuplicatesWebPane: NSViewRepresentable {
             }
             if let setID = body["set"] as? String, let set = parent.sets.first(where: { $0.id == setID }) {
                 let member = (body["member"] as? String).flatMap { id in set.members.first { $0.id == id } }
+                let keep = (body["keep"] as? Int).flatMap { set.members.indices.contains($0) ? $0 : nil }
                 switch action {
-                case "compare": compare(set)
+                case "trashOthers": keep.map { parent.trashOthers(set, $0) }
+                case "compare":
+                    if let member, let keep { parent.compare(FolderPair(a: set.members[keep].folder, b: member.folder)) }
                 case "reveal": member.map { parent.revealFolder($0.folder) }
                 case "trash": member.map(parent.trashFolder)
                 case "menu": member.map { member in
@@ -231,17 +236,6 @@ struct DuplicatesWebPane: NSViewRepresentable {
 
         private func isConnected(_ driveUUID: String) -> Bool {
             parent.drives.first { $0.id == driveUUID }?.isConnected ?? false
-        }
-
-        /// Two folders open Folder Compare; more ask which two
-        private func compare(_ set: FolderSet) {
-            let folders = set.members.map(\.folder)
-            guard folders.count > 2 else { parent.compare(FolderPair(a: folders[0], b: folders[1])); return }
-            let pairs = folders.indices.flatMap { i in folders[(i + 1)...].map { (folders[i], $0) } }
-            popUp(pairs.map { a, b in
-                ("\(a.driveName): \(a.relativePath)  ↔  \(b.driveName): \(b.relativePath)", true,
-                 { self.parent.compare(FolderPair(a: a, b: b)) })
-            })
         }
 
         /// A real NSMenu at the mouse instead of WebKit's (Reload, Inspect Element)

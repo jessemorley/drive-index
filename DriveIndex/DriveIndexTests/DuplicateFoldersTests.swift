@@ -96,6 +96,15 @@ struct FolderOverlapTests {
         #expect(o.sets[0].wastedBytes == 100)
     }
 
+    /// 6 is in A and B only: each counts it as shared, but keeping C and trashing both would lose it
+    @Test func missingFromTheKeptFolder() throws {
+        let o = overview(files("A", "S", five + ["6"]) + files("B", "S", five + ["6"]) + files("C", "S", five))
+        let set = try #require(o.sets.first)
+        #expect(set.members.map(\.folder.driveUUID) == ["A", "B", "C"])
+        #expect(set.members.allSatisfy { $0.isSafeToRemove })
+        #expect(set.members.map(\.missingFrom) == [[0, 0, 1], [0, 0, 1], [0, 0, 0]])
+    }
+
     /// Selects picked from several camera folders: no one folder holds enough of them, the shoot's Capture does
     @Test func selectsFromSubfoldersPairWithTheShoot() throws {
         let looks = (1...3).flatMap { look in files("T72", "Shoot/Capture/LOOK \(look)", (1...6).map { "\(look)-\($0).NEF" }) }

@@ -2,8 +2,9 @@
 //  DuplicatesView.swift
 //  DriveIndex
 //
-//  Duplicates by folder: a card per set of folders holding copies of each other's files, with a
-//  verdict per folder, then a card per duplicate file with a copy outside every set
+//  Duplicates by folder: a review list of the sets of folders holding copies of each other's files
+//  (pick one to keep, trash the others once nothing blocks it), then the duplicate files with a copy
+//  outside every set
 //
 
 import SwiftUI
@@ -101,8 +102,8 @@ struct DuplicatesView: View {
                     DuplicatesWebPane(sets: sets, loose: loose, drives: driveMonitor.drives, topInset: webTopInset,
                                       reveal: revealInFinder, trash: moveToTrash,
                                       revealFolder: revealInFinder, trashFolder: confirmTrash,
-                                      compare: { comparing = $0 })
-                        // Under the toolbar, like a native ScrollView; the web view keeps content clear of it
+                                      trashOthers: confirmTrash, compare: { comparing = $0 })
+                        // Under the toolbar, like a native ScrollView; the page pads its columns clear of it
                         .ignoresSafeArea(edges: .top)
                 }
         }
@@ -185,20 +186,50 @@ struct DuplicatesView: View {
         alert.addButton(withTitle: "Move to Trash")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        moveToTrash(driveUUID: member.folder.driveUUID, relativePath: member.folder.relativePath)
+        moveToTrash([member.folder])
     }
 
-    /// Trashes a file or folder, drops it (and anything inside it) from the index, then recomputes the cards
-    private func moveToTrash(driveUUID: String, relativePath: String) {
-        guard let drive = driveMonitor.drives.first(where: { $0.id == driveUUID }),
-              let driveURL = driveMonitor.getDriveURL(for: drive),
-              (try? FileManager.default.trashItem(at: driveURL.appendingPathComponent(relativePath), resultingItemURL: nil)) != nil else {
+    /// Every folder of the set but the kept one, only when each file in them has a copy in the kept one.
+    /// The page disables the button in the same case; this is the check that counts
+    private func confirmTrash(_ set: FolderSet, keeping keep: Int) {
+        let kept = set.members[keep]
+        let removed = set.members.indices.filter { $0 != keep }.map { set.members[$0] }
+        let connected = Set(driveMonitor.drives.filter(\.isConnected).map(\.id))
+        guard removed.allSatisfy({ connected.contains($0.folder.driveUUID) && !$0.holdsAnother && $0.unchecked == 0 && $0.missingFrom[keep] == 0 }) else {
             NSSound.beep()
             return
         }
-        // ponytail: drop it from the index now so it doesn't reappear before FSEvents rescans; if this fails, that rescan catches up
+        let alert = NSAlert()
+        alert.messageText = removed.count == 1 ? "Move 1 folder to the Trash?" : "Move \(removed.count) folders to the Trash?"
+        alert.informativeText = removed.map { "\($0.folder.driveName): \($0.folder.relativePath), \($0.files.formatted()) files, \(ByteCountFormatter.string(fromByteCount: $0.bytes, countStyle: .file))" }
+            .joined(separator: "\n") + "\n\nEvery file in \(removed.count == 1 ? "it" : "them") has a copy in \(kept.folder.relativePath) on \(kept.folder.driveName), which stays."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        moveToTrash(removed.map(\.folder))
+    }
+
+    private func moveToTrash(driveUUID: String, relativePath: String) {
+        moveToTrash([FolderLocation(driveUUID: driveUUID, driveName: "", relativePath: relativePath)])
+    }
+
+    /// Trashes files or folders, drops them (and anything inside) from the index, then recomputes the cards once
+    private func moveToTrash(_ items: [FolderLocation]) {
+        let trashed = items.filter { item in
+            guard let drive = driveMonitor.drives.first(where: { $0.id == item.driveUUID }),
+                  let driveURL = driveMonitor.getDriveURL(for: drive),
+                  (try? FileManager.default.trashItem(at: driveURL.appendingPathComponent(item.relativePath), resultingItemURL: nil)) != nil else {
+                NSSound.beep()
+                return false
+            }
+            return true
+        }
+        // ponytail: drop them from the index now so they don't reappear before FSEvents rescans; if this fails, that rescan catches up
         Task {
-            try? await DatabaseManager.shared.deleteFiles(driveUUID: driveUUID, relativePaths: [relativePath])
+            for item in trashed {
+                try? await DatabaseManager.shared.deleteFiles(driveUUID: item.driveUUID, relativePaths: [item.relativePath])
+            }
             await load()
         }
     }

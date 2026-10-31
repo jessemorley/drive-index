@@ -25,6 +25,9 @@ struct FolderSet: Identifiable {
         /// Another folder of the set is inside this one: its counts leave that folder out, and trashing
         /// this one would take it too
         var holdsAnother = false
+        /// By member index: hashed files with no copy in that folder. With three or more folders, `shared`
+        /// can mean the only other copy is in a folder also being trashed; this says what keeping one loses
+        var missingFrom: [Int] = []
 
         var id: String { folder.driveUUID + ":" + folder.relativePath }
         // ponytail: every file shared; a threshold ("99% shared") if the user wants one
@@ -218,6 +221,7 @@ struct DuplicateOverview {
                                                                      relativePath: keys[m].path))
                 member.holdsAnother = card.contains { $0 != m && ancestors(parent[$0]).contains(m) }
                 let others = slots.indices.filter { $0 != s }
+                member.missingFrom = hashes.map { kept in slots[s].count { files[$0].hash.map { !kept.contains($0) } ?? false } }
                 for i in slots[s] {
                     let f = files[i]
                     member.files += 1

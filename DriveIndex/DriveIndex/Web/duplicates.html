@@ -1,88 +1,92 @@
 <!doctype html>
-<!-- Duplicates: folder set cards, then file cards. DuplicatesWebPane calls render(data); clicks go back as messages -->
+<!-- Duplicates review: sets of folders, then loose files, on the left; the selected one on the right.
+     DuplicatesWebPane calls render(data); clicks go back as messages -->
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="base.css">
 <style>
-.item { margin-bottom: 8px; }
-.card { background: var(--card); border: 0.5px solid var(--card-border); border-radius: 10px; overflow: hidden; }
-.heading { display: flex; align-items: baseline; gap: 8px; padding: 8px 4px 0; font-weight: 600; }
-.heading .secondary { font-weight: normal; }
-.header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
-.header .name { flex: 0 1 auto; }
+body { padding: 0; height: 100vh; overflow: hidden; display: grid; grid-template-columns: minmax(280px, 34%) 1fr; }
+#side, #detail { overflow-y: auto; min-width: 0; }
+/* The columns scroll under the toolbar, like native lists */
+#side { padding: calc(var(--top, 0px) + 10px) 10px 16px; border-right: 0.5px solid var(--separator); }
+#detail { padding: calc(var(--top, 0px) + 16px) 24px 24px; }
+
+.name, .path, .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.small { font-size: 11px; color: var(--secondary); }
 .spacer { flex: 1; }
-.chev { width: 10px; height: 10px; flex: none; color: var(--secondary); transition: rotate .3s var(--ease); }
-.open .chev { rotate: 90deg; }
-.body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s var(--ease); }
-.open .body { grid-template-rows: 1fr; }
-.rows { overflow: hidden; min-height: 0; padding: 0 4px; }
-.open .rows, .set .rows { padding-bottom: 6px; }
-.row {
-  position: relative; display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px; border-radius: 6px; transition: background-color .15s;
-}
-.row::before { content: ""; position: absolute; top: 0; left: 8px; right: 8px; border-top: 0.5px solid var(--separator); }
-.row:hover { background: var(--hover); }
-.row:hover::before, .row:hover + .row::before { opacity: 0; }
-.name, .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.path { flex: 1; color: var(--secondary); }
-.off .drive, .off .path { color: var(--tertiary); }
-button.compare { color: var(--orange); }
 
-/* A folder of a set: what share of its files are elsewhere in the set */
-.member { flex-direction: column; align-items: stretch; gap: 5px; padding-bottom: 7px; }
-.line { display: flex; align-items: center; gap: 8px; }
-.bar, .verdict { margin-left: 24px; margin-right: 30px; }
-.bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--separator); }
-.bar i { width: 0; transition: width .6s var(--ease); }
-.bar .shared { background: var(--green); }
-.bar .changed { background: var(--orange); }
-.bar .only { background: var(--blue); }
-.bar .unchecked { background: var(--tertiary); }
-.verdict { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary); }
-.verdict .safe { color: var(--green); }
-
+/* MARK: List */
+.heading { display: flex; align-items: baseline; gap: 6px; padding: 8px 10px 6px; font-weight: 600; }
+.heading .secondary { font-weight: normal; }
+.item { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-radius: 6px; margin-bottom: 1px; }
+.item:hover { background: var(--hover); }
+.item .text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.item .size { font-variant-numeric: tabular-nums; color: var(--secondary); }
+.item.sel { background: var(--blue); color: white; }
+.item.sel .small, .item.sel .size { color: #ffffffd0; }
 #more { display: flex; justify-content: center; padding: 8px 0; }
 #more[hidden] { display: none; }
-#more button {
-  width: auto; height: auto; padding: 4px 12px; border-radius: 6px; color: var(--label);
+
+button.push {
+  width: auto; height: 22px; padding: 0 10px; border-radius: 6px; color: var(--label); white-space: nowrap;
   background: var(--card); border: 0.5px solid var(--card-border);
 }
+button.push.primary { background: var(--blue); color: white; border-color: transparent; }
+
+/* MARK: Detail */
+#detail > * { animation: in .35s var(--ease) backwards; }
+@keyframes in { from { opacity: 0; transform: translateY(6px); } }
+h1 { font-size: 17px; font-weight: 600; margin: 0; }
+.meta { color: var(--secondary); margin: 2px 0 18px; }
+.section { display: flex; align-items: baseline; gap: 12px; margin: 0 4px 6px; font-weight: 600; }
+.legend { display: flex; gap: 10px; font-size: 11px; font-weight: normal; color: var(--secondary); flex-wrap: wrap; justify-content: flex-end; }
+.legend i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.card { background: var(--card); border: 0.5px solid var(--card-border); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; }
+.row + .row { border-top: 0.5px solid var(--separator); }
+.row .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.path { flex: 1; color: var(--secondary); }
+.drive { font-weight: 500; white-space: nowrap; }
+.off .drive, .off .path { color: var(--tertiary); }
+.member.kept { background: color-mix(in srgb, var(--blue) 9%, transparent); }
+.member input { accent-color: var(--blue); margin: 0; flex: none; }
+.tag { font-size: 11px; font-weight: 600; color: var(--blue); }
+.status.keep { color: var(--blue); }
+.status.safe { color: var(--green); }
+
+.bar { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: var(--separator); }
+.bar i { width: 0; transition: width .6s var(--ease); }
+.shared { background: var(--tertiary); }
+.changed { background: var(--orange); }
+.only { background: var(--blue); }
+.unchecked { background: transparent; box-shadow: inset 0 0 0 0.5px var(--secondary); }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.clear { display: flex; align-items: center; gap: 8px; }
+.clear svg { width: 16px; height: 16px; color: var(--green); flex: none; }
+.note { display: flex; gap: 6px; align-items: center; margin: -10px 4px 18px; }
+.note svg { width: 13px; height: 13px; flex: none; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style></head>
-<body><div id="above"></div><div id="list"></div><div id="below"></div>
-<div id="more" hidden><button></button></div>
+<body><div id="side"><div id="list"></div><div id="more" hidden><button class="push"></button></div></div><div id="detail"></div>
 <script>
 const ICON = {
-  chev: '<svg class="chev" viewBox="0 0 10 10"><path d="M3.5 1.5 7 5l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   trash: '<svg viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  compare: '<svg viewBox="0 0 16 16"><path d="M5 13V3M2.5 5.5 5 3l2.5 2.5M11 3v10m-2.5-2.5L11 13l2.5-2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  check: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor"/><path d="m5.2 8.2 1.9 1.9 3.7-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  info: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor"/><path d="M8 7.2V11.5M8 4.8v.1" fill="none" stroke="currentColor" stroke-linecap="round"/></svg>',
 };
 const EASE = 'cubic-bezier(.2, .8, .2, 1)';
-const GAP = 8;          // .item margin-bottom
-const OVERSCAN = 1000;  // px drawn past each edge of the window, so fast scrolling never shows a gap
-
-// Thousands of cards: only the items near the window are in the DOM. Spacers above and below stand in
-// for the rest, sized from each item's height (measured once drawn, estimated until then)
-const above = document.getElementById('above');
 const list = document.getElementById('list');
-const below = document.getElementById('below');
-// Swift sends file cards a page at a time
-const more = document.getElementById('more');
-more.firstChild.addEventListener('click', () => post({ action: 'more' }));
-let items = [];             // { kind: 'heading' | 'set' | 'file', id, d: the data }, in order
-let offsets = [0];          // offsets[i] = top of items[i] in the list; offsets[items.length] = its height
-const heights = new Map();  // item id → measured height, gap included, for items that have been drawn
-let fileHeight = 42 + GAP;  // a collapsed file card, until one is measured
-let measuredFile = false;
-const open = new Set();     // ids of open file cards, drawn or not
-const shown = new Map();    // item id → { el, it, rows, refs, rowsEl }, for items in the DOM
-let first = true;
+const detail = document.getElementById('detail');
+const more = document.querySelector('#more button');
+more.addEventListener('click', () => post({ action: 'more' }));
 
-/// Until an item is drawn
-function estimate(it) {
-  if (it.kind === 'file') return fileHeight;
-  if (it.kind === 'set') return 44 + it.d.members.length * 62 + GAP;
-  return 26 + GAP;
-}
+let data = { sets: [], groups: [], more: 0 };
+let items = [];             // { kind: 'heading' | 'set' | 'file', id, d }, in list order
+const rows = new Map();     // item id → its list element
+let sel = null;             // id of the selected item
+const keepBy = new Map();   // set id → index of the folder to keep, once picked
+const bars = new Map();     // member or file id → the bar widths last shown, so a redraw slides from them
 
 const post = message => webkit.messageHandlers.native.postMessage(message);
 // WebKit's own menu (Reload, Inspect Element) gives the page away; rows ask for a native one
@@ -97,13 +101,15 @@ function el(tag, cls, html) {
 function text(cls, value) { const node = el('span', cls); node.textContent = value; return node; }
 /// A Finder icon, served by Swift on the icon: scheme
 function icon(src) { const img = el('img', 'icon'); img.src = src; return img; }
-function button(icon, title, cls, onClick) {
-  const b = el('button', cls, icon);
-  b.title = title;
+function button(label, cls, onClick, disabled) {
+  const b = el('button', cls);
+  b.textContent = label;
+  b.disabled = !!disabled;
   b.addEventListener('click', e => { e.stopPropagation(); onClick(); });
-  b.addEventListener('dblclick', e => e.stopPropagation());
   return b;
 }
+const n = x => x.toLocaleString();
+const plural = (x, one, many) => n(x) + ' ' + (x === 1 ? one : many);
 
 // MARK: Middle truncation, like the native lists: CSS can only cut at the end
 
@@ -118,9 +124,9 @@ function fitText(cls, value) {
 }
 function fit(nodes) {
   // Full text first, so each one's width is the room it has; then read them all, then write them all
-  for (const n of nodes) n.textContent = n.dataset.full;
-  const widths = nodes.map(n => n.clientWidth);
-  nodes.forEach((n, i) => { n.textContent = middle(n.dataset.full, widths[i]); });
+  for (const x of nodes) x.textContent = x.dataset.full;
+  const widths = nodes.map(x => x.clientWidth);
+  nodes.forEach((x, i) => { x.textContent = middle(x.dataset.full, widths[i]); });
 }
 function middle(t, width) {
   const fits = s => measure.measureText(s).width <= width;
@@ -131,290 +137,273 @@ function middle(t, width) {
   return cut(lo);
 }
 
-/// Shrinks an item or row away, so what's under it slides up
-function collapse(node) {
-  if (node.dataset.leaving) return;
-  node.dataset.leaving = '1';
-  node.style.pointerEvents = 'none';
-  sizes.unobserve(node);
-  node.animate([
-    { height: node.offsetHeight + 'px', opacity: 1 },
-    { height: '0px', opacity: 0, marginBottom: '0px', paddingTop: '0px', paddingBottom: '0px', borderWidth: '0px' },
-  ], { duration: 300, easing: EASE }).finished.then(() => node.remove());
-}
+// MARK: List
 
-function makeItem(it) {
-  const c = it.kind === 'set' ? makeSet(it) : it.kind === 'file' ? makeFile(it) : makeHeading(it);
-  c.el.dataset.id = it.id;
-  return c;
-}
-function updateItem(c, it) {
-  c.it = it;
-  if (it.kind === 'set') updateSet(c);
-  else if (it.kind === 'file') updateFile(c);
-  else c.refs.count.textContent = it.d.count;
-}
-
-function makeHeading(it) {
-  const c = { it, el: el('div', 'heading item'), refs: { count: text('secondary', '') } };
-  c.el.append(text('', it.d.title), c.refs.count);
-  return c;
-}
-
-// MARK: Folder sets: every folder shown, no disclosure
-
-function makeSet(it) {
-  const c = { it, rows: new Map(), el: el('div', 'card set item') };
-  const header = el('div', 'header');
-  c.refs = { name: fitText('name', it.d.name), copies: text('secondary', ''), wasted: text('', '') };
-  header.append(icon('icon://folder'), c.refs.name, el('span', 'spacer'), c.refs.copies, c.refs.wasted,
-                button(ICON.compare, 'Compare these folders', 'compare', () => post({ action: 'compare', set: c.it.d.id })));
-  c.rowsEl = el('div', 'rows');
-  c.el.append(header, c.rowsEl);
-  return c;
-}
-
-function updateSet(c) {
-  const s = c.it.d;
-  // A trashed folder can change the set's name
-  if (c.refs.name.dataset.full !== s.name) {
-    c.refs.name.dataset.full = c.refs.name.title = s.name;
-    if (c.el.isConnected) fit([c.refs.name]);
+function fillRow(row, it) {
+  if (it.kind === 'heading') {
+    row.className = 'heading';
+    row.replaceChildren(text('', it.d.title), text('secondary', it.d.count));
+    return;
   }
-  c.refs.copies.textContent = s.members.length + ' folders';
-  c.refs.wasted.textContent = s.wasted + ' wasted';
+  const d = it.d;
+  const sub = it.kind === 'set' ? d.members.length + ' folders' : d.copies + ' copies · ' + d.size;
+  const textCol = el('div', 'text');
+  textCol.append(text('name', d.name), text('small', sub));
+  textCol.firstChild.title = d.name;
+  row.className = 'item' + (it.id === sel ? ' sel' : '');
+  row.replaceChildren(icon(it.kind === 'set' ? 'icon://folder' : d.icon), textCol, text('size', d.wasted));
+}
 
-  const ids = new Set(s.members.map(m => m.id));
-  for (const [id, r] of c.rows) if (!ids.has(id)) { c.rows.delete(id); collapse(r.el); }
-  const added = [];
-  for (const m of s.members) {
-    let r = c.rows.get(m.id);
-    if (!r) {
-      r = { el: el('div', 'row member'), bar: el('div', 'bar'), verdict: el('div', 'verdict') };
-      const send = action => post({ action, set: c.it.d.id, member: m.id });
-      r.button = button(ICON.trash, 'Move this folder to the Trash', '', () => send('trash'));
-      const path = fitText('path', m.path);
-      const line = el('div', 'line');
-      line.append(icon(m.driveIcon), text('drive', m.drive), path, r.button);
-      r.segs = ['shared', 'changed', 'only', 'unchecked'].map(k => r.bar.appendChild(el('i', k)));
-      r.el.append(line, r.bar, r.verdict);
-      r.el.addEventListener('dblclick', () => send('reveal'));
-      r.el.addEventListener('contextmenu', () => send('menu'));
-      c.rows.set(m.id, r);
-      c.rowsEl.append(r.el);
-      added.push(path);
+function drawList(fresh) {
+  const ids = new Set(items.map(it => it.id));
+  for (const [id, row] of rows) {
+    if (ids.has(id)) continue;
+    rows.delete(id);
+    // A trashed set shrinks away, so what's under it slides up
+    if (fresh) { row.remove(); continue; }
+    row.style.pointerEvents = 'none';
+    row.animate([{ height: row.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0, paddingTop: '0px', paddingBottom: '0px' }],
+                { duration: 300, easing: EASE }).finished.then(() => row.remove());
+  }
+  // Back to front, so each row goes in before the one after it; only rows out of place move
+  let next = null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    let row = rows.get(it.id);
+    if (!row) {
+      row = el('div');
+      if (it.kind !== 'heading') row.addEventListener('click', () => select(it.id));
+      rows.set(it.id, row);
     }
-    // Widths transition, so a trashed copy elsewhere in the set slides the bar over
-    [m.shared, m.changed, m.onlyHere, m.unchecked].forEach((n, i) => { r.segs[i].style.width = (100 * n / Math.max(m.files, 1)) + '%'; });
-    r.bar.title = `${m.shared.toLocaleString()} shared, ${m.changed.toLocaleString()} changed, `
-                + `${m.onlyHere.toLocaleString()} only here, ${m.unchecked.toLocaleString()} not checked yet`;
-    r.verdict.replaceChildren(text('', m.summary + ' · '), text(m.safe ? 'safe' : '', m.verdict));
-    r.verdict.title = r.verdict.textContent;
-    r.el.classList.toggle('off', !m.connected);
-    r.button.disabled = !m.connected || m.holdsAnother;
+    fillRow(row, it);
+    if (row.nextElementSibling !== next || !row.isConnected) list.insertBefore(row, next);
+    next = row;
   }
-  if (added.length && c.el.isConnected) fit(added);
 }
 
-// MARK: Files, outside every set
-
-function makeFile(it) {
-  const c = { it, rows: new Map(), el: el('div', 'card item') };
-  c.el.classList.toggle('open', open.has(it.id));
-  const header = el('div', 'header', ICON.chev);
-  // A group's name never changes: same contents, same name
-  c.refs = { name: fitText('name', it.d.name), size: text('secondary', ''), copies: text('secondary', ''), wasted: text('', '') };
-  header.append(icon(it.d.icon), c.refs.name, c.refs.size, el('span', 'spacer'), c.refs.copies, c.refs.wasted);
-  header.addEventListener('click', () => {
-    const isOpen = c.el.classList.toggle('open');
-    isOpen ? open.add(c.it.id) : open.delete(c.it.id);
-    if (isOpen) syncRows(c);
-  });
-  const body = el('div', 'body');
-  c.rowsEl = el('div', 'rows');
-  body.append(c.rowsEl);
-  c.el.append(header, body);
-  return c;
+function select(id, scroll) {
+  if (id === sel) return;
+  rows.get(sel)?.classList.remove('sel');
+  sel = id;
+  const row = rows.get(sel);
+  row?.classList.add('sel');
+  if (scroll) row?.scrollIntoView({ block: 'nearest' });
+  drawDetail(true);
 }
 
-function updateFile(c) {
-  const g = c.it.d;
-  c.refs.size.textContent = g.size;
-  c.refs.copies.textContent = g.copies + ' copies';
-  c.refs.wasted.textContent = g.wasted + ' wasted';
-  // Rows are built on first open: most cards never are
-  if (c.el.classList.contains('open') || c.rows.size) syncRows(c);
-}
+const selectable = () => items.filter(it => it.kind !== 'heading');
 
-function syncRows(c) {
-  const g = c.it.d;
-  const ids = new Set(g.files.map(f => f.id));
-  for (const [id, r] of c.rows) if (!ids.has(id)) { c.rows.delete(id); collapse(r.el); }
-  const added = [];
-  for (const f of g.files) {
-    let r = c.rows.get(f.id);
-    if (!r) {
-      r = { el: el('div', 'row') };
-      r.button = button(ICON.trash, 'Move this copy to the Trash', '', () => post({ action: 'trash', group: c.it.d.id, file: f.id }));
-      const path = fitText('path', f.path);
-      r.el.append(icon(f.driveIcon), text('drive', f.drive), path, text('secondary', f.date), r.button);
-      r.el.addEventListener('dblclick', () => post({ action: 'reveal', group: c.it.d.id, file: f.id }));
-      r.el.addEventListener('contextmenu', () => post({ action: 'menu', group: c.it.d.id, file: f.id }));
-      c.rows.set(f.id, r);
-      c.rowsEl.append(r.el);
-      added.push(path);
-    }
-    r.el.classList.toggle('off', !f.connected);
-    r.button.disabled = !f.connected;
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    const all = selectable();
+    const i = all.findIndex(it => it.id === sel);
+    const next = all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+    if (next) select(next.id, true);
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    const primary = detail.querySelector('button.primary');
+    if (primary && !primary.disabled) primary.click();
   }
-  if (added.length && c.el.isConnected) fit(added);
-}
-
-// MARK: Window
-
-/// Items change height as they open, close and lose rows; keep the spacers in step
-const sizes = new ResizeObserver(entries => {
-  let changed = false;
-  for (const e of entries) {
-    const id = e.target.dataset.id;
-    const h = Math.round(e.borderBoxSize[0].blockSize) + GAP;
-    if (!measuredFile && shown.get(id)?.it.kind === 'file' && !open.has(id)) { fileHeight = h; measuredFile = true; }
-    if (heights.get(id) !== h) { heights.set(id, h); changed = true; }
-  }
-  if (changed) { layout(); place(); }
 });
 
-function layout() {
-  offsets = new Array(items.length + 1);
-  offsets[0] = 0;
-  for (let i = 0; i < items.length; i++) offsets[i + 1] = offsets[i] + (heights.get(items[i].id) ?? estimate(items[i]));
+// MARK: Detail
+
+function bar(id, parts, total) {
+  const b = el('div', 'bar');
+  const widths = parts.map(x => (100 * x / Math.max(total, 1)) + '%');
+  const segs = ['shared', 'changed', 'only', 'unchecked'].map((k, i) => {
+    const seg = b.appendChild(el('i', k));
+    seg.style.width = bars.get(id)?.[i] ?? '0%';
+    return seg;
+  });
+  // Next frame, so the widths transition from the last ones shown (or from empty)
+  requestAnimationFrame(() => requestAnimationFrame(() => segs.forEach((s, i) => { s.style.width = widths[i]; })));
+  bars.set(id, widths);
+  return b;
 }
 
-/// First index whose item ends below y
-function indexAt(y) {
-  let lo = 0, hi = items.length;
-  while (lo < hi) { const mid = (lo + hi) >> 1; offsets[mid + 1] <= y ? lo = mid + 1 : hi = mid; }
-  return lo;
+function defaultKeep(s) {
+  let best = 0;
+  s.members.forEach((m, i) => { if (m.files > s.members[best].files) best = i; });
+  return best;
 }
 
-/// Puts the items near the window in the DOM, in order, and sizes the spacers; returns the ones it made
-function place() {
-  const top = scrollY - above.offsetTop;
-  const firstIndex = indexAt(top - OVERSCAN);
-  const last = Math.min(items.length, indexAt(top + innerHeight + OVERSCAN) + 1);
-  const wanted = new Set();
-  for (let i = firstIndex; i < last; i++) wanted.add(items[i].id);
-
-  for (const [id, c] of shown) {
-    if (wanted.has(id)) continue;
-    shown.delete(id);
-    sizes.unobserve(c.el);
-    c.el.remove();
+function drawDetail(fresh) {
+  const it = items.find(x => x.id === sel);
+  const scroll = detail.scrollTop;
+  detail.replaceChildren();
+  if (!it) return;
+  if (it.kind === 'set') drawSet(it.d); else drawFile(it.d);
+  // A redraw of the same item keeps its place and doesn't fade in again
+  if (!fresh) {
+    detail.scrollTop = scroll;
+    for (const c of detail.children) c.style.animation = 'none';
   }
-  const added = [];
-  // Back to front, so each item goes in before the one after it; only items not yet in place move
-  let next = null;
-  for (let i = last - 1; i >= firstIndex; i--) {
-    const it = items[i];
-    let c = shown.get(it.id);
-    if (!c) { c = makeItem(it); updateItem(c, it); shown.set(it.id, c); added.push(c); }
-    if (!c.el.isConnected || nextShown(c.el) !== next) list.insertBefore(c.el, next);
-    next = c.el;
+  fit([...detail.querySelectorAll('.fit')]);
+}
+
+function drawSet(s) {
+  const keep = keepBy.get(s.id) ?? defaultKeep(s);
+  const kept = s.members[keep];
+  const h = el('h1'); h.textContent = s.name;
+  const meta = text('meta', s.members.length + ' folders · ' + s.wasted + ' wasted');
+  meta.style.display = 'block';
+
+  const head = el('div', 'section');
+  const legend = el('span', 'legend');
+  for (const [k, label] of [['shared', 'Copied elsewhere'], ['only', 'Only here'], ['changed', 'Changed'], ['unchecked', 'Not checked']]) {
+    const entry = el('span'); entry.append(el('i', k), label); legend.append(entry);
   }
-  for (const c of added) sizes.observe(c.el);
-  if (added.length) fit(added.flatMap(c => [...c.el.querySelectorAll('.fit')]));
+  head.append(text('', 'Keep which folder?'), el('span', 'spacer'), legend);
 
-  above.style.height = offsets[firstIndex] + 'px';
-  below.style.height = (offsets[items.length] - offsets[last]) + 'px';
-  return added.reverse();
-}
-/// The next item that is staying, skipping ones shrinking away
-function nextShown(node) {
-  let n = node.nextElementSibling;
-  while (n && n.dataset.leaving) n = n.nextElementSibling;
-  return n;
+  const folders = el('div', 'card');
+  const blockers = [];
+  const offline = new Set();
+  s.members.forEach((m, i) => {
+    const isKept = i === keep;
+    // Hashed files with no copy in the kept folder, beyond the ones only here or changed: their other copy is in a folder going too
+    const elsewhere = isKept ? 0 : Math.max(0, m.missingFrom[keep] - m.onlyHere - m.changed);
+    const where = m.drive + ' · ' + m.path;
+    const parts = [];
+    if (!isKept) {
+      if (!m.connected) offline.add(m.drive);
+      if (m.holdsAnother) {
+        parts.push('holds another folder of this set');
+        blockers.push({ color: 'var(--secondary)', label: 'Holds another folder of this set', where, action: 'Reveal in Finder', run: () => post({ action: 'reveal', set: s.id, member: m.id }) });
+      }
+      if (m.onlyHere) {
+        parts.push(n(m.onlyHere) + ' only here');
+        blockers.push({ color: 'var(--blue)', label: plural(m.onlyHere, 'file exists', 'files exist') + ' only in this folder', where, action: 'Copy to Kept Folder' });
+      }
+      if (m.changed) {
+        parts.push(n(m.changed) + ' changed');
+        blockers.push({ color: 'var(--orange)', label: plural(m.changed, 'file differs', 'files differ') + ' from the other copies', where, action: 'Compare…',
+                        run: () => post({ action: 'compare', set: s.id, member: m.id, keep }) });
+      }
+      if (elsewhere) {
+        parts.push(n(elsewhere) + ' not in kept folder');
+        blockers.push({ color: 'var(--blue)', label: plural(elsewhere, 'file has its', 'files have their') + ' only other copy in a folder you’re removing', where, action: 'Copy to Kept Folder' });
+      }
+      if (m.unchecked) {
+        parts.push(n(m.unchecked) + ' not checked');
+        blockers.push({ color: 'var(--secondary)', label: plural(m.unchecked, 'file hasn’t', 'files haven’t') + ' been checked', where, action: 'Check Now' });
+      }
+    }
+
+    const row = el('label', 'row member' + (isKept ? ' kept' : '') + (m.connected ? '' : ' off'));
+    const radio = el('input');
+    radio.type = 'radio'; radio.name = 'keep'; radio.checked = isKept;
+    radio.addEventListener('change', () => { keepBy.set(s.id, i); drawDetail(false); });
+    const col = el('div', 'col');
+    const line = el('div', 'line');
+    line.append(icon(m.driveIcon), text('drive', m.drive), fitText('path', m.path));
+    if (isKept) line.append(text('tag', 'KEEP'));
+    const status = isKept ? text('status keep', 'Keeping') : parts.length ? text('status', parts.join(', ')) : text('status safe', 'Safe to remove');
+    const stats = el('div', 'small');
+    stats.append(m.summary + ' — ', status);
+    col.append(line, bar(m.id, [m.shared, m.changed, m.onlyHere, m.unchecked], m.files), stats);
+    col.children[1].title = `${n(m.shared)} copied elsewhere, ${n(m.changed)} changed, ${n(m.onlyHere)} only here, ${n(m.unchecked)} not checked yet`;
+    row.append(radio, col);
+    row.addEventListener('contextmenu', () => post({ action: 'menu', set: s.id, member: m.id }));
+    folders.append(row);
+  });
+
+  const head2 = el('div', 'section');
+  head2.append(text('', 'Before removing the other folders'));
+  const list2 = el('div', 'card');
+  if (blockers.length) {
+    for (const b of blockers) {
+      const row = el('div', 'row');
+      const dot = el('span', 'dot'); dot.style.background = b.color;
+      const col = el('div', 'col'); col.style.gap = '1px';
+      col.append(text('label', b.label), fitText('small path', b.where));
+      // ponytail: Copy to Kept Folder and Check Now aren't built yet, so they stay disabled
+      row.append(dot, col, button(b.action, 'push', b.run ?? (() => {}), !b.run));
+      list2.append(row);
+    }
+  } else {
+    const row = el('div', 'row clear', ICON.check);
+    row.append(text('', 'Nothing blocking. Every file in the folders you’re removing has a copy in the one you’re keeping.'));
+    list2.append(row);
+  }
+
+  const out = [h, meta, head, folders, head2, list2];
+  if (offline.size) {
+    const note = el('div', 'note small', ICON.info);
+    note.append(`${[...offline].join(' and ')} ${offline.size === 1 ? 'is' : 'are'} offline. Connect ${offline.size === 1 ? 'it' : 'them'} to move ${offline.size === 1 ? 'its' : 'their'} folders to the Trash.`);
+    out.push(note);
+  }
+  const removing = s.members.length - 1;
+  const actions = el('div', 'actions');
+  actions.append(
+    button('Skip', 'push', () => {
+      const all = selectable();
+      const next = all[(all.findIndex(x => x.id === sel) + 1) % all.length];
+      if (next) select(next.id, true);
+    }),
+    button(`Move ${plural(removing, 'Folder', 'Folders')} to Trash`, 'push primary', () => post({ action: 'trashOthers', set: s.id, keep }),
+           blockers.length || offline.size));
+  out.push(actions);
+  detail.append(...out);
 }
 
+function drawFile(g) {
+  const h = el('h1'); h.textContent = g.name;
+  const meta = text('meta', `${g.copies} copies · ${g.size} each · ${g.wasted} wasted`);
+  meta.style.display = 'block';
+  const head = el('div', 'section');
+  head.append(text('', 'Copies'));
+  const card = el('div', 'card');
+  for (const f of g.files) {
+    const row = el('div', 'row' + (f.connected ? '' : ' off'));
+    const line = el('div', 'line'); line.style.flex = '1';
+    line.append(icon(f.driveIcon), text('drive', f.drive), fitText('path', f.path), text('secondary', f.date));
+    const trash = el('button', '', ICON.trash);
+    trash.title = 'Move this copy to the Trash';
+    trash.disabled = !f.connected;
+    trash.addEventListener('click', () => post({ action: 'trash', group: g.id, file: f.id }));
+    row.append(line, trash);
+    row.addEventListener('dblclick', () => post({ action: 'reveal', group: g.id, file: f.id }));
+    row.addEventListener('contextmenu', () => post({ action: 'menu', group: g.id, file: f.id }));
+    card.append(row);
+  }
+  detail.append(h, meta, head, card);
+}
+
+// The path widths follow the window
 let frame = 0;
-const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
-addEventListener('scroll', schedule, { passive: true });
-// The window, not the page: taller means more items; wider or narrower means cutting the text again
-let width = innerWidth;
 addEventListener('resize', () => {
   cancelAnimationFrame(frame);
-  frame = requestAnimationFrame(() => {
-    place();
-    if (innerWidth !== width) { width = innerWidth; fit([...list.querySelectorAll('.fit')]); }
-  });
+  frame = requestAnimationFrame(() => fit([...detail.querySelectorAll('.fit')]));
 });
 
 // MARK: Updates from Swift
 
-function render(data) {
-  const fresh = first;
-  first = false;
+function render(next) {
+  const fresh = !items.length;
+  data = next;
+  document.documentElement.style.setProperty('--top', data.top + 'px');
   const files = data.groups.length + data.more;
-  const next = [];
-  if (data.sets.length) next.push({ kind: 'heading', id: 'h:sets', d: { title: 'Folders', count: data.sets.length.toLocaleString() + ' sets of copies' } });
-  for (const s of data.sets) next.push({ kind: 'set', id: 's:' + s.id, d: s });
-  if (files) next.push({ kind: 'heading', id: 'h:files', d: { title: 'Files', count: files.toLocaleString() + ' with a copy outside those folders' } });
-  for (const g of data.groups) next.push({ kind: 'file', id: 'f:' + g.id, d: g });
+  const old = selectable();
+  items = [];
+  if (data.sets.length) items.push({ kind: 'heading', id: 'h:sets', d: { title: 'Folders', count: data.sets.length.toLocaleString() + ' sets of copies' } });
+  for (const s of data.sets) items.push({ kind: 'set', id: 's:' + s.id, d: s });
+  if (files) items.push({ kind: 'heading', id: 'h:files', d: { title: 'Files', count: files.toLocaleString() + ' with a copy outside those folders' } });
+  for (const g of data.groups) items.push({ kind: 'file', id: 'f:' + g.id, d: g });
 
-  const ids = new Set(next.map(it => it.id));
-  // A set that lost or gained a folder has a new id: keep its card, so the change animates in place
-  const renamed = new Map();
-  for (const it of next) {
-    if (it.kind !== 'set' || shown.has(it.id)) continue;
-    const mine = new Set(it.d.members.map(m => m.id));
-    for (const [id, c] of shown) {
-      if (ids.has(id) || c.it.kind !== 'set' || !c.it.d.members.some(m => mine.has(m.id))) continue;
-      shown.delete(id);
-      shown.set(it.id, c);
-      c.el.dataset.id = it.id;
-      if (heights.has(id)) { heights.set(it.id, heights.get(id)); heights.delete(id); }
-      renamed.set(id, it.id);
-      break;
-    }
+  // A trashed selection hands it to whatever took its place in the list
+  const all = selectable();
+  const same = all.some(it => it.id === sel);
+  if (!same) {
+    const at = Math.max(0, old.findIndex(it => it.id === sel));
+    sel = all[Math.min(at, all.length - 1)]?.id ?? null;
   }
+  for (const id of keepBy.keys()) if (!data.sets.some(s => s.id === id)) keepBy.delete(id);
 
-  const keptOrder = items.map(it => renamed.get(it.id) ?? it.id).filter(id => ids.has(id) && shown.has(id));
-  const newOrder = next.map(it => it.id).filter(id => shown.has(id));
-  const reordered = keptOrder.join() !== newOrder.join();
+  more.parentNode.hidden = !data.more;
+  more.textContent = `Show ${Math.min(data.more, 200)} More (${data.more.toLocaleString()} left)`;
 
-  // First (FLIP): where each drawn item is before the change
-  const before = new Map();
-  for (const [id, c] of shown) if (ids.has(id)) before.set(id, c.el.getBoundingClientRect().top);
-
-  for (const [id, c] of shown) {
-    if (ids.has(id)) continue;
-    shown.delete(id);
-    // ponytail: a re-sort drops leavers instantly; collapsing in place only works while order holds
-    if (reordered) { sizes.unobserve(c.el); c.el.remove(); } else collapse(c.el);
-  }
-  for (const id of open) if (!ids.has(id)) open.delete(id);
-  for (const id of heights.keys()) if (!ids.has(id)) heights.delete(id);
-
-  more.hidden = !data.more;
-  more.firstChild.textContent = `Show ${Math.min(data.more, 200)} More (${data.more.toLocaleString()} left)`;
-
-  items = next;
-  for (const it of items) { const c = shown.get(it.id); if (c) updateItem(c, it); }
-  layout();
-  const added = place();
-
-  // Last, Invert, Play: slide moved items from where they were
-  for (const [id, top] of before) {
-    const c = shown.get(id);
-    if (!c) continue;
-    const now = c.el.getBoundingClientRect().top;
-    if (top !== now) c.el.animate([{ transform: `translateY(${top - now}px)` }, { transform: 'none' }], { duration: 450, easing: EASE });
-  }
-
-  added.forEach((c, i) => {
-    const top = c.el.getBoundingClientRect().top;
-    if (top > innerHeight || top < -100) return;
-    c.el.animate([{ opacity: 0, transform: 'translateY(8px) scale(.98)' }, { opacity: 1, transform: 'none' }],
-                 { duration: 400, delay: fresh ? Math.min(i, 20) * 25 : 0, easing: EASE, fill: 'backwards' });
-  });
+  drawList(fresh);
+  drawDetail(!same);
 }
 </script></body></html>
