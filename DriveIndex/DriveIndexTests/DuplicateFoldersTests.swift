@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import SQLite3
 @testable import DriveIndex
 
 /// Hashed by file name unless a hash is given (nil: too small to hash)
@@ -46,5 +47,28 @@ struct DuplicateFoldersTests {
         ]
         let groups = DuplicateGroup.folders(from: rows, minSize: 1)
         #expect(groups.map { $0.files.map(\.relativePath) } == [["Z", "Z"]])
+    }
+}
+
+struct BuildOutputTests {
+    /// Build and tool folders anywhere in a path are left out; folders that only share a name start aren't
+    @Test func buildFoldersAreNotCompared() throws {
+        var db: OpaquePointer?
+        try #require(sqlite3_open(":memory:", &db) == SQLITE_OK)
+        defer { sqlite3_close(db) }
+        let paths = [
+            "app/target/debug/deps/a.o", "target/release/b.rlib", "x/DerivedData/c", "web/node_modules/d.js", "repo/.git/e",
+            "Projects/Target Shoot/f.NEF", "target/notes.txt", "textures/g.png",
+        ]
+        let values = paths.map { "('\($0)')" }.joined(separator: ",")
+        try #require(sqlite3_exec(db, "CREATE TABLE files (relative_path TEXT); INSERT INTO files VALUES \(values);", nil, nil, nil) == SQLITE_OK)
+
+        var stmt: OpaquePointer?
+        try #require(sqlite3_prepare_v2(db, "SELECT relative_path FROM files WHERE \(DatabaseManager.notBuildOutput)", -1, &stmt, nil) == SQLITE_OK)
+        defer { sqlite3_finalize(stmt) }
+        var kept: [String] = []
+        while sqlite3_step(stmt) == SQLITE_ROW { kept.append(String(cString: sqlite3_column_text(stmt, 0))) }
+
+        #expect(kept == ["Projects/Target Shoot/f.NEF", "target/notes.txt", "textures/g.png"])
     }
 }

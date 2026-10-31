@@ -386,7 +386,7 @@ extension FolderComparison {
     /// - Parameter urls: the folders on disk; nil from the index
     mutating func findCopiesElsewhere(a: FolderLocation, b: FolderLocation, urls: (URL, URL)?) async throws {
         let database = DatabaseManager.shared
-        let minSize = Int64(try await database.getSetting("min_duplicate_file_size") ?? "") ?? 5_242_880
+        let minSize = Int64(try await database.getSetting("min_duplicate_file_size") ?? "") ?? DatabaseManager.defaultMinDuplicateFileSize
         for side in [Side.a, .b] {
             var files = side == .a ? onlyA : onlyB
             let root = side == .a ? urls?.0 : urls?.1

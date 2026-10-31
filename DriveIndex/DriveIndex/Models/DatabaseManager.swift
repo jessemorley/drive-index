@@ -153,6 +153,16 @@ extension DuplicateGroup {
 actor DatabaseManager {
     static let shared = DatabaseManager()
 
+    /// "min_duplicate_file_size" when it isn't set: every non-empty file is hashed and compared
+    static let defaultMinDuplicateFileSize: Int64 = 1
+
+    /// SQL condition: not inside build or tool output, which is never worth showing as duplicates,
+    /// so it isn't hashed or compared. It stays indexed and searchable.
+    /// ponytail: matched by folder name anywhere in the path; a project's own "DerivedData" folder is skipped too
+    static let notBuildOutput = ["*/target/debug/*", "*/target/release/*", "*/DerivedData/*", "*/node_modules/*", "*/.git/*"]
+        .map { "('/' || relative_path || '/') NOT GLOB '\($0)'" }
+        .joined(separator: " AND ")
+
     private var db: OpaquePointer?
     private let dbPath: String
     private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -1540,7 +1550,7 @@ actor DatabaseManager {
         let selectSQL = """
             SELECT id, drive_uuid, relative_path, size
             FROM files
-            WHERE hash IS NULL AND is_directory = 0 AND size >= ?
+            WHERE hash IS NULL AND is_directory = 0 AND size >= ? AND \(Self.notBuildOutput)
             ORDER BY size DESC
             LIMIT ?
         """
@@ -1577,7 +1587,7 @@ actor DatabaseManager {
         let countSQL = """
             SELECT COUNT(*)
             FROM files
-            WHERE hash IS NULL AND is_directory = 0 AND size >= ?
+            WHERE hash IS NULL AND is_directory = 0 AND size >= ? AND \(Self.notBuildOutput)
         """
 
         guard sqlite3_prepare_v2(db, countSQL, -1, &stmt, nil) == SQLITE_OK else {
@@ -1667,9 +1677,7 @@ actor DatabaseManager {
 
     /// Get all duplicate file groups (files with same hash appearing multiple times)
     func getDuplicateGroups() throws -> [DuplicateGroup] {
-        // Get minimum file size from settings (default 5MB)
-        let minSizeStr = try getSetting("min_duplicate_file_size") ?? "5242880"
-        let minSize = Int64(minSizeStr) ?? 5_242_880  // 5MB default
+        let minSize = Int64(try getSetting("min_duplicate_file_size") ?? "") ?? Self.defaultMinDuplicateFileSize
 
         var stmt: OpaquePointer?
         defer {
@@ -1683,7 +1691,7 @@ actor DatabaseManager {
         let groupSQL = """
             SELECT hash, name, size, COUNT(*) as count
             FROM files
-            WHERE is_directory = 0 AND size >= ? AND hash IS NOT NULL
+            WHERE is_directory = 0 AND size >= ? AND hash IS NOT NULL AND \(Self.notBuildOutput)
             GROUP BY hash
             HAVING COUNT(*) > 1
             ORDER BY count DESC, size DESC
@@ -1730,7 +1738,7 @@ actor DatabaseManager {
             SELECT f.id, f.drive_uuid, d.name as drive_name, f.relative_path, f.modified_at
             FROM files f
             JOIN drives d ON d.uuid = f.drive_uuid
-            WHERE f.hash = ? AND f.is_directory = 0
+            WHERE f.hash = ? AND f.is_directory = 0 AND \(Self.notBuildOutput)
             ORDER BY d.name, f.relative_path
         """
 
@@ -1844,7 +1852,7 @@ actor DatabaseManager {
 
     /// Folders with identical contents, as groups whose "files" are the folders
     func getDuplicateFolderGroups() throws -> [DuplicateGroup] {
-        let minSize = Int64(try getSetting("min_duplicate_file_size") ?? "") ?? 5_242_880
+        let minSize = Int64(try getSetting("min_duplicate_file_size") ?? "") ?? Self.defaultMinDuplicateFileSize
 
         var stmt: OpaquePointer?
         defer {
@@ -1857,6 +1865,7 @@ actor DatabaseManager {
             SELECT f.id, f.drive_uuid, d.name, f.relative_path, f.size, f.hash, f.is_directory, f.modified_at
             FROM files f
             JOIN drives d ON d.uuid = f.drive_uuid
+            WHERE \(Self.notBuildOutput)
         """
 
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {

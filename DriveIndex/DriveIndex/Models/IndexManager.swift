@@ -306,9 +306,8 @@ class IndexManager: ObservableObject {
         hashingTask?.cancel()
 
         do {
-            // Get minimum file size from settings (default 5MB)
-            let minSizeStr = try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "5242880"
-            let minSize = Int64(minSizeStr) ?? 5_242_880
+            let minSize = Int64(try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "")
+                ?? DatabaseManager.defaultMinDuplicateFileSize
 
             // Check if there are files to hash
             let unhashed = try await DatabaseManager.shared.getUnhashedCount(minSize: minSize)
