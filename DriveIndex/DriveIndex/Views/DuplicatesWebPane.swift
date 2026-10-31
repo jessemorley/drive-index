@@ -2,22 +2,24 @@
 //  DuplicatesWebPane.swift
 //  DriveIndex
 //
-//  Prototype: the duplicates cards drawn by WebKit (Web/duplicates.html), for CSS animation. The
-//  toolbar, data and actions stay in DuplicatesView; this pane only renders and posts clicks back
+//  The duplicates cards drawn by WebKit (Web/duplicates.html), for CSS animation. The toolbar, data
+//  and actions stay in DuplicatesView; this pane only renders, posts clicks back and shows native menus
 //
 
 import SwiftUI
 import WebKit
 
 struct DuplicatesWebPane: NSViewRepresentable {
-    let groups: [DuplicateGroup]
-    let kind: DuplicateKind
+    let sets: [FolderSet]
+    let loose: [DuplicateGroup]
     let drives: [DriveInfo]
     /// The toolbar's height: the page lays out below it but scrolls under it
     let topInset: CGFloat
     let reveal: (DuplicateFile) -> Void
     let trash: (DuplicateFile) -> Void
-    let compare: (DuplicateGroup) -> Void
+    let revealFolder: (FolderLocation) -> Void
+    let trashFolder: (FolderSet.Member) -> Void
+    let compare: (FolderPair) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -69,6 +71,15 @@ struct DuplicatesWebPane: NSViewRepresentable {
     // MARK: - Data
 
     private struct Payload: Encodable {
+        struct Set: Encodable {
+            let id, name, wasted: String
+            let members: [Member]
+        }
+        struct Member: Encodable {
+            let id, drive, driveIcon, path, summary, verdict: String
+            let safe, connected, holdsAnother: Bool
+            let files, shared, changed, onlyHere, unchecked: Int
+        }
         struct Group: Encodable {
             let id: Int64
             let name, icon, size, wasted: String
@@ -80,22 +91,30 @@ struct DuplicatesWebPane: NSViewRepresentable {
             let drive, driveIcon, path, date: String
             let connected: Bool
         }
-        let folders: Bool
+        let sets: [Set]
         let groups: [Group]
         /// Groups not sent yet
         let more: Int
     }
 
-    /// The first `limit` groups
+    /// Every set, and the first `limit` groups
     fileprivate func payload(limit: Int) -> String {
-        let connected = Set(drives.filter(\.isConnected).map(\.id))
-        let payload = Payload(folders: kind == .folders, groups: groups.prefix(limit).map { group in
+        let connected = Swift.Set(drives.filter(\.isConnected).map(\.id))
+        func bytes(_ n: Int64) -> String { ByteCountFormatter.string(fromByteCount: n, countStyle: .file) }
+        let payload = Payload(sets: sets.map { set in
+            Payload.Set(id: set.id, name: set.name, wasted: bytes(set.wastedBytes), members: set.members.map { m in
+                Payload.Member(id: m.id, drive: m.folder.driveName, driveIcon: "icon://drive/\(m.folder.driveUUID)",
+                               path: m.folder.relativePath, summary: "\(m.files.formatted()) files, \(bytes(m.bytes))",
+                               verdict: m.verdict, safe: m.isSafeToRemove, connected: connected.contains(m.folder.driveUUID), holdsAnother: m.holdsAnother,
+                               files: m.files, shared: m.shared, changed: m.changed, onlyHere: m.onlyHere, unchecked: m.unchecked)
+            })
+        }, groups: loose.prefix(limit).map { group in
             Payload.Group(
                 id: group.cardID,
                 name: group.name,
-                icon: Self.typeIconURL(name: group.name, isDirectory: kind == .folders),
-                size: ByteCountFormatter.string(fromByteCount: group.size, countStyle: .file),
-                wasted: ByteCountFormatter.string(fromByteCount: group.wastedBytes, countStyle: .file),
+                icon: Self.typeIconURL(name: group.name),
+                size: bytes(group.size),
+                wasted: bytes(group.wastedBytes),
                 copies: group.files.count,
                 files: group.files.map { file in
                     Payload.File(id: file.id, drive: file.driveName, driveIcon: "icon://drive/\(file.driveUUID)",
@@ -103,15 +122,14 @@ struct DuplicatesWebPane: NSViewRepresentable {
                                  date: file.modifiedAt?.formatted(.dateTime.day().month().year()) ?? "",
                                  connected: connected.contains(file.driveUUID))
                 })
-        }, more: max(0, groups.count - limit))
+        }, more: max(0, loose.count - limit))
         return String(decoding: try! JSONEncoder().encode(payload), as: UTF8.self)
     }
 
     // MARK: - Icons
 
     /// One URL per file type, not per file, so WebKit fetches each icon once
-    private static func typeIconURL(name: String, isDirectory: Bool) -> String {
-        if isDirectory { return "icon://folder" }
+    private static func typeIconURL(name: String) -> String {
         let ext = (name as NSString).pathExtension.lowercased()
         return "icon://type/" + (ext.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
     }
@@ -144,14 +162,12 @@ struct DuplicatesWebPane: NSViewRepresentable {
         // ponytail: pages of 200 keep each send small; Show More adds a page
         static let pageSize = 200
         private var limit = pageSize
-        private var kind: DuplicateKind?
 
         init(_ parent: DuplicatesWebPane) { self.parent = parent }
 
-        /// Hands the page the current groups; it diffs them against what it shows and animates the change
+        /// Hands the page the current cards; it diffs them against what it shows and animates the change
         func send() {
             guard loaded, let webView else { return }
-            if parent.kind != kind { kind = parent.kind; limit = Self.pageSize }
             let json = parent.payload(limit: limit)
             guard json != sent else { return }
             sent = json
@@ -178,41 +194,70 @@ struct DuplicatesWebPane: NSViewRepresentable {
         func webView(_ webView: WKWebView, stop task: any WKURLSchemeTask) {}
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            if (message.body as? [String: Any])?["action"] as? String == "more" {
+            guard let body = message.body as? [String: Any], let action = body["action"] as? String else { return }
+            if action == "more" {
                 limit += Self.pageSize
                 send()
                 return
             }
-            guard let body = message.body as? [String: Any],
-                  let action = body["action"] as? String,
-                  let groupID = (body["group"] as? NSNumber)?.int64Value,
-                  let group = parent.groups.first(where: { $0.cardID == groupID }) else { return }
-            let file = (body["file"] as? NSNumber).flatMap { id in group.files.first { $0.id == id.int64Value } }
+            if let setID = body["set"] as? String, let set = parent.sets.first(where: { $0.id == setID }) {
+                let member = (body["member"] as? String).flatMap { id in set.members.first { $0.id == id } }
+                switch action {
+                case "compare": compare(set)
+                case "reveal": member.map { parent.revealFolder($0.folder) }
+                case "trash": member.map(parent.trashFolder)
+                case "menu": member.map { member in
+                    let connected = isConnected(member.folder.driveUUID)
+                    popUp([("Reveal in Finder", connected, { self.parent.revealFolder(member.folder) }),
+                           ("Move to Trash…", connected && !member.holdsAnother, { self.parent.trashFolder(member) })])
+                }
+                default: break
+                }
+                return
+            }
+            guard let groupID = (body["group"] as? NSNumber)?.int64Value,
+                  let group = parent.loose.first(where: { $0.cardID == groupID }),
+                  let file = (body["file"] as? NSNumber).flatMap({ id in group.files.first { $0.id == id.int64Value } }) else { return }
             switch action {
-            case "compare": parent.compare(group)
-            case "reveal": file.map(parent.reveal)
-            case "trash": file.map(parent.trash)
-            case "menu": file.map(showMenu)
+            case "reveal": parent.reveal(file)
+            case "trash": parent.trash(file)
+            case "menu":
+                let connected = isConnected(file.driveUUID)
+                popUp([("Reveal in Finder", connected, { self.parent.reveal(file) }),
+                       ("Move to Trash", connected, { self.parent.trash(file) })])
             default: break
             }
         }
 
-        /// A real NSMenu instead of WebKit's (Reload, Inspect Element)
-        private func showMenu(for file: DuplicateFile) {
+        private func isConnected(_ driveUUID: String) -> Bool {
+            parent.drives.first { $0.id == driveUUID }?.isConnected ?? false
+        }
+
+        /// Two folders open Folder Compare; more ask which two
+        private func compare(_ set: FolderSet) {
+            let folders = set.members.map(\.folder)
+            guard folders.count > 2 else { parent.compare(FolderPair(a: folders[0], b: folders[1])); return }
+            let pairs = folders.indices.flatMap { i in folders[(i + 1)...].map { (folders[i], $0) } }
+            popUp(pairs.map { a, b in
+                ("\(a.driveName): \(a.relativePath)  ↔  \(b.driveName): \(b.relativePath)", true,
+                 { self.parent.compare(FolderPair(a: a, b: b)) })
+            })
+        }
+
+        /// A real NSMenu at the mouse instead of WebKit's (Reload, Inspect Element)
+        private func popUp(_ items: [(title: String, enabled: Bool, run: () -> Void)]) {
             guard let webView, let window = webView.window else { return }
-            let connected = parent.drives.first { $0.id == file.driveUUID }?.isConnected ?? false
             let menu = NSMenu()
-            for (title, action) in [("Reveal in Finder", #selector(revealItem)), ("Move to Trash", #selector(trashItem))] {
+            for item in items {
                 // No action leaves the item disabled
-                let item = NSMenuItem(title: title, action: connected ? action : nil, keyEquivalent: "")
-                item.target = self
-                item.representedObject = file
-                menu.addItem(item)
+                let menuItem = NSMenuItem(title: item.title, action: item.enabled ? #selector(run) : nil, keyEquivalent: "")
+                menuItem.target = self
+                menuItem.representedObject = item.run
+                menu.addItem(menuItem)
             }
             menu.popUp(positioning: nil, at: webView.convert(window.mouseLocationOutsideOfEventStream, from: nil), in: webView)
         }
 
-        @objc private func revealItem(_ item: NSMenuItem) { (item.representedObject as? DuplicateFile).map(parent.reveal) }
-        @objc private func trashItem(_ item: NSMenuItem) { (item.representedObject as? DuplicateFile).map(parent.trash) }
+        @objc private func run(_ item: NSMenuItem) { (item.representedObject as? () -> Void)?() }
     }
 }

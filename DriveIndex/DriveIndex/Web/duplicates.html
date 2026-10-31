@@ -1,12 +1,12 @@
 <!doctype html>
-<!-- Duplicates cards. DuplicatesWebPane calls render(data) with every group; clicks go back as messages -->
+<!-- Duplicates: folder set cards, then file cards. DuplicatesWebPane calls render(data); clicks go back as messages -->
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="base.css">
 <style>
-.card {
-  background: var(--card); border: 0.5px solid var(--card-border); border-radius: 10px;
-  margin-bottom: 8px; overflow: hidden;
-}
+.item { margin-bottom: 8px; }
+.card { background: var(--card); border: 0.5px solid var(--card-border); border-radius: 10px; overflow: hidden; }
+.heading { display: flex; align-items: baseline; gap: 8px; padding: 8px 4px 0; font-weight: 600; }
+.heading .secondary { font-weight: normal; }
 .header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .header .name { flex: 0 1 auto; }
 .spacer { flex: 1; }
@@ -15,7 +15,7 @@
 .body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s var(--ease); }
 .open .body { grid-template-rows: 1fr; }
 .rows { overflow: hidden; min-height: 0; padding: 0 4px; }
-.open .rows { padding-bottom: 6px; }
+.open .rows, .set .rows { padding-bottom: 6px; }
 .row {
   position: relative; display: flex; align-items: center; gap: 8px;
   padding: 5px 8px; border-radius: 6px; transition: background-color .15s;
@@ -27,6 +27,20 @@
 .path { flex: 1; color: var(--secondary); }
 .off .drive, .off .path { color: var(--tertiary); }
 button.compare { color: var(--orange); }
+
+/* A folder of a set: what share of its files are elsewhere in the set */
+.member { flex-direction: column; align-items: stretch; gap: 5px; padding-bottom: 7px; }
+.line { display: flex; align-items: center; gap: 8px; }
+.bar, .verdict { margin-left: 24px; margin-right: 30px; }
+.bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: var(--separator); }
+.bar i { width: 0; transition: width .6s var(--ease); }
+.bar .shared { background: var(--green); }
+.bar .changed { background: var(--orange); }
+.bar .only { background: var(--blue); }
+.bar .unchecked { background: var(--tertiary); }
+.verdict { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--secondary); }
+.verdict .safe { color: var(--green); }
+
 #more { display: flex; justify-content: center; padding: 8px 0; }
 #more[hidden] { display: none; }
 #more button {
@@ -43,24 +57,32 @@ const ICON = {
   compare: '<svg viewBox="0 0 16 16"><path d="M5 13V3M2.5 5.5 5 3l2.5 2.5M11 3v10m-2.5-2.5L11 13l2.5-2.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 const EASE = 'cubic-bezier(.2, .8, .2, 1)';
-const GAP = 8;          // .card margin-bottom
+const GAP = 8;          // .item margin-bottom
 const OVERSCAN = 1000;  // px drawn past each edge of the window, so fast scrolling never shows a gap
 
-// Thousands of groups: only the cards near the window are in the DOM. Spacers above and below stand in
-// for the rest, sized from each card's height (all collapsed cards are one height; open ones are measured)
+// Thousands of cards: only the items near the window are in the DOM. Spacers above and below stand in
+// for the rest, sized from each item's height (measured once drawn, estimated until then)
 const above = document.getElementById('above');
 const list = document.getElementById('list');
 const below = document.getElementById('below');
-// Swift sends groups a page at a time
+// Swift sends file cards a page at a time
 const more = document.getElementById('more');
 more.firstChild.addEventListener('click', () => post({ action: 'more' }));
-let groups = [];            // every group, in order
-let offsets = [0];          // offsets[i] = top of groups[i] in the list; offsets[groups.length] = its height
-const heights = new Map();  // group id → measured height, gap included, for cards that have been drawn
-let cardHeight = 42 + GAP;  // until the first card is measured
-const open = new Set();     // ids of open cards, drawn or not
-const shown = new Map();    // group id → { el, g, rows, refs, rowsEl }, for cards in the DOM
-let folders = null;
+let items = [];             // { kind: 'heading' | 'set' | 'file', id, d: the data }, in order
+let offsets = [0];          // offsets[i] = top of items[i] in the list; offsets[items.length] = its height
+const heights = new Map();  // item id → measured height, gap included, for items that have been drawn
+let fileHeight = 42 + GAP;  // a collapsed file card, until one is measured
+let measuredFile = false;
+const open = new Set();     // ids of open file cards, drawn or not
+const shown = new Map();    // item id → { el, it, rows, refs, rowsEl }, for items in the DOM
+let first = true;
+
+/// Until an item is drawn
+function estimate(it) {
+  if (it.kind === 'file') return fileHeight;
+  if (it.kind === 'set') return 44 + it.d.members.length * 62 + GAP;
+  return 26 + GAP;
+}
 
 const post = message => webkit.messageHandlers.native.postMessage(message);
 // WebKit's own menu (Reload, Inspect Element) gives the page away; rows ask for a native one
@@ -109,9 +131,7 @@ function middle(t, width) {
   return cut(lo);
 }
 
-// MARK: Cards
-
-/// Shrinks a card or row away, so what's under it slides up
+/// Shrinks an item or row away, so what's under it slides up
 function collapse(node) {
   if (node.dataset.leaving) return;
   node.dataset.leaving = '1';
@@ -123,18 +143,91 @@ function collapse(node) {
   ], { duration: 300, easing: EASE }).finished.then(() => node.remove());
 }
 
-function makeCard(g) {
-  const c = { g, rows: new Map(), el: el('div', 'card') };
-  c.el.dataset.id = g.id;
-  c.el.classList.toggle('open', open.has(g.id));
+function makeItem(it) {
+  const c = it.kind === 'set' ? makeSet(it) : it.kind === 'file' ? makeFile(it) : makeHeading(it);
+  c.el.dataset.id = it.id;
+  return c;
+}
+function updateItem(c, it) {
+  c.it = it;
+  if (it.kind === 'set') updateSet(c);
+  else if (it.kind === 'file') updateFile(c);
+  else c.refs.count.textContent = it.d.count;
+}
+
+function makeHeading(it) {
+  const c = { it, el: el('div', 'heading item'), refs: { count: text('secondary', '') } };
+  c.el.append(text('', it.d.title), c.refs.count);
+  return c;
+}
+
+// MARK: Folder sets: every folder shown, no disclosure
+
+function makeSet(it) {
+  const c = { it, rows: new Map(), el: el('div', 'card set item') };
+  const header = el('div', 'header');
+  c.refs = { name: fitText('name', it.d.name), copies: text('secondary', ''), wasted: text('', '') };
+  header.append(icon('icon://folder'), c.refs.name, el('span', 'spacer'), c.refs.copies, c.refs.wasted,
+                button(ICON.compare, 'Compare these folders', 'compare', () => post({ action: 'compare', set: c.it.d.id })));
+  c.rowsEl = el('div', 'rows');
+  c.el.append(header, c.rowsEl);
+  return c;
+}
+
+function updateSet(c) {
+  const s = c.it.d;
+  // A trashed folder can change the set's name
+  if (c.refs.name.dataset.full !== s.name) {
+    c.refs.name.dataset.full = c.refs.name.title = s.name;
+    if (c.el.isConnected) fit([c.refs.name]);
+  }
+  c.refs.copies.textContent = s.members.length + ' folders';
+  c.refs.wasted.textContent = s.wasted + ' wasted';
+
+  const ids = new Set(s.members.map(m => m.id));
+  for (const [id, r] of c.rows) if (!ids.has(id)) { c.rows.delete(id); collapse(r.el); }
+  const added = [];
+  for (const m of s.members) {
+    let r = c.rows.get(m.id);
+    if (!r) {
+      r = { el: el('div', 'row member'), bar: el('div', 'bar'), verdict: el('div', 'verdict') };
+      const send = action => post({ action, set: c.it.d.id, member: m.id });
+      r.button = button(ICON.trash, 'Move this folder to the Trash', '', () => send('trash'));
+      const path = fitText('path', m.path);
+      const line = el('div', 'line');
+      line.append(icon(m.driveIcon), text('drive', m.drive), path, r.button);
+      r.segs = ['shared', 'changed', 'only', 'unchecked'].map(k => r.bar.appendChild(el('i', k)));
+      r.el.append(line, r.bar, r.verdict);
+      r.el.addEventListener('dblclick', () => send('reveal'));
+      r.el.addEventListener('contextmenu', () => send('menu'));
+      c.rows.set(m.id, r);
+      c.rowsEl.append(r.el);
+      added.push(path);
+    }
+    // Widths transition, so a trashed copy elsewhere in the set slides the bar over
+    [m.shared, m.changed, m.onlyHere, m.unchecked].forEach((n, i) => { r.segs[i].style.width = (100 * n / Math.max(m.files, 1)) + '%'; });
+    r.bar.title = `${m.shared.toLocaleString()} shared, ${m.changed.toLocaleString()} changed, `
+                + `${m.onlyHere.toLocaleString()} only here, ${m.unchecked.toLocaleString()} not checked yet`;
+    r.verdict.replaceChildren(text('', m.summary + ' · '), text(m.safe ? 'safe' : '', m.verdict));
+    r.verdict.title = r.verdict.textContent;
+    r.el.classList.toggle('off', !m.connected);
+    r.button.disabled = !m.connected || m.holdsAnother;
+  }
+  if (added.length && c.el.isConnected) fit(added);
+}
+
+// MARK: Files, outside every set
+
+function makeFile(it) {
+  const c = { it, rows: new Map(), el: el('div', 'card item') };
+  c.el.classList.toggle('open', open.has(it.id));
   const header = el('div', 'header', ICON.chev);
   // A group's name never changes: same contents, same name
-  c.refs = { name: fitText('name', g.name), size: text('secondary', ''), copies: text('secondary', ''), wasted: text('', '') };
-  header.append(icon(g.icon), c.refs.name, c.refs.size, el('span', 'spacer'), c.refs.copies, c.refs.wasted);
-  if (folders) header.append(button(ICON.compare, 'Compare the folders above these copies', 'compare', () => post({ action: 'compare', group: c.g.id })));
+  c.refs = { name: fitText('name', it.d.name), size: text('secondary', ''), copies: text('secondary', ''), wasted: text('', '') };
+  header.append(icon(it.d.icon), c.refs.name, c.refs.size, el('span', 'spacer'), c.refs.copies, c.refs.wasted);
   header.addEventListener('click', () => {
     const isOpen = c.el.classList.toggle('open');
-    isOpen ? open.add(c.g.id) : open.delete(c.g.id);
+    isOpen ? open.add(c.it.id) : open.delete(c.it.id);
     if (isOpen) syncRows(c);
   });
   const body = el('div', 'body');
@@ -144,8 +237,8 @@ function makeCard(g) {
   return c;
 }
 
-function updateCard(c, g) {
-  c.g = g;
+function updateFile(c) {
+  const g = c.it.d;
   c.refs.size.textContent = g.size;
   c.refs.copies.textContent = g.copies + ' copies';
   c.refs.wasted.textContent = g.wasted + ' wasted';
@@ -154,18 +247,19 @@ function updateCard(c, g) {
 }
 
 function syncRows(c) {
-  const ids = new Set(c.g.files.map(f => f.id));
+  const g = c.it.d;
+  const ids = new Set(g.files.map(f => f.id));
   for (const [id, r] of c.rows) if (!ids.has(id)) { c.rows.delete(id); collapse(r.el); }
   const added = [];
-  for (const f of c.g.files) {
+  for (const f of g.files) {
     let r = c.rows.get(f.id);
     if (!r) {
       r = { el: el('div', 'row') };
-      r.button = button(ICON.trash, 'Move this copy to the Trash', '', () => post({ action: 'trash', group: c.g.id, file: f.id }));
+      r.button = button(ICON.trash, 'Move this copy to the Trash', '', () => post({ action: 'trash', group: c.it.d.id, file: f.id }));
       const path = fitText('path', f.path);
       r.el.append(icon(f.driveIcon), text('drive', f.drive), path, text('secondary', f.date), r.button);
-      r.el.addEventListener('dblclick', () => post({ action: 'reveal', group: c.g.id, file: f.id }));
-      r.el.addEventListener('contextmenu', () => post({ action: 'menu', group: c.g.id, file: f.id }));
+      r.el.addEventListener('dblclick', () => post({ action: 'reveal', group: c.it.d.id, file: f.id }));
+      r.el.addEventListener('contextmenu', () => post({ action: 'menu', group: c.it.d.id, file: f.id }));
       c.rows.set(f.id, r);
       c.rowsEl.append(r.el);
       added.push(path);
@@ -178,38 +272,38 @@ function syncRows(c) {
 
 // MARK: Window
 
-/// Open cards change height as they animate; keep the spacers in step
+/// Items change height as they open, close and lose rows; keep the spacers in step
 const sizes = new ResizeObserver(entries => {
   let changed = false;
   for (const e of entries) {
-    const id = +e.target.dataset.id;
+    const id = e.target.dataset.id;
     const h = Math.round(e.borderBoxSize[0].blockSize) + GAP;
-    if (!open.has(id) && !heights.size) cardHeight = h;  // the first collapsed card sets the default
+    if (!measuredFile && shown.get(id)?.it.kind === 'file' && !open.has(id)) { fileHeight = h; measuredFile = true; }
     if (heights.get(id) !== h) { heights.set(id, h); changed = true; }
   }
   if (changed) { layout(); place(); }
 });
 
 function layout() {
-  offsets = new Array(groups.length + 1);
+  offsets = new Array(items.length + 1);
   offsets[0] = 0;
-  for (let i = 0; i < groups.length; i++) offsets[i + 1] = offsets[i] + (heights.get(groups[i].id) ?? cardHeight);
+  for (let i = 0; i < items.length; i++) offsets[i + 1] = offsets[i] + (heights.get(items[i].id) ?? estimate(items[i]));
 }
 
-/// First index whose card ends below y
+/// First index whose item ends below y
 function indexAt(y) {
-  let lo = 0, hi = groups.length;
+  let lo = 0, hi = items.length;
   while (lo < hi) { const mid = (lo + hi) >> 1; offsets[mid + 1] <= y ? lo = mid + 1 : hi = mid; }
   return lo;
 }
 
-/// Puts the cards near the window in the DOM, in order, and sizes the spacers; returns the cards it made
+/// Puts the items near the window in the DOM, in order, and sizes the spacers; returns the ones it made
 function place() {
   const top = scrollY - above.offsetTop;
-  const first = indexAt(top - OVERSCAN);
-  const last = Math.min(groups.length, indexAt(top + innerHeight + OVERSCAN) + 1);
+  const firstIndex = indexAt(top - OVERSCAN);
+  const last = Math.min(items.length, indexAt(top + innerHeight + OVERSCAN) + 1);
   const wanted = new Set();
-  for (let i = first; i < last; i++) wanted.add(groups[i].id);
+  for (let i = firstIndex; i < last; i++) wanted.add(items[i].id);
 
   for (const [id, c] of shown) {
     if (wanted.has(id)) continue;
@@ -218,23 +312,23 @@ function place() {
     c.el.remove();
   }
   const added = [];
-  // Back to front, so each card goes in before the one after it; only cards not yet in place move
+  // Back to front, so each item goes in before the one after it; only items not yet in place move
   let next = null;
-  for (let i = last - 1; i >= first; i--) {
-    const g = groups[i];
-    let c = shown.get(g.id);
-    if (!c) { c = makeCard(g); updateCard(c, g); shown.set(g.id, c); added.push(c); }
+  for (let i = last - 1; i >= firstIndex; i--) {
+    const it = items[i];
+    let c = shown.get(it.id);
+    if (!c) { c = makeItem(it); updateItem(c, it); shown.set(it.id, c); added.push(c); }
     if (!c.el.isConnected || nextShown(c.el) !== next) list.insertBefore(c.el, next);
     next = c.el;
   }
   for (const c of added) sizes.observe(c.el);
   if (added.length) fit(added.flatMap(c => [...c.el.querySelectorAll('.fit')]));
 
-  above.style.height = offsets[first] + 'px';
-  below.style.height = (offsets[groups.length] - offsets[last]) + 'px';
+  above.style.height = offsets[firstIndex] + 'px';
+  below.style.height = (offsets[items.length] - offsets[last]) + 'px';
   return added.reverse();
 }
-/// The next card that is staying, skipping ones shrinking away
+/// The next item that is staying, skipping ones shrinking away
 function nextShown(node) {
   let n = node.nextElementSibling;
   while (n && n.dataset.leaving) n = n.nextElementSibling;
@@ -244,7 +338,7 @@ function nextShown(node) {
 let frame = 0;
 const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
 addEventListener('scroll', schedule, { passive: true });
-// The window, not the page: taller means more cards; wider or narrower means cutting the text again
+// The window, not the page: taller means more items; wider or narrower means cutting the text again
 let width = innerWidth;
 addEventListener('resize', () => {
   cancelAnimationFrame(frame);
@@ -257,22 +351,37 @@ addEventListener('resize', () => {
 // MARK: Updates from Swift
 
 function render(data) {
-  // Files ↔ Folders is a different list, not a change to this one
-  const fresh = data.folders !== folders;
-  if (fresh) {
-    folders = data.folders;
-    for (const c of shown.values()) sizes.unobserve(c.el);
-    shown.clear(); open.clear(); heights.clear();
-    list.replaceChildren();
-    scrollTo(0, 0);
+  const fresh = first;
+  first = false;
+  const files = data.groups.length + data.more;
+  const next = [];
+  if (data.sets.length) next.push({ kind: 'heading', id: 'h:sets', d: { title: 'Folders', count: data.sets.length.toLocaleString() + ' sets of copies' } });
+  for (const s of data.sets) next.push({ kind: 'set', id: 's:' + s.id, d: s });
+  if (files) next.push({ kind: 'heading', id: 'h:files', d: { title: 'Files', count: files.toLocaleString() + ' with a copy outside those folders' } });
+  for (const g of data.groups) next.push({ kind: 'file', id: 'f:' + g.id, d: g });
+
+  const ids = new Set(next.map(it => it.id));
+  // A set that lost or gained a folder has a new id: keep its card, so the change animates in place
+  const renamed = new Map();
+  for (const it of next) {
+    if (it.kind !== 'set' || shown.has(it.id)) continue;
+    const mine = new Set(it.d.members.map(m => m.id));
+    for (const [id, c] of shown) {
+      if (ids.has(id) || c.it.kind !== 'set' || !c.it.d.members.some(m => mine.has(m.id))) continue;
+      shown.delete(id);
+      shown.set(it.id, c);
+      c.el.dataset.id = it.id;
+      if (heights.has(id)) { heights.set(it.id, heights.get(id)); heights.delete(id); }
+      renamed.set(id, it.id);
+      break;
+    }
   }
 
-  const ids = new Set(data.groups.map(g => g.id));
-  const keptOrder = groups.map(g => g.id).filter(id => ids.has(id) && shown.has(id));
-  const newOrder = data.groups.map(g => g.id).filter(id => shown.has(id));
+  const keptOrder = items.map(it => renamed.get(it.id) ?? it.id).filter(id => ids.has(id) && shown.has(id));
+  const newOrder = next.map(it => it.id).filter(id => shown.has(id));
   const reordered = keptOrder.join() !== newOrder.join();
 
-  // First (FLIP): where each drawn card is before the change
+  // First (FLIP): where each drawn item is before the change
   const before = new Map();
   for (const [id, c] of shown) if (ids.has(id)) before.set(id, c.el.getBoundingClientRect().top);
 
@@ -288,12 +397,12 @@ function render(data) {
   more.hidden = !data.more;
   more.firstChild.textContent = `Show ${Math.min(data.more, 200)} More (${data.more.toLocaleString()} left)`;
 
-  groups = data.groups;
-  for (const g of groups) { const c = shown.get(g.id); if (c) updateCard(c, g); }
+  items = next;
+  for (const it of items) { const c = shown.get(it.id); if (c) updateItem(c, it); }
   layout();
   const added = place();
 
-  // Last, Invert, Play: slide moved cards from where they were
+  // Last, Invert, Play: slide moved items from where they were
   for (const [id, top] of before) {
     const c = shown.get(id);
     if (!c) continue;

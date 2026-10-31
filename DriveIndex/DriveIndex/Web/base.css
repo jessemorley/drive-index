@@ -9,6 +9,8 @@
   --card-border: light-dark(#00000014, #ffffff14);
   --hover: light-dark(#0000000d, #ffffff12);
   --orange: light-dark(#ff9500, #ff9f0a);
+  --green: light-dark(#34c759, #30d158);
+  --blue: light-dark(#007aff, #0a84ff);
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
 html, body { margin: 0; background: transparent; }
