@@ -39,6 +39,7 @@ struct DuplicatesView: View {
     @AppStorage("duplicates.kind") private var kind: DuplicateKind = .files
     @AppStorage("duplicates.excludeLocal") private var excludeLocal = false
     @AppStorage("duplicates.web") private var web = false
+    @State private var webTopInset: CGFloat = 0
 
     /// The groups shown: without this Mac's copies, a group needs two copies on drives
     private var shownGroups: [DuplicateGroup] {
@@ -108,14 +109,17 @@ struct DuplicatesView: View {
             ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("\(kind.rawValue) with identical contents will appear here"))
         } else if web {
             // ponytail: with more than two copies, compares only the first two; the native menu lists every pair
-            GeometryReader { proxy in
-                DuplicatesWebPane(groups: shownGroups, kind: kind, drives: driveMonitor.drives,
-                                  topInset: proxy.safeAreaInsets.top,
-                                  reveal: revealInFinder, trash: moveToTrash,
-                                  compare: { comparing = compareLevels($0.files[0], $0.files[1]).last })
-                    // Under the toolbar, like a native ScrollView; the web view keeps content clear of it
-                    .ignoresSafeArea(edges: .top)
-            }
+            // Not a GeometryReader: that rebuilt the pane, and re-sent every group, on each frame of a resize
+            Color.clear
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { webTopInset = $0 }
+                .overlay {
+                    DuplicatesWebPane(groups: shownGroups, kind: kind, drives: driveMonitor.drives,
+                                      topInset: webTopInset,
+                                      reveal: revealInFinder, trash: moveToTrash,
+                                      compare: { comparing = compareLevels($0.files[0], $0.files[1]).last })
+                        // Under the toolbar, like a native ScrollView; the web view keeps content clear of it
+                        .ignoresSafeArea(edges: .top)
+                }
         } else {
             ScrollView {
                 // Lazy: there can be thousands of groups

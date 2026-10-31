@@ -24,6 +24,7 @@ struct DuplicatesWebPane: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "native")
+        config.setURLSchemeHandler(context.coordinator, forURLScheme: "icon")
         #if DEBUG
         // ⌘R (with the pane focused) reloads the page from the source folder
         config.userContentController.addUserScript(WKUserScript(
@@ -70,51 +71,88 @@ struct DuplicatesWebPane: NSViewRepresentable {
     private struct Payload: Encodable {
         struct Group: Encodable {
             let id: Int64
-            let name, size, wasted: String
+            let name, icon, size, wasted: String
             let copies: Int
             let files: [File]
         }
         struct File: Encodable {
             let id: Int64
-            let drive, path, date: String
+            let drive, driveIcon, path, date: String
             let connected: Bool
         }
         let folders: Bool
         let groups: [Group]
+        /// Groups not sent yet
+        let more: Int
     }
 
-    fileprivate func payload() -> String {
+    /// The first `limit` groups
+    fileprivate func payload(limit: Int) -> String {
         let connected = Set(drives.filter(\.isConnected).map(\.id))
-        let payload = Payload(folders: kind == .folders, groups: groups.map { group in
+        let payload = Payload(folders: kind == .folders, groups: groups.prefix(limit).map { group in
             Payload.Group(
                 id: group.cardID,
                 name: group.name,
+                icon: Self.typeIconURL(name: group.name, isDirectory: kind == .folders),
                 size: ByteCountFormatter.string(fromByteCount: group.size, countStyle: .file),
                 wasted: ByteCountFormatter.string(fromByteCount: group.wastedBytes, countStyle: .file),
                 copies: group.files.count,
                 files: group.files.map { file in
-                    Payload.File(id: file.id, drive: file.driveName, path: file.relativePath,
+                    Payload.File(id: file.id, drive: file.driveName, driveIcon: "icon://drive/\(file.driveUUID)",
+                                 path: file.relativePath,
                                  date: file.modifiedAt?.formatted(.dateTime.day().month().year()) ?? "",
                                  connected: connected.contains(file.driveUUID))
                 })
-        })
+        }, more: max(0, groups.count - limit))
         return String(decoding: try! JSONEncoder().encode(payload), as: UTF8.self)
+    }
+
+    // MARK: - Icons
+
+    /// One URL per file type, not per file, so WebKit fetches each icon once
+    private static func typeIconURL(name: String, isDirectory: Bool) -> String {
+        if isDirectory { return "icon://folder" }
+        let ext = (name as NSString).pathExtension.lowercased()
+        return "icon://type/" + (ext.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "")
+    }
+
+    /// The Finder icon an icon:// URL names, as a 32 px PNG (16 pt at 2x)
+    fileprivate func iconPNG(for url: URL) -> Data? {
+        let image: NSImage? = switch url.host() {
+        case "folder": NSWorkspace.shared.listIcon(name: "", isDirectory: true)
+        case "type": NSWorkspace.shared.listIcon(name: "x." + url.lastPathComponent, isDirectory: false)
+        case "drive": drives.first { $0.id == url.lastPathComponent }?.finderIcon
+        default: nil
+        }
+        guard let image, let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: 32, height: 32))
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
     }
 
     // MARK: - Bridge
 
-    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKURLSchemeHandler {
         var parent: DuplicatesWebPane
         weak var webView: WKWebView?
         private var loaded = false
         private var sent: String?
+        // ponytail: pages of 200 keep each send small; Show More adds a page
+        static let pageSize = 200
+        private var limit = pageSize
+        private var kind: DuplicateKind?
 
         init(_ parent: DuplicatesWebPane) { self.parent = parent }
 
         /// Hands the page the current groups; it diffs them against what it shows and animates the change
         func send() {
             guard loaded, let webView else { return }
-            let json = parent.payload()
+            if parent.kind != kind { kind = parent.kind; limit = Self.pageSize }
+            let json = parent.payload(limit: limit)
             guard json != sent else { return }
             sent = json
             webView.callAsyncJavaScript("render(JSON.parse(json))", arguments: ["json": json], in: nil, in: .page)
@@ -127,7 +165,24 @@ struct DuplicatesWebPane: NSViewRepresentable {
             send()
         }
 
+        func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
+            guard let url = task.request.url, let png = parent.iconPNG(for: url) else {
+                task.didFailWithError(URLError(.fileDoesNotExist))
+                return
+            }
+            task.didReceive(URLResponse(url: url, mimeType: "image/png", expectedContentLength: png.count, textEncodingName: nil))
+            task.didReceive(png)
+            task.didFinish()
+        }
+
+        func webView(_ webView: WKWebView, stop task: any WKURLSchemeTask) {}
+
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if (message.body as? [String: Any])?["action"] as? String == "more" {
+                limit += Self.pageSize
+                send()
+                return
+            }
             guard let body = message.body as? [String: Any],
                   let action = body["action"] as? String,
                   let groupID = (body["group"] as? NSNumber)?.int64Value,

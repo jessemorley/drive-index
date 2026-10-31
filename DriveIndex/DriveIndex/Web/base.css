@@ -17,7 +17,7 @@ body {
   padding: 16px; user-select: none; -webkit-user-select: none; cursor: default;
 }
 .secondary { color: var(--secondary); white-space: nowrap; }
-svg.icon { width: 16px; height: 16px; flex: none; color: var(--secondary); }
+.icon { width: 16px; height: 16px; flex: none; color: var(--secondary); }
 button {
   all: unset; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px;
   color: var(--secondary); transition: background-color .15s, transform .15s var(--ease);
