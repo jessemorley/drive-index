@@ -3,7 +3,7 @@
 //  DriveIndex
 //
 //  Duplicates by folder: a review list of the sets of folders holding copies of each other's files
-//  (pick one to keep, trash the others once nothing blocks it), then the duplicate files with a copy
+//  (each copy's menu says what happens to it: leave, update to match the newest, or trash), then the duplicate files with a copy
 //  outside every set
 //
 
@@ -95,6 +95,9 @@ enum Blocker {
     }
 }
 
+/// What Apply does to a copy in a set
+enum CopyAction: Hashable { case leave, update, trash }
+
 enum DuplicateSelection: Hashable {
     case set(String)
     case file(Int64)
@@ -125,8 +128,10 @@ struct DuplicatesView<Sidebar: View>: View {
     @State private var errorMessage: String?
     @State private var comparing: FolderPair?
     @State private var selection: DuplicateSelection?
-    /// Set id → index of the folder to keep, once picked
+    /// Set id → index of the copy the others are compared with and updated from, once changed
     @State private var keep: [String: Int] = [:]
+    /// Set id → member id → the action picked in that copy's menu
+    @State private var actions: [String: [String: CopyAction]] = [:]
     /// "kept member id|other member id" → the two folders compared from the index; cleared on each load
     @State private var comparisons: [String: FolderComparison] = [:]
     @State private var loads = 0
@@ -315,27 +320,35 @@ struct DuplicatesView<Sidebar: View>: View {
 
         return Form {
             Section {
-                ForEach(Array(set.members.enumerated()), id: \.element.id) { i, _ in
-                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, identical: set.isExactMatch, blockers: set.members[i].blockers(keeping: kept))
-                        .onTapGesture { keep[set.id] = i }
+                // The newest copy first
+                ForEach(set.members.indices.sorted { ($0 == set.mostRecent ? 0 : 1, $0) < ($1 == set.mostRecent ? 0 : 1, $1) }, id: \.self) { i in
+                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, identical: set.isExactMatch, blockers: set.members[i].blockers(keeping: kept)) {
+                        keep[set.id] = i
+                        actions[set.id] = nil
+                    } menu: {
+                        actionMenu(set, i, kept: kept)
+                    }
                 }
             } header: {
                 paneTitle
-                HStack {
-                    Text("Keep which folder?")
-                    Spacer()
-                    legend
-                }
-                .padding(.bottom, 6)
             }
 
             keptFiles(set, kept: kept)
+
+            if !offline.isEmpty {
+                Section {
+                    let one = offline.count == 1
+                    Label("\(offline.formatted()) \(one ? "is" : "are") offline. Connect \(one ? "it" : "them") to update or trash \(one ? "its" : "their") folders.",
+                          systemImage: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Section {
                 if let verdicts = diskVerdicts[set.id + "#" + set.members[kept].id] {
                     if verdicts.allSatisfy({ $0.losses == nil }) {
                         Label {
-                            Text("Clear to delete: on disk, every file in the other \(verdicts.count == 1 ? "copy" : "copies") is in the kept folder")
+                            Text("Nothing is lost: on disk, every file in the other \(verdicts.count == 1 ? "copy" : "copies") is also on \(set.members[kept].folder.driveName)")
                         } icon: {
                             Image(systemName: "checkmark.circle").foregroundStyle(.green)
                         }
@@ -352,18 +365,14 @@ struct DuplicatesView<Sidebar: View>: View {
                 } else if let session = removed.map({ set.members[$0] }).first(where: { $0.isSession && $0.onlyHere + $0.changed > 0 }) {
                     // Sessions have no index blockers, but the index still sees their photos
                     Label {
-                        Text("\(session.folder.name) has \((session.onlyHere + session.changed).formatted()) files the kept folder lacks or has changed. It's in a Capture One session, so Check on Disk decides")
+                        Text("\(session.folder.name) has \((session.onlyHere + session.changed).formatted()) files \(set.members[kept].folder.driveName) lacks or has changed. It's in a Capture One session, so Check on Disk decides")
                     } icon: {
                         Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                     }
-                } else if blockers.isEmpty {
-                    Label {
-                        Text(set.isExactMatch
-                             ?"Safe to delete: the folders are an exact match"
-                             : "Safe to delete: the kept folder has every file")
-                    } icon: {
-                        Image(systemName: "checkmark.circle").foregroundStyle(.green)
-                    }
+                }
+                // What Apply will do
+                ForEach(set.members.indices, id: \.self) { i in
+                    if let p = plan(set, i, kept: kept) { Label(p.text, systemImage: p.icon) }
                 }
                 ForEach(blockers.indices, id: \.self) { index in
                     let b = blockers[index]
@@ -389,12 +398,6 @@ struct DuplicatesView<Sidebar: View>: View {
                     }
                     .padding(.vertical, 4)
                 }
-                if !offline.isEmpty {
-                    let one = offline.count == 1
-                    Label("\(offline.formatted()) \(one ? "is" : "are") offline. Connect \(one ? "it" : "them") to update or trash \(one ? "its" : "their") folders.",
-                          systemImage: "info.circle")
-                        .foregroundStyle(.secondary)
-                }
                 HStack {
                     if let working, working.set == set.id {
                         Spacer()
@@ -414,19 +417,18 @@ struct DuplicatesView<Sidebar: View>: View {
                         }
                         Button("Cancel") { workTask?.cancel() }
                     } else {
-                        // "Older" only when the kept folder is the most recent
-                        let copies = (kept == set.mostRecent && !set.isExactMatch ? "Older " : "Other ") + (removed.count == 1 ? "Copy" : "Copies")
-                        Button("Check on Disk") { onDisk(set, keeping: kept, then: .check) }
+                        Button("Check on Disk") {
+                            workTask?.cancel()
+                            workTask = Task { await onDisk(set, keeping: kept, removed, then: .check) }
+                        }
                             .help("Check on disk whether the other copies are clear to delete, including files the index leaves out")
                             .disabled(!offline.isEmpty || !isConnected(set.members[kept].folder.driveUUID))
                         Spacer()
                         Button("Skip") { skip() }
-                        Button("Update \(removed.count) \(copies)…") { onDisk(set, keeping: kept, then: .update) }
-                            .disabled(!offline.isEmpty || set.members.contains(where: \.holdsAnother))
-                        Button("Move \(removed.count) \(copies) to Trash") { onDisk(set, keeping: kept, then: .trash) }
+                        Button("Apply") { apply(set, kept: kept) }
                             .buttonStyle(.borderedProminent)
                             .keyboardShortcut(.defaultAction)
-                            .disabled(!blockers.isEmpty || !offline.isEmpty || removed.contains { set.members[$0].holdsAnother })
+                            .disabled(set.members.indices.allSatisfy { action(set, $0, kept: kept) == .leave } || !canApply(set, kept: kept))
                     }
                 }
                 .padding(.vertical, 4)
@@ -497,38 +499,23 @@ struct DuplicatesView<Sidebar: View>: View {
         Text(title).font(.subheadline).fontWeight(.semibold).foregroundStyle(.secondary)
     }
 
-    private var legend: some View {
-        HStack(spacing: 10) {
-            ForEach([("Copied elsewhere", "square.fill", AnyShapeStyle(.tertiary)), ("Only here", "square.fill", AnyShapeStyle(.blue)),
-                     ("Changed", "square.fill", AnyShapeStyle(.orange)), ("Not checked", "square", AnyShapeStyle(.secondary))], id: \.0) { title, symbol, style in
-                Label { Text(title) } icon: { Image(systemName: symbol).foregroundStyle(style) }
-                    .lineLimit(1)
-            }
-        }
-        .fixedSize()
-        .font(.caption)
-        .fontWeight(.regular)
-        .foregroundStyle(.secondary)
-    }
-
-    /// A folder of the set: radio, drive and path, how its files overlap the others, and what blocks trashing it
-    private func member(_ m: FolderSet.Member, kept: Bool, mostRecent: Bool, identical: Bool, blockers: [(Blocker, Int)]) -> some View {
+    /// A copy of the set: drive and path, how its files overlap the others, what blocks trashing it, and its action menu
+    private func member<Menu: View>(_ m: FolderSet.Member, kept: Bool, mostRecent: Bool, identical: Bool, blockers: [(Blocker, Int)],
+                                    compareWithThis: @escaping () -> Void, @ViewBuilder menu: () -> Menu) -> some View {
         let status = kept ? nil
             : blockers.isEmpty ? nil
             : blockers.map { $0.0.short($0.1) }.joined(separator: ", ")
-        return HStack(spacing: 8) {
-            Image(systemName: kept ? "largecircle.fill.circle" : "circle")
-                .foregroundStyle(kept ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+        return HStack(spacing: 12) {
+            driveIcon(m.folder.driveUUID)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    driveIcon(m.folder.driveUUID)
                     Text(m.folder.driveName).fontWeight(.medium)
                     Text(m.folder.relativePath).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     if identical {
                         StatusChip(title: "Identical", color: .orange)
-                    } else if mostRecent {
-                        StatusChip(title: "Most recent", color: .green)
+                    } else if kept {
+                        StatusChip(title: mostRecent ? "Newest" : "Compared with", color: mostRecent ? .green : nil)
                     }
                 }
                 .foregroundStyle(isConnected(m.folder.driveUUID) ? .primary : .secondary)
@@ -536,10 +523,14 @@ struct DuplicatesView<Sidebar: View>: View {
                 Text("\(m.files.formatted()) files · \(bytes(m.bytes))\(m.latest.map { " · modified \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")\(status.map { " — \($0)" } ?? "")")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            menu()
         }
         .padding(.vertical, 6)
         .contentShape(.rect)
         .contextMenu {
+            Button("Compare Other Copies with This One") { compareWithThis() }
+                .disabled(kept)
+            Divider()
             Button("Reveal in Finder") { revealInFinder(m.folder) }
                 .disabled(!isConnected(m.folder.driveUUID))
             Button("Move to Trash…") { confirmTrash(m) }
@@ -677,6 +668,7 @@ struct DuplicatesView<Sidebar: View>: View {
                 selection = now.isEmpty ? nil : now[min(i, now.count - 1)]
             }
             keep = keep.filter { id, _ in sets.contains { $0.id == id } }
+            actions = actions.filter { id, _ in sets.contains { $0.id == id } }
             comparisons = [:]
             diskVerdicts = [:]
             loads += 1
@@ -746,9 +738,9 @@ struct DuplicatesView<Sidebar: View>: View {
     private enum DiskAction { case check, update, trash }
 
     /// Check: says whether the other folders are clear to delete, and changes nothing
-    private func onDisk(_ set: FolderSet, keeping keep: Int, then action: DiskAction) {
+    private func onDisk(_ set: FolderSet, keeping keep: Int, _ removed: [Int], then action: DiskAction) async {
         let kept = set.members[keep]
-        let others = set.members.indices.filter { $0 != keep }.map { set.members[$0] }
+        let others = removed.map { set.members[$0] }
         let urls = others.compactMap { $0.folder.url(in: driveMonitor.drives) }
         // Nested folders: updating one from the other copies it into itself, and trashing the outer one takes the
         // inner one too. Trashing the inner one is fine: the outer one's counts and disk check leave it out
@@ -762,8 +754,7 @@ struct DuplicatesView<Sidebar: View>: View {
             NSSound.beep()
             return
         }
-        workTask?.cancel()
-        workTask = Task {
+        do {
             defer { if working?.set == set.id { working = nil } }
             var results: [(member: FolderSet.Member, result: FolderComparison)] = []
             do {
@@ -786,6 +777,80 @@ struct DuplicatesView<Sidebar: View>: View {
             case .update: await update(results, from: kept, at: keptURL, to: urls, set: set.id)
             case .trash: confirmTrash(results, kept: kept)
             }
+        }
+    }
+
+    /// What Apply does to a copy: the action picked in its menu, else trash when the index says nothing is lost
+    private func action(_ set: FolderSet, _ i: Int, kept: Int) -> CopyAction {
+        guard i != kept else { return .leave }
+        let m = set.members[i]
+        return actions[set.id]?[m.id] ?? (canTrash(m, kept: kept) ? .trash : .leave)
+    }
+
+    /// What Apply will do to a copy, from the index (the disk check before it has the final say); nil when it's left as is
+    private func plan(_ set: FolderSet, _ i: Int, kept: Int) -> (icon: String, text: String)? {
+        let m = set.members[i], drive = m.folder.driveName, source = set.members[kept].folder.driveName
+        let files = { (n: Int) in "\(n.formatted()) \(n == 1 ? "file" : "files")" }
+        switch action(set, i, kept: kept) {
+        case .leave:
+            return nil
+        case .trash:
+            return ("trash", "\(drive) · \(m.folder.relativePath) will be moved to the Trash (\(files(m.files)), \(bytes(m.bytes)))")
+        case .update:
+            guard let plan = comparisons[set.members[kept].id + "|" + m.id]?.mirrorPlan(from: .a) else {
+                return ("arrow.triangle.2.circlepath", "\(drive) will be updated to match \(source)")
+            }
+            var parts: [String] = []
+            if !plan.add.isEmpty { parts.append("\(files(plan.add.count)) will be copied to \(drive) (\(bytes(plan.add.reduce(0) { $0 + $1.size })))") }
+            if !plan.replace.isEmpty { parts.append("\(files(plan.replace.count)) changed on \(drive) will be replaced") }
+            if !plan.remove.isEmpty { parts.append("\(files(plan.remove.count)) only on \(drive) will be moved to the Trash") }
+            return ("arrow.triangle.2.circlepath", parts.isEmpty ? "\(drive) already matches \(source)" : parts.formatted())
+        }
+    }
+
+    /// Every copy's action can be done now
+    private func canApply(_ set: FolderSet, kept: Int) -> Bool {
+        set.members.indices.allSatisfy { i in
+            switch action(set, i, kept: kept) {
+            case .leave: true
+            case .update: canUpdate(set, set.members[i])
+            case .trash: canTrash(set.members[i], kept: kept)
+            }
+        }
+    }
+
+    private func canTrash(_ m: FolderSet.Member, kept: Int) -> Bool {
+        isConnected(m.folder.driveUUID) && !m.holdsAnother && m.blockers(keeping: kept).isEmpty
+    }
+
+    /// Nested folders: updating one from the other copies it into itself
+    private func canUpdate(_ set: FolderSet, _ m: FolderSet.Member) -> Bool {
+        isConnected(m.folder.driveUUID) && !set.members.contains(where: \.holdsAnother)
+    }
+
+    private func actionMenu(_ set: FolderSet, _ i: Int, kept: Int) -> some View {
+        let m = set.members[i]
+        return Picker("Action", selection: Binding(get: { action(set, i, kept: kept) }, set: { actions[set.id, default: [:]][m.id] = $0 })) {
+            Text("Leave as Is").tag(CopyAction.leave)
+            if i != kept {
+                // Always pickable: Apply stays disabled while a pick can't be done, and the cards below say why
+                Text("Match \(set.members[kept].folder.driveName)").tag(CopyAction.update)
+                Text("Move to Trash").tag(CopyAction.trash)
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
+        .disabled(i == kept)
+    }
+
+    /// Each copy's action, checked on disk first: the ones going to the Trash, then the ones to update
+    private func apply(_ set: FolderSet, kept: Int) {
+        let trash = set.members.indices.filter { action(set, $0, kept: kept) == .trash }
+        let update = set.members.indices.filter { action(set, $0, kept: kept) == .update }
+        workTask?.cancel()
+        workTask = Task {
+            if !trash.isEmpty { await onDisk(set, keeping: kept, trash, then: .trash) }
+            if !update.isEmpty && !Task.isCancelled { await onDisk(set, keeping: kept, update, then: .update) }
         }
     }
 
