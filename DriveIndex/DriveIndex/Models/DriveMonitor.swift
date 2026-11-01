@@ -57,11 +57,36 @@ struct DriveInfo: Identifiable, Equatable, Hashable {
     var isIndexed: Bool {
         lastScanDate != nil && !isExcluded
     }
+
+    /// This Mac's startup disk, indexed only in its local folders
+    var isLocal: Bool { path == "/" }
+}
+
+/// Folders indexed on this Mac's startup disk, absolute paths. The disk is never walked whole:
+/// with none set it's listed but not indexed.
+enum LocalFolders {
+    static func load() async -> [String] {
+        let value = (try? await DatabaseManager.shared.getSetting("local_folders")) ?? nil
+        return value?.split(separator: "\n").map(String.init) ?? []
+    }
+
+    static func save(_ paths: [String]) async throws {
+        try await DatabaseManager.shared.setSetting("local_folders", value: paths.joined(separator: "\n"))
+    }
+
+    /// The walk roots: folders inside another listed folder are dropped, or they'd be walked twice
+    static func urls() async -> [URL] {
+        let paths = await load()
+        return paths.filter { path in !paths.contains { path.hasPrefix($0 + "/") } }
+            .map { URL(fileURLWithPath: $0) }
+    }
 }
 
 @MainActor
 class DriveMonitor: ObservableObject {
     @Published var drives: [DriveInfo] = []
+    /// LocalFolders, as of the last loadDrives()
+    @Published var localFolders: [String] = []
     @Published var pendingDrive: (url: URL, uuid: String, name: String)?
     @Published var showTrackingDialog = false
     private let database = DatabaseManager.shared
@@ -235,6 +260,7 @@ class DriveMonitor: ObservableObject {
 
             var mountedDriveUUIDs: Set<String> = []
             var updatedDrives: [DriveInfo] = []
+            localFolders = await LocalFolders.load()
 
             // Process currently mounted drives
             for url in mountedURLs {
@@ -249,8 +275,8 @@ class DriveMonitor: ObservableObject {
                         .volumeUUIDStringKey
                     ])
 
-                    // Only show external drives (non-internal)
-                    guard values.volumeIsInternal == false else {
+                    // Only show external drives, and this Mac
+                    guard values.volumeIsInternal == false || url.path == "/" else {
                         continue
                     }
 
@@ -326,8 +352,11 @@ class DriveMonitor: ObservableObject {
                 }
             }
 
-            // Sort by connection status (connected first) then by name
+            // This Mac first, then connected drives, then by name
             updatedDrives.sort { drive1, drive2 in
+                if drive1.isLocal != drive2.isLocal {
+                    return drive1.isLocal
+                }
                 if drive1.isConnected != drive2.isConnected {
                     return drive1.isConnected
                 }
@@ -398,6 +427,11 @@ class DriveMonitor: ObservableObject {
                 continue
             }
         }
+    }
+
+    /// This Mac has nothing to scan until it has local folders
+    func canScan(_ drive: DriveInfo) -> Bool {
+        drive.isConnected && !(drive.isLocal && localFolders.isEmpty)
     }
 
     func getDriveURL(for driveInfo: DriveInfo) -> URL? {
@@ -506,8 +540,8 @@ class DriveMonitor: ObservableObject {
             try await database.setDriveExcluded(uuid: driveUUID, excluded: false)
             print("✅ Drive un-excluded: \(driveUUID)")
 
-            // Start FSEvents monitoring if drive is currently connected
-            if let driveInfo = drives.first(where: { $0.id == driveUUID }),
+            // Start FSEvents monitoring if drive is currently connected. This Mac only scans on demand.
+            if let driveInfo = drives.first(where: { $0.id == driveUUID }), !driveInfo.isLocal,
                let driveURL = getDriveURL(for: driveInfo) {
                 Task {
                     do {

@@ -91,7 +91,7 @@ struct SweepTests {
         let marked = OSAllocatedUnfairLock(initialState: Set<String>())
         let stream = AsyncStream<FileEntry> { continuation in
             FileIndexer.enumerateFiles(
-                at: root, basePath: root.path, driveUUID: "A",
+                at: [root], basePath: root.path, driveUUID: "A",
                 excludedDirs: [], excludedExts: [],
                 cachedDirectories: nil, existingFiles: existing, directoriesFromFSEvents: nil,
                 onDirectorySkipped: nil,

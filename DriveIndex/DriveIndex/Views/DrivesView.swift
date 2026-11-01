@@ -139,7 +139,7 @@ struct DriveCard: View {
                     Button(drive.lastScanDate == nil ? "Scan" : "Rescan") {
                         scanDrive(drive)
                     }
-                    .disabled(indexManager.isIndexing || !drive.isConnected)
+                    .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
 
                     Button("Show in Finder") {
                         revealInFinder(drive)
@@ -151,7 +151,7 @@ struct DriveCard: View {
                     Button("Eject") {
                         ejectDrive(drive)
                     }
-                    .disabled(!drive.isConnected)
+                    .disabled(!drive.isConnected || drive.isLocal)
                     .help("Eject drive")
                 }
             }
@@ -208,11 +208,13 @@ struct DriveDetailCard: View {
                 if drive.isConnected {
                     HStack {
                         Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
-                            .disabled(indexManager.isIndexing)
+                            .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
                         Button("Show in Finder", action: revealInFinder)
                         Spacer()
-                        Button("Eject", action: ejectDrive)
-                            .help("Eject drive")
+                        if !drive.isLocal {
+                            Button("Eject", action: ejectDrive)
+                                .help("Eject drive")
+                        }
                     }
                 }
             }

@@ -162,7 +162,7 @@ private extension [OldSettingsFolder] {
 enum CaptureOneTab: String, CaseIterable {
     case settings = "Settings"
     case masks = "Mask Backups"
-    case trash = "Trash"
+    case trash = "Trashes"
 }
 
 /// One card: a session and its rows on the current tab
@@ -272,16 +272,16 @@ struct CaptureOneView: View {
             ScrollView {
                 LazyVStack {
                     SpaceSavedCard(settings: freedSettings, masks: freedMasks, trash: freedTrash)
-                    if groups.isEmpty {
-                        emptyState
-                            .padding(.top, 40)
-                    }
                     section("Sessions", groups.filter { $0.session.file != nil && !unchecked($0) })
                     section("Not Checked", groups.filter { $0.session.file != nil && unchecked($0) })
                     let folders = groups.filter { $0.session.file == nil }
                     section("Folders", folders, deleteAll: tab == .settings ? folders.flatMap { $0.rows.filter { $0.status == .safe } } : [])
                 }
                 .padding()
+            }
+            // Centered in the window, as other empty pages are; the card is short enough not to meet it
+            .overlay {
+                if groups.isEmpty { emptyState }
             }
         } else {
             ProgressView("Checking Capture One sessions...")
@@ -297,7 +297,7 @@ struct CaptureOneView: View {
         case .masks:
             ContentUnavailableView("No Mask Backups", systemImage: "camera.aperture", description: Text("Capture One mask backups on your indexed drives will appear here"))
         case .trash:
-            ContentUnavailableView("Session Trash Is Empty", systemImage: "trash", description: Text("Images you delete in Capture One wait in each session's Trash folder; they'll appear here"))
+            ContentUnavailableView("No Session Trash Files Detected", systemImage: "trash", description: Text("Images you delete in Capture One are moved to the Session Trash. Currently they're all empty."))
         }
     }
 
