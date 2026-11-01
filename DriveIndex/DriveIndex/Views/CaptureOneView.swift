@@ -170,12 +170,14 @@ private enum ActionNote: Identifiable {
     case safe
     case held(CleanupRow)
     case unchecked(Int)
+    case offline
 
     var id: String {
         switch self {
         case .safe: "safe"
         case .held(let row): row.id
         case .unchecked: "unchecked"
+        case .offline: "offline"
         }
     }
 }
@@ -424,6 +426,7 @@ struct CaptureOneView<Sidebar: View>: View {
                 // One ForEach, no `if` rows: an empty one mis-lays the Form when it updates in place
                 let notes: [ActionNote] = (!safe.isEmpty && held.isEmpty && unchecked.isEmpty ? [.safe] : [])
                     + held.map(ActionNote.held) + (unchecked.isEmpty ? [] : [.unchecked(unchecked.count)])
+                    + (connected ? [] : [.offline])
                 ForEach(notes) { note in
                     switch note {
                     case .safe:
@@ -437,44 +440,40 @@ struct CaptureOneView<Sidebar: View>: View {
                     case .unchecked(let count):
                         Label("\(count) item\(count == 1 ? "" : "s") not checked", systemImage: "questionmark.circle")
                             .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Actions")
-                    .padding(.bottom, 6)
-            } footer: {
-                VStack(alignment: .leading, spacing: 20) {
-                    if !connected {
+                    case .offline:
                         Label("\(driveName) is offline. Connect it to check and delete these items.", systemImage: "info.circle")
                             .foregroundStyle(.secondary)
                     }
-                    HStack {
-                        Button(session.file == nil ? "Show Folder" : "Open Session") {
-                            session.file == nil ? showFolder(session) : openSession(session)
-                        }
-                        .disabled(!connected)
-                        .help(session.file == nil ? "Show this folder in Finder" : "Open this session in Capture One")
-                        Spacer()
-                        Button("Skip") { skip() }
-                        // For when the unique files don't matter: every old Settings folder, held ones too
-                        if held.contains(where: { if case .settings = $0.item { true } else { false } }) {
-                            Button("Delete All Old Settings…") {
-                                pendingDelete = group.rows.compactMap { row in
-                                    guard case .settings = row.item, row.status != .unverified else { return nil }
-                                    var row = row
-                                    row.forced = true
-                                    return row
-                                }
-                            }
-                            .disabled(deleting != nil)
-                        }
-                        Button("Delete \(safe.count) Safe Item\(safe.count == 1 ? "" : "s")") { pendingDelete = safe }
-                            .buttonStyle(.borderedProminent)
-                            .keyboardShortcut(.defaultAction)
-                            .disabled(safe.isEmpty || deleting != nil)
-                    }
                 }
-                .padding(.top, 6)
+                HStack {
+                    Button(session.file == nil ? "Show Folder" : "Open Session") {
+                        session.file == nil ? showFolder(session) : openSession(session)
+                    }
+                    .disabled(!connected)
+                    .help(session.file == nil ? "Show this folder in Finder" : "Open this session in Capture One")
+                    Spacer()
+                    Button("Skip") { skip() }
+                    // For when the unique files don't matter: every old Settings folder, held ones too
+                    if held.contains(where: { if case .settings = $0.item { true } else { false } }) {
+                        Button("Delete All Old Settings…") {
+                            pendingDelete = group.rows.compactMap { row in
+                                guard case .settings = row.item, row.status != .unverified else { return nil }
+                                var row = row
+                                row.forced = true
+                                return row
+                            }
+                        }
+                        .disabled(deleting != nil)
+                    }
+                    Button("Delete \(safe.count) Safe Item\(safe.count == 1 ? "" : "s")") { pendingDelete = safe }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(safe.isEmpty || deleting != nil)
+                }
+                .padding(.vertical, 4)
+            } header: {
+                Text("Actions")
+                    .padding(.bottom, 6)
             }
         }
         .formStyle(.grouped)
