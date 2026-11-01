@@ -477,8 +477,9 @@ struct CaptureOneView<Sidebar: View>: View {
                 .textCase(nil)
             }
 
-            // What's kept back, under the buttons in a card of its own. A ForEach, not an `if`, for the reason below
-            let issues: [ActionNote] = held.map(ActionNote.held) + (unchecked.isEmpty ? [] : [.unchecked(unchecked.count)])
+            // What's kept back, under the buttons in a card of its own. A ForEach, not an `if`, for the reason below.
+            // Offline, the offline note covers the unchecked items
+            let issues: [ActionNote] = held.map(ActionNote.held) + (unchecked.isEmpty || !connected ? [] : [.unchecked(unchecked.count)])
                 + (connected ? [] : [.offline])
             ForEach(issues.isEmpty ? [] : [0], id: \.self) { _ in
                 Section {
