@@ -29,6 +29,8 @@
 		86758BD32ECA78F200270DC6 /* TagInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86758BD22ECA78F100270DC6 /* TagInputView.swift */; };
 		867891AB2EC0A52600E2CDAD /* SearchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867891AA2EC0A52600E2CDAD /* SearchManager.swift */; };
 		86BA12133092D6D700E616CB /* AppStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA12123092D6D700E616CB /* AppStyle.swift */; };
+		86BA121F3092F42B00E616CB /* CaptureOne.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA121E3092F42B00E616CB /* CaptureOne.swift */; };
+		86BA12213092F43B00E616CB /* CaptureOneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86BA12203092F43B00E616CB /* CaptureOneView.swift */; };
 		86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */; };
 		86F76A982ECC2A2000039E10 /* DuplicatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F76A972ECC2A2000039E10 /* DuplicatesView.swift */; };
 		87000001 /* SettingsWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87000011 /* SettingsWindowView.swift */; };
@@ -79,6 +81,8 @@
 		86778AE03090AB6100F17112 /* DriveIndexTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DriveIndexTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		867891AA2EC0A52600E2CDAD /* SearchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchManager.swift; sourceTree = "<group>"; };
 		86BA12123092D6D700E616CB /* AppStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStyle.swift; sourceTree = "<group>"; };
+		86BA121E3092F42B00E616CB /* CaptureOne.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOne.swift; sourceTree = "<group>"; };
+		86BA12203092F43B00E616CB /* CaptureOneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOneView.swift; sourceTree = "<group>"; };
 		86EE86FB2EC73FA0005146ED /* FSEventsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsMonitor.swift; sourceTree = "<group>"; };
 		86F76A972ECC2A2000039E10 /* DuplicatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatesView.swift; sourceTree = "<group>"; };
 		87000011 /* SettingsWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowView.swift; sourceTree = "<group>"; };
@@ -166,6 +170,7 @@
 				87000011 /* SettingsWindowView.swift */,
 				87000017 /* MainWindowView.swift */,
 				86B531A92EC04858007DC54C /* Components */,
+				86BA12203092F43B00E616CB /* CaptureOneView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -186,6 +191,7 @@
 				1A00000A /* DriveMonitor.swift */,
 				1A00000C /* FileIndexer.swift */,
 				1A00000E /* IndexManager.swift */,
+				86BA121E3092F42B00E616CB /* CaptureOne.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -329,6 +335,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				86BA12213092F43B00E616CB /* CaptureOneView.swift in Sources */,
 				863168312EC96F54007B6201 /* StorageVisualizationView.swift in Sources */,
 				86653A0D2EC695FF00DD4FB3 /* SettingsWindow.swift in Sources */,
 				8631682F2EC96F43007B6201 /* StorageAnalysis.swift in Sources */,
@@ -341,6 +348,7 @@
 				8305C1EBAB7645EAB3D0CC67 /* DuplicateSettingsView.swift in Sources */,
 				863168442EC999E8007B6201 /* DrivesView.swift in Sources */,
 				863168452EC999E8007B6201 /* IndexingView.swift in Sources */,
+				86BA121F3092F42B00E616CB /* CaptureOne.swift in Sources */,
 				1A000001 /* DriveIndexApp.swift in Sources */,
 				86EE86FC2EC73FA0005146ED /* FSEventsMonitor.swift in Sources */,
 				1A000009 /* DatabaseManager.swift in Sources */,

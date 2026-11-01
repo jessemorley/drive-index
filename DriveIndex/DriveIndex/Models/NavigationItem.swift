@@ -19,6 +19,7 @@ enum NavigationItem: Identifiable, Hashable {
     // Index section
     case drives
     case duplicates
+    case captureOne
 
     var id: String {
         switch self {
@@ -26,6 +27,7 @@ enum NavigationItem: Identifiable, Hashable {
         case .drive(let driveInfo): return "drive-\(driveInfo.id)"
         case .drives: return "drives"
         case .duplicates: return "duplicates"
+        case .captureOne: return "captureOne"
         }
     }
 
@@ -35,6 +37,7 @@ enum NavigationItem: Identifiable, Hashable {
         case .drive(let driveInfo): return driveInfo.name
         case .drives: return "Drives"
         case .duplicates: return "Duplicates"
+        case .captureOne: return "Capture One"
         }
     }
 
@@ -44,6 +47,7 @@ enum NavigationItem: Identifiable, Hashable {
         case .drive: return "externaldrive"
         case .drives: return "externaldrive"
         case .duplicates: return "doc.on.doc"
+        case .captureOne: return "camera.aperture"
         }
     }
 }
