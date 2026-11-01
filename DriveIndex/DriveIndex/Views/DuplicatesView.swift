@@ -267,7 +267,7 @@ struct DuplicatesView<Sidebar: View>: View {
             Spacer()
             Text(bytes(size)).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 
     private func skip() {
@@ -522,7 +522,7 @@ struct DuplicatesView<Sidebar: View>: View {
             Image(systemName: kept ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(kept ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .padding(.trailing, -4)
-            driveIcon(m.folder.driveUUID, size: 48)
+            driveIcon(m.folder.driveUUID, size: 40)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(m.folder.driveName).fontWeight(.medium)
