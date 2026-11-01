@@ -251,6 +251,8 @@ struct CaptureOneView<Sidebar: View>: View {
                             .help("Delete everything marked Safe in every session")
                             .badge(safeRows.count)
                     }
+                    // Destructive action in its own capsule, away from Refresh
+                    ToolbarSpacer(.fixed)
                     ToolbarItem(id: "refresh", placement: .automatic) {
                         Button("Refresh", systemImage: "arrow.clockwise") {
                             Task { await load() }

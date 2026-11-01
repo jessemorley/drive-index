@@ -185,6 +185,7 @@ struct DuplicatesView<Sidebar: View>: View {
                                 .disabled(pairs.isEmpty)
                         }
                     }
+                    ToolbarSpacer(.fixed)
                     ToolbarItem(id: "refresh", placement: .automatic) {
                         Button("Refresh", systemImage: "arrow.clockwise") {
                             Task { await load() }
