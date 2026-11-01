@@ -62,11 +62,14 @@ struct SearchView: View {
 
     // MARK: - Empty States
 
+    /// What the search covers, not how to use it (the field is already focused)
     private var emptyStateView: some View {
-        ContentUnavailableView(
+        let indexed = driveMonitor.drives.filter { $0.fileCount > 0 && !$0.isExcluded }
+        let files = indexed.reduce(0) { $0 + $1.fileCount }
+        return ContentUnavailableView(
             "Search Your Drives",
             systemImage: "magnifyingglass",
-            description: Text("Use the search bar above to find files across all indexed drives")
+            description: Text("^[\(files) file](inflect: true) on ^[\(indexed.count) drive](inflect: true)")
         )
     }
 
