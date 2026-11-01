@@ -165,16 +165,14 @@ enum CaptureOneTab: String, CaseIterable {
     case trash = "Trashes"
 }
 
-/// A row of the review's Actions section
+/// An issue row under the review's Actions
 private enum ActionNote: Identifiable {
-    case safe
     case held(CleanupRow)
     case unchecked(Int)
     case offline
 
     var id: String {
         switch self {
-        case .safe: "safe"
         case .held(let row): row.id
         case .unchecked: "unchecked"
         case .offline: "offline"
@@ -224,8 +222,9 @@ struct CaptureOneView<Sidebar: View>: View {
         driveMonitor.drives.filter(\.isConnected).map(\.id)
     }
 
+    /// The selected session's safe items
     private var safeRows: [CleanupRow] {
-        (groups ?? []).flatMap(\.safe)
+        groups?.first { $0.id == selection }?.safe ?? []
     }
 
     var body: some View {
@@ -246,9 +245,9 @@ struct CaptureOneView<Sidebar: View>: View {
                     // Detail-column items start at the column's leading edge otherwise
                     ToolbarSpacer(.flexible)
                     ToolbarItem(id: "delete-safe", placement: .automatic) {
-                        Button("Delete All Safe", systemImage: "trash") { pendingDelete = safeRows }
+                        Button("Delete Safe Items", systemImage: "trash") { pendingDelete = safeRows }
                             .disabled(safeRows.isEmpty || deleting != nil)
-                            .help("Delete everything marked Safe in every session")
+                            .help("Delete everything marked Safe in this session")
                             .badge(safeRows.count)
                     }
                     // Destructive action in its own capsule, away from Refresh
@@ -416,31 +415,17 @@ struct CaptureOneView<Sidebar: View>: View {
         return Form {
             Section {
                 // One ForEach, no `if` rows: an empty one mis-lays the Form when it updates in place
-                let notes: [ActionNote] = (!safe.isEmpty && held.isEmpty && unchecked.isEmpty ? [.safe] : [])
-                    + held.map(ActionNote.held) + (unchecked.isEmpty ? [] : [.unchecked(unchecked.count)])
-                    + (connected ? [] : [.offline])
-                ForEach(notes) { note in
-                    switch note {
-                    case .safe:
-                        // Laid out as the held rows: a line, then why
-                        HStack {
-                            Image(systemName: CleanupStatus.safe.symbol).foregroundStyle(CleanupStatus.safe.color)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Safe to delete")
-                                Text(kinds.map(Self.safeReason).joined(separator: " "))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
+                ForEach(safe.isEmpty ? [] : [0], id: \.self) { _ in
+                    // Laid out as the held rows: a line, then what goes
+                    HStack {
+                        Image(systemName: CleanupStatus.safe.symbol).foregroundStyle(CleanupStatus.safe.color)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Safe to delete")
+                            Text(Self.safeSummary(safe))
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 4)
-                    case .held(let row):
-                        heldRow(row, connected: connected)
-                    case .unchecked(let count):
-                        Label("\(count) item\(count == 1 ? "" : "s") not checked", systemImage: CleanupStatus.unverified.symbol)
-                            .foregroundStyle(.secondary)
-                    case .offline:
-                        Label("\(driveName) is offline. Connect it to check and delete these items.", systemImage: "info.circle")
-                            .foregroundStyle(.secondary)
                     }
+                    .padding(.vertical, 4)
                 }
                 HStack {
                     Button(session.file == nil ? "Show Folder" : "Open Session") {
@@ -490,6 +475,26 @@ struct CaptureOneView<Sidebar: View>: View {
                 }
                 .foregroundStyle(.primary)
                 .textCase(nil)
+            }
+
+            // What's kept back, under the buttons in a card of its own. A ForEach, not an `if`, for the reason below
+            let issues: [ActionNote] = held.map(ActionNote.held) + (unchecked.isEmpty ? [] : [.unchecked(unchecked.count)])
+                + (connected ? [] : [.offline])
+            ForEach(issues.isEmpty ? [] : [0], id: \.self) { _ in
+                Section {
+                    ForEach(issues) { note in
+                        switch note {
+                        case .held(let row):
+                            heldRow(row, connected: connected)
+                        case .unchecked(let count):
+                            Label("\(count) item\(count == 1 ? "" : "s") not checked", systemImage: CleanupStatus.unverified.symbol)
+                                .foregroundStyle(.secondary)
+                        case .offline:
+                            Label("\(driveName) is offline. Connect it to check and delete these items.", systemImage: "info.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
 
             // Only the kinds present: an empty `if` section left in the Form mis-laid it (rows lost their card, the
@@ -547,12 +552,22 @@ struct CaptureOneView<Sidebar: View>: View {
         }
     }
 
-    private static func safeReason(_ tab: CaptureOneTab) -> String {
-        switch tab {
-        case .settings: "The old settings are in the newer ones, or are only settings and previews from browsing."
-        case .masks: "Every image still has its live mask."
-        case .trash: "The Trash holds what was deleted in Capture One."
+    /// What the safe items are, counted by kind, and their total size: "3 old Settings folders, 12 mask backups · 1.2 GB"
+    private static func safeSummary(_ safe: [CleanupRow]) -> String {
+        var settings = 0, loose = 0, masks = 0, trash = 0
+        for row in safe {
+            switch row.item {
+            case .settings(let folders): settings += folders.count
+            case .loose: loose += 1
+            case .masks(let set): masks += set.backupPaths.count
+            case .trash: trash += 1
+            }
         }
+        let parts = [(settings, "old Settings folder", "old Settings folders"), (loose, "CaptureOne folder", "CaptureOne folders"),
+                     (masks, "mask backup", "mask backups"), (trash, "item in the Trash", "items in the Trash")]
+            .filter { $0.0 > 0 }
+            .map { "\($0.0) \($0.0 == 1 ? $0.1 : $0.2)" }
+        return parts.joined(separator: ", ") + " · " + formatted(safeSize(safe))
     }
 
     private func itemRow(_ row: CleanupRow) -> some View {
