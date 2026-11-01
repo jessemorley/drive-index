@@ -249,6 +249,7 @@ struct CaptureOneView<Sidebar: View>: View {
                         Button("Delete All Safe", systemImage: "trash") { pendingDelete = safeRows }
                             .disabled(safeRows.isEmpty || deleting != nil)
                             .help("Delete everything marked Safe in every session")
+                            .badge(safeRows.count)
                     }
                     ToolbarItem(id: "refresh", placement: .automatic) {
                         Button("Refresh", systemImage: "arrow.clockwise") {
