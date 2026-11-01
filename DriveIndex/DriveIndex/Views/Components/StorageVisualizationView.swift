@@ -37,7 +37,7 @@ struct StorageVisualizationView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else if let breakdown = breakdown {
-                StorageBreakdownView(driveName: drive.name, breakdown: breakdown)
+                StorageBreakdownView(breakdown: breakdown)
             } else {
                 Text("Unable to analyze storage")
                     .foregroundStyle(.secondary)
@@ -88,17 +88,13 @@ struct StorageVisualizationView: View {
 
 /// Laid out like System Settings > General > Storage.
 private struct StorageBreakdownView: View {
-    let driveName: String
     let breakdown: StorageBreakdown
 
     var body: some View {
         VStack(alignment: .leading) {
-            HStack {
-                Text(driveName)
-                Spacer()
-                Text("\(breakdown.formattedUsed) of \(breakdown.formattedTotal) used")
-                    .foregroundStyle(.secondary)
-            }
+            // No drive name: the toolbar title already shows it
+            Text("\(breakdown.formattedUsed) of \(breakdown.formattedTotal) used")
+                .foregroundStyle(.secondary)
 
             StorageBar(breakdown: breakdown)
 
@@ -188,7 +184,6 @@ extension StorageBreakdown {
     let tb: Int64 = 1_000_000_000_000
     let parts: [(StorageCategory, Double)] = [(.media, 0.30), (.documents, 0.10), (.apps, 0.05), (.system, 0.03), (.other, 0.07)]
     StorageBreakdownView(
-        driveName: "Jesse T72",
         breakdown: StorageBreakdown(
             driveUUID: "preview",
             totalCapacity: 2 * tb,
