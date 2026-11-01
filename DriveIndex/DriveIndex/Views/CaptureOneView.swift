@@ -414,10 +414,6 @@ struct CaptureOneView<Sidebar: View>: View {
         let kinds = CaptureOneTab.allCases.filter { kind in group.rows.contains { $0.tab == kind } }
 
         return Form {
-            // Only the kinds present: an empty `if` section left in the Form mis-laid it (rows lost their card, the
-            // buttons gained one; in a preview, SwiftUI's table diff crashed)
-            ForEach(kinds, id: \.self) { kindSection($0, of: group, driveName: driveName, first: kinds.first) }
-
             Section {
                 // One ForEach, no `if` rows: an empty one mis-lays the Form when it updates in place
                 let notes: [ActionNote] = (!safe.isEmpty && held.isEmpty && unchecked.isEmpty ? [.safe] : [])
@@ -426,15 +422,20 @@ struct CaptureOneView<Sidebar: View>: View {
                 ForEach(notes) { note in
                     switch note {
                     case .safe:
-                        Label {
-                            Text("Safe to delete: " + kinds.map(Self.safeReason).joined(separator: "; "))
-                        } icon: {
-                            Image(systemName: "checkmark.circle").foregroundStyle(.green)
+                        // Laid out as the held rows: a line, then why
+                        HStack {
+                            Image(systemName: CleanupStatus.safe.symbol).foregroundStyle(CleanupStatus.safe.color)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Safe to delete")
+                                Text(kinds.map(Self.safeReason).joined(separator: " "))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.vertical, 4)
                     case .held(let row):
                         heldRow(row, connected: connected)
                     case .unchecked(let count):
-                        Label("\(count) item\(count == 1 ? "" : "s") not checked", systemImage: "questionmark.circle")
+                        Label("\(count) item\(count == 1 ? "" : "s") not checked", systemImage: CleanupStatus.unverified.symbol)
                             .foregroundStyle(.secondary)
                     case .offline:
                         Label("\(driveName) is offline. Connect it to check and delete these items.", systemImage: "info.circle")
@@ -468,9 +469,32 @@ struct CaptureOneView<Sidebar: View>: View {
                 }
                 .padding(.vertical, 4)
             } header: {
-                Text("Actions")
-                    .padding(.bottom, 6)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Atop the review: a three-column window titles the middle column, not this one
+                    HStack {
+                        // The list's icon at a size spanning both lines; Finder's icons carry every size
+                        Image(nsImage: NSWorkspace.shared.listIcon(name: session.file ?? session.name, isDirectory: session.file == nil))
+                            .resizable()
+                            .frame(width: 36, height: 36)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(session.name).font(.title2.bold())
+                            Text("\(driveName) · \(group.rows.count) item\(group.rows.count == 1 ? "" : "s")\(group.safeSize > 0 ? " · \(formatted(group.safeSize)) safe to remove" : "")")
+                                .font(.body).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.bottom, 28)
+                    // A header with more than one view turns grey and small; this matches the plain section headers
+                    Text("Actions")
+                        .font(.headline)
+                        .padding(.bottom, 6)
+                }
+                .foregroundStyle(.primary)
+                .textCase(nil)
             }
+
+            // Only the kinds present: an empty `if` section left in the Form mis-laid it (rows lost their card, the
+            // buttons gained one; in a preview, SwiftUI's table diff crashed)
+            ForEach(kinds, id: \.self) { kindSection($0, of: group) }
         }
         .formStyle(.grouped)
         // A new Form for each session and each load, as Duplicates does for a new set: updated in place, the
@@ -481,7 +505,8 @@ struct CaptureOneView<Sidebar: View>: View {
     /// An item kept back, and why
     private func heldRow(_ row: CleanupRow, connected: Bool) -> some View {
         HStack {
-            Image(systemName: "circle.fill").font(.caption2).foregroundStyle(row.status.color)
+            // As the item rows' own status labels
+            Image(systemName: row.status.symbol).foregroundStyle(row.status.color)
             VStack(alignment: .leading, spacing: 3) {
                 Text("\(row.name): \(row.statusText)")
                 if case .settings(let folders) = row.item, row.hasUniqueFiles {
@@ -497,31 +522,15 @@ struct CaptureOneView<Sidebar: View>: View {
         .padding(.vertical, 4)
     }
 
-    /// One kind of item in the review; the first one also carries the session's title
-    private func kindSection(_ kind: CaptureOneTab, of group: SessionGroup, driveName: String, first: CaptureOneTab?) -> some View {
+    /// One kind of item in the review
+    private func kindSection(_ kind: CaptureOneTab, of group: SessionGroup) -> some View {
         let rows = group.rows.filter { $0.tab == kind }
         let safe = rows.filter { $0.status == .safe }
         return Section {
             ForEach(rows) { itemRow($0) }
         } header: {
-            // One view, not an `if` and a Text: a conditional header landed inside the card
-            VStack(alignment: .leading, spacing: 0) {
-                if kind == first {
-                    // Atop the review: a three-column window titles the middle column, not this one
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.session.name).font(.title2.bold())
-                        Text("\(driveName) · \(group.rows.count) item\(group.rows.count == 1 ? "" : "s")\(group.safeSize > 0 ? " · \(formatted(group.safeSize)) safe to remove" : "")")
-                            .font(.body).foregroundStyle(.secondary)
-                    }
-                    .padding(.bottom, 28)
-                }
-                // A header with more than one view turns grey and small; this matches the plain "Actions" one
-                Text(kind.rawValue)
-                    .font(.headline)
-                    .padding(.bottom, 6)
-            }
-            .foregroundStyle(.primary)
-            .textCase(nil)
+            Text(kind.rawValue)
+                .padding(.bottom, 6)
         } footer: {
             HStack {
                 Button("Reveal in Finder") { revealInFinder(rows) }
@@ -540,9 +549,9 @@ struct CaptureOneView<Sidebar: View>: View {
 
     private static func safeReason(_ tab: CaptureOneTab) -> String {
         switch tab {
-        case .settings: "the old settings are in the newer ones, or are only settings and previews from browsing"
-        case .masks: "every image still has its live mask"
-        case .trash: "the Trash holds what was deleted in Capture One"
+        case .settings: "The old settings are in the newer ones, or are only settings and previews from browsing."
+        case .masks: "Every image still has its live mask."
+        case .trash: "The Trash holds what was deleted in Capture One."
         }
     }
 
