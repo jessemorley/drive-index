@@ -33,7 +33,11 @@ A lightweight native macOS app that lives in your menu bar and indexes the conte
 
 - Duplicate file detection across drives, with a configurable minimum file size
 - Side-by-side folder comparison between two drives, with missing, changed and moved files highlighted, copying of missing files and trashing of extras
-- Capture One cleanup of files that can be removed without losing edits (mask backups, superseded Settings folders, stray CaptureOne folders, session Trash), plus session sync between copies
+
+### Capture One
+
+- Cleanup of files that can be removed without losing edits (mask backups, superseded Settings folders, stray CaptureOne folders, session Trash)
+- Session sync from one copy of a session onto another
 
 ## Raycast Extension
 
