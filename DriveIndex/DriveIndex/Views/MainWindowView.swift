@@ -20,6 +20,9 @@ struct MainWindowView: View {
             if selectedItem == .duplicates {
                 // Duplicates has a list and a review, so it brings its own three columns
                 DuplicatesView(columnVisibility: $columnVisibility) { sidebar }
+            } else if selectedItem == .captureOne {
+                // So does Capture One: a list of sessions and a review
+                CaptureOneView(columnVisibility: $columnVisibility) { sidebar }
             } else {
                 NavigationSplitView(columnVisibility: $columnVisibility) {
                     sidebar
@@ -70,10 +73,8 @@ struct MainWindowView: View {
             DrivesView(selectedItem: $selectedItem)
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-        case .duplicates:
-            EmptyView()  // the window's columns come from DuplicatesView, in body
-        case .captureOne:
-            CaptureOneView()
+        case .duplicates, .captureOne:
+            EmptyView()  // these bring the window's columns, in body
         }
     }
 }
