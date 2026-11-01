@@ -35,7 +35,7 @@ struct DriveDetailView: View {
                 LocalFoldersSection()
             } else if drive.fileCount > 0 {
                 Section("Files") {
-                    FileBrowserView(drive: drive)
+                    RootFolderList(drive: drive)
                         .id(drive.id)  // Force new view instance for each drive
                 }
             }
@@ -46,6 +46,12 @@ struct DriveDetailView: View {
             }
         }
         .formStyle(.grouped)
+        // Full-height browser for a clicked folder: a Table can't scroll inside the Form
+        .navigationDestination(for: FileBrowserItem.self) { folder in
+            FileBrowserView(drive: drive, folder: folder)
+                .navigationTitle(folder.name)
+                .navigationSubtitle(drive.name)
+        }
         .navigationTitle(drive.name)
         .navigationSubtitle(drive.formattedTotal)
         .toolbar {

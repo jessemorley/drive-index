@@ -66,9 +66,13 @@ struct MainWindowView: View {
             SearchView(searchText: $searchText)
                 .environmentObject(driveMonitor)
         case .drive(let driveInfo):
-            DriveDetailView(drive: driveInfo)
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
+            // A stack so a clicked folder can open; new per drive so switching drives pops back
+            NavigationStack {
+                DriveDetailView(drive: driveInfo)
+            }
+            .id(driveInfo.id)
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
         case .drives:
             DrivesView(selectedItem: $selectedItem)
                 .environmentObject(driveMonitor)
