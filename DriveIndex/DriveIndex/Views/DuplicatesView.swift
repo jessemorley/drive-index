@@ -230,9 +230,7 @@ struct DuplicatesView<Sidebar: View>: View {
                 Section {
                     header("Folders", sets.count.formatted())
                     ForEach(sets) { set in
-                        // A session shows Finder's icon for a Capture One session (its .cosessiondb)
-                        row(icon: NSWorkspace.shared.listIcon(name: set.members.contains(where: \.isSession) ? "Session.cosessiondb" : "",
-                                                              isDirectory: !set.members.contains(where: \.isSession)), name: set.name, copies: set.members.count, size: set.wastedBytes)
+                        row(icon: icon(set), name: set.name, copies: set.members.count, size: set.wastedBytes)
                             .tag(DuplicateSelection.set(set.id))
                     }
                 }
@@ -257,6 +255,12 @@ struct DuplicatesView<Sidebar: View>: View {
         }
         .padding(.top, 8)
         .selectionDisabled()
+    }
+
+    /// A session shows Finder's icon for a Capture One session (its .cosessiondb)
+    private func icon(_ set: FolderSet) -> NSImage {
+        let isSession = set.members.contains(where: \.isSession)
+        return NSWorkspace.shared.listIcon(name: isSession ? "Session.cosessiondb" : "", isDirectory: !isSession)
     }
 
     private func row(icon: NSImage, name: String, copies: Int, size: Int64) -> some View {
@@ -385,54 +389,51 @@ struct DuplicatesView<Sidebar: View>: View {
                     }
                     .padding(.vertical, 4)
                 }
+                if !offline.isEmpty {
+                    let one = offline.count == 1
+                    Label("\(offline.formatted()) \(one ? "is" : "are") offline. Connect \(one ? "it" : "them") to update or trash \(one ? "its" : "their") folders.",
+                          systemImage: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    if let working, working.set == set.id {
+                        Spacer()
+                        ProgressView().controlSize(.small)
+                        Text(working.label).foregroundStyle(.secondary)
+                        ProgressView(value: Double(working.done), total: Double(max(working.total, 1)))
+                            .frame(width: 120)
+                        // Until both folders are walked there's nothing to measure against
+                        if working.total > 0 {
+                            // Sized by the widest count it'll show, so the bar doesn't shift as the count changes length
+                            ZStack(alignment: .leading) {
+                                Text("888.88 GB of \(bytes(working.total))").hidden()
+                                Text("\(paddedBytes.string(fromByteCount: working.done)) of \(bytes(working.total))")
+                            }
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        }
+                        Button("Cancel") { workTask?.cancel() }
+                    } else {
+                        // "Older" only when the kept folder is the most recent
+                        let copies = (kept == set.mostRecent && !set.isExactMatch ? "Older " : "Other ") + (removed.count == 1 ? "Copy" : "Copies")
+                        Button("Check on Disk") { onDisk(set, keeping: kept, then: .check) }
+                            .help("Check on disk whether the other copies are clear to delete, including files the index leaves out")
+                            .disabled(!offline.isEmpty || !isConnected(set.members[kept].folder.driveUUID))
+                        Spacer()
+                        Button("Skip") { skip() }
+                        Button("Update \(removed.count) \(copies)…") { onDisk(set, keeping: kept, then: .update) }
+                            .disabled(!offline.isEmpty || set.members.contains(where: \.holdsAnother))
+                        Button("Move \(removed.count) \(copies) to Trash") { onDisk(set, keeping: kept, then: .trash) }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(!blockers.isEmpty || !offline.isEmpty || removed.contains { set.members[$0].holdsAnother })
+                    }
+                }
+                .padding(.vertical, 4)
             } header: {
                 Text("Actions")
                     .padding(.top, 12)
                     .padding(.bottom, 6)
-            } footer: {
-                VStack(alignment: .leading, spacing: 20) {
-                    if !offline.isEmpty {
-                        let one = offline.count == 1
-                        Label("\(offline.formatted()) \(one ? "is" : "are") offline. Connect \(one ? "it" : "them") to update or trash \(one ? "its" : "their") folders.",
-                              systemImage: "info.circle")
-                            .foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        if let working, working.set == set.id {
-                            Spacer()
-                            ProgressView().controlSize(.small)
-                            Text(working.label).foregroundStyle(.secondary)
-                            ProgressView(value: Double(working.done), total: Double(max(working.total, 1)))
-                                .frame(width: 120)
-                            // Until both folders are walked there's nothing to measure against
-                            if working.total > 0 {
-                                // Sized by the widest count it'll show, so the bar doesn't shift as the count changes length
-                                ZStack(alignment: .leading) {
-                                    Text("888.88 GB of \(bytes(working.total))").hidden()
-                                    Text("\(paddedBytes.string(fromByteCount: working.done)) of \(bytes(working.total))")
-                                }
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                            }
-                            Button("Cancel") { workTask?.cancel() }
-                        } else {
-                            // "Older" only when the kept folder is the most recent
-                            let copies = (kept == set.mostRecent && !set.isExactMatch ? "Older " : "Other ") + (removed.count == 1 ? "Copy" : "Copies")
-                            Button("Check on Disk") { onDisk(set, keeping: kept, then: .check) }
-                                .help("Check on disk whether the other copies are clear to delete, including files the index leaves out")
-                                .disabled(!offline.isEmpty || !isConnected(set.members[kept].folder.driveUUID))
-                            Spacer()
-                            Button("Skip") { skip() }
-                            Button("Update \(removed.count) \(copies)…") { onDisk(set, keeping: kept, then: .update) }
-                                .disabled(!offline.isEmpty || set.members.contains(where: \.holdsAnother))
-                            Button("Move \(removed.count) \(copies) to Trash") { onDisk(set, keeping: kept, then: .trash) }
-                                .buttonStyle(.borderedProminent)
-                                .keyboardShortcut(.defaultAction)
-                                .disabled(!blockers.isEmpty || !offline.isEmpty || removed.contains { set.members[$0].holdsAnother })
-                        }
-                    }
-                }
-                .padding(.top, 6)
             }
         }
         .formStyle(.grouped)
@@ -487,10 +488,6 @@ struct DuplicatesView<Sidebar: View>: View {
                             Text("…and \((changed.count - 200).formatted()) more").foregroundStyle(.secondary)
                         }
                     }
-                } header: {
-                    Text("Kept folder")
-                        .padding(.top, 12)
-                        .padding(.bottom, 6)
                 }
             }
         }
@@ -519,13 +516,12 @@ struct DuplicatesView<Sidebar: View>: View {
         let status = kept ? nil
             : blockers.isEmpty ? nil
             : blockers.map { $0.0.short($0.1) }.joined(separator: ", ")
-        return HStack(spacing: 8) {  // the drive icon's own transparent margin adds to this
+        return HStack(spacing: 8) {
             Image(systemName: kept ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(kept ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                .padding(.trailing, -4)
-            driveIcon(m.folder.driveUUID, size: 40)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
+                    driveIcon(m.folder.driveUUID)
                     Text(m.folder.driveName).fontWeight(.medium)
                     Text(m.folder.relativePath).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer()
@@ -587,27 +583,35 @@ struct DuplicatesView<Sidebar: View>: View {
 
     /// Atop the review: a three-column window titles the middle column (as Mail does), not this one
     private var paneTitle: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(titles.title).font(.title2.bold()).foregroundStyle(.primary)
-            Text(titles.subtitle).font(.body).foregroundStyle(.secondary)
+        HStack {
+            // The list's icon at a size spanning both lines, as in Capture One
+            if let icon = titles.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 36, height: 36)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titles.title).font(.title2.bold()).foregroundStyle(.primary)
+                Text(titles.subtitle).font(.body).foregroundStyle(.secondary)
+            }
         }
         .textCase(nil)
         .padding(.bottom, 16)
     }
 
     /// The selected set or file, and its copies
-    private var titles: (title: String, subtitle: String) {
+    private var titles: (icon: NSImage?, title: String, subtitle: String) {
         switch selection {
         case .set(let id):
             guard let set = sets.first(where: { $0.id == id }) else { break }
-            return (set.name, "\(set.members.count) copies · \(bytes(set.wastedBytes))")
+            return (icon(set), set.name, "\(set.members.count) copies · \(bytes(set.wastedBytes))")
         case .file(let id):
             guard let group = loose.first(where: { $0.cardID == id }) else { break }
-            return (group.name, "\(group.files.count) copies · \(bytes(group.size)) each")
+            return (NSWorkspace.shared.listIcon(name: group.name, isDirectory: false), group.name, "\(group.files.count) copies · \(bytes(group.size)) each")
         case nil:
             break
         }
-        return ("Duplicates", "")
+        return (nil, "Duplicates", "")
     }
 
     // MARK: - Data
