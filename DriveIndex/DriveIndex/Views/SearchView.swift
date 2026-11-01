@@ -17,6 +17,7 @@ struct SearchView: View {
     @State private var selection: FileDisplayItem.ID?
     @State private var sortOrder = [KeyPathComparator(\FileDisplayItem.name, comparator: .localizedStandard)]
     @AppStorage("searchTableColumns") private var columnCustomization = TableColumnCustomization<FileDisplayItem>()
+    @FocusState private var searchFocused: Bool
 
     private let searchManager = SearchManager()
 
@@ -41,6 +42,8 @@ struct SearchView: View {
             }
         }
         .searchable(text: $searchText, placement: .automatic, prompt: "Search files")
+        .searchFocused($searchFocused)
+        .onAppear { searchFocused = true }  // Selecting Search in the sidebar puts the cursor in the field
         .onChange(of: searchText) { oldValue, newValue in
             Task {
                 await performSearch(newValue)
