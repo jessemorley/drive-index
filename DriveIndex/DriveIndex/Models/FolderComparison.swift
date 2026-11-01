@@ -401,6 +401,14 @@ extension FolderComparison {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
+    /// The first of `others` with the same size and full SHA-256 as `file`, or nil. The index only
+    /// matches files on a partial hash (ends and size), so two files differing in the middle pair up there
+    static func identicalCopy(of file: URL, among others: [URL]) throws -> URL? {
+        let size = { (url: URL) in try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize }
+        let hash = try sha256(file)
+        return try others.first { try size($0) == size(file) && sha256($0) == hash }
+    }
+
     /// Notes a copy elsewhere in the index for each file only one side has. The index holds
     /// HashWorker's partial hash, so files on disk are hashed the same way. Files under the
     /// duplicate size setting aren't hashed in the index, so those match by name and size, as

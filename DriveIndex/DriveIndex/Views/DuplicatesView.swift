@@ -322,7 +322,11 @@ struct DuplicatesView<Sidebar: View>: View {
             Section {
                 // The newest copy first
                 ForEach(set.members.indices.sorted { ($0 == set.mostRecent ? 0 : 1, $0) < ($1 == set.mostRecent ? 0 : 1, $1) }, id: \.self) { i in
-                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, identical: set.isExactMatch, blockers: set.members[i].blockers(keeping: kept)) {
+                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, identical: set.isExactMatch, blockers: set.members[i].blockers(keeping: kept),
+                           trash: i != kept && canTrash(set.members[i], kept: kept) ? {
+                               workTask?.cancel()
+                               workTask = Task { await onDisk(set, keeping: kept, [i], then: .trash) }
+                           } : nil) {
                         keep[set.id] = i
                         actions[set.id] = nil
                     } menu: {
@@ -512,8 +516,9 @@ struct DuplicatesView<Sidebar: View>: View {
     }
 
     /// A copy of the set: drive and path, how its files overlap the others, what blocks trashing it, and its action menu
+    /// - Parameter trash: checks on disk, then asks; nil when it can't be trashed (the kept copy, offline, blocked)
     private func member<Menu: View>(_ m: FolderSet.Member, kept: Bool, mostRecent: Bool, identical: Bool, blockers: [(Blocker, Int)],
-                                    compareWithThis: @escaping () -> Void, @ViewBuilder menu: () -> Menu) -> some View {
+                                    trash: (() -> Void)?, compareWithThis: @escaping () -> Void, @ViewBuilder menu: () -> Menu) -> some View {
         let status = kept ? nil
             : blockers.isEmpty ? nil
             : blockers.map { $0.0.short($0.1) }.joined(separator: ", ")
@@ -545,8 +550,8 @@ struct DuplicatesView<Sidebar: View>: View {
             Divider()
             Button("Reveal in Finder") { revealInFinder(m.folder) }
                 .disabled(!isConnected(m.folder.driveUUID))
-            Button("Move to Trash…") { confirmTrash(m) }
-                .disabled(!isConnected(m.folder.driveUUID) || m.holdsAnother)
+            Button("Move to Trash…") { trash?() }
+                .disabled(trash == nil)
         }
     }
 
@@ -562,7 +567,7 @@ struct DuplicatesView<Sidebar: View>: View {
                         Text(file.relativePath).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         Spacer()
                         if let date = file.modifiedAt { Text(date, format: .dateTime.day().month().year()).foregroundStyle(.secondary) }
-                        Button("Move to Trash", systemImage: "trash") { moveToTrash(file) }
+                        Button("Move to Trash", systemImage: "trash") { confirmTrash(file, in: group) }
                             .labelStyle(.iconOnly)
                             .buttonStyle(.borderless)
                             .disabled(!connected)
@@ -573,7 +578,7 @@ struct DuplicatesView<Sidebar: View>: View {
                     .onTapGesture(count: 2) { revealInFinder(file) }
                     .contextMenu {
                         Button("Reveal in Finder") { revealInFinder(file) }.disabled(!connected)
-                        Button("Move to Trash") { moveToTrash(file) }.disabled(!connected)
+                        Button("Move to Trash…") { confirmTrash(file, in: group) }.disabled(!connected)
                     }
                 }
             } header: {
@@ -725,21 +730,32 @@ struct DuplicatesView<Sidebar: View>: View {
         }
     }
 
-    private func moveToTrash(_ file: DuplicateFile) {
-        moveToTrash(driveUUID: file.driveUUID, relativePath: file.relativePath)
-    }
-
-    /// A whole folder goes only after a native confirmation that says what's in it and what isn't elsewhere
-    private func confirmTrash(_ member: FolderSet.Member) {
-        guard !member.holdsAnother else { NSSound.beep(); return }
-        let alert = NSAlert()
-        alert.messageText = "Move “\(member.folder.name)” on \(member.folder.driveName) to the Trash?"
-        alert.informativeText = "\(member.files.formatted()) files, \(bytes(member.bytes)). \(member.verdict)."
-        alert.alertStyle = member.isSafeToRemove ? .warning : .critical
-        alert.addButton(withTitle: "Move to Trash")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        moveToTrash([member.folder])
+    /// A loose file goes only once another connected copy is found identical on disk, then after asking.
+    /// The index pairs files on a partial hash, so it can't say they're the same
+    private func confirmTrash(_ file: DuplicateFile, in group: DuplicateGroup) {
+        let location = { (f: DuplicateFile) in FolderLocation(driveUUID: f.driveUUID, driveName: f.driveName, relativePath: f.relativePath) }
+        guard let target = location(file).url(in: driveMonitor.drives) else { NSSound.beep(); return }
+        let others = group.files.filter { $0.id != file.id }.compactMap { f in location(f).url(in: driveMonitor.drives).map { (f, $0) } }
+        workTask?.cancel()
+        workTask = Task {
+            // ponytail: no progress while hashing; a big file takes a while
+            let match = try? await Task.detached { try FolderComparison.identicalCopy(of: target, among: others.map(\.1)) }.value
+            let alert = NSAlert()
+            guard let match, let copy = others.first(where: { $0.1 == match })?.0 else {
+                alert.messageText = "Not moved to the Trash"
+                alert.informativeText = "No other connected copy has the same contents on disk. Connect a drive with another copy, or compare the files in Finder."
+                alert.alertStyle = .warning
+                alert.runModal()
+                return
+            }
+            alert.messageText = "Move “\(file.relativePath.split(separator: "/").last ?? "")” on \(file.driveName) to the Trash?"
+            alert.informativeText = "Checked on disk: identical to \(copy.relativePath) on \(copy.driveName), which stays."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Move to Trash")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            await moveToTrash([location(file)])
+        }
     }
 
     /// The set's other folders, trashed or updated from the kept one. The index can't see everything
@@ -750,7 +766,9 @@ struct DuplicatesView<Sidebar: View>: View {
     private enum DiskAction { case check, update, trash }
 
     /// Check: says whether the other folders are clear to delete, and changes nothing
-    private func onDisk(_ set: FolderSet, keeping keep: Int, _ removed: [Int], then action: DiskAction) async {
+    /// - Returns: whether the action went ahead (false when refused, cancelled or failed)
+    @discardableResult
+    private func onDisk(_ set: FolderSet, keeping keep: Int, _ removed: [Int], then action: DiskAction) async -> Bool {
         let kept = set.members[keep]
         let others = removed.map { set.members[$0] }
         let urls = others.compactMap { $0.folder.url(in: driveMonitor.drives) }
@@ -764,7 +782,7 @@ struct DuplicatesView<Sidebar: View>: View {
         guard allowed,
               urls.count == others.count, let keptURL = kept.folder.url(in: driveMonitor.drives) else {
             NSSound.beep()
-            return
+            return false
         }
         do {
             defer { if working?.set == set.id { working = nil } }
@@ -780,14 +798,18 @@ struct DuplicatesView<Sidebar: View>: View {
                 }
             } catch {
                 if !(error is CancellationError) { NSAlert(error: error).runModal() }
-                return
+                return false
             }
             working = nil
             switch action {
             case .check:
                 diskVerdicts[set.id + "#" + kept.id] = results.map { ($0.member.folder, Self.losses($0.result)) }
-            case .update: await update(results, from: kept, at: keptURL, to: urls, set: set.id)
-            case .trash: confirmTrash(results, kept: kept)
+                return true
+            case .update:
+                await update(results, from: kept, at: keptURL, to: urls, set: set.id)
+                return true
+            case .trash:
+                return await confirmTrash(results, kept: kept)
             }
         }
     }
@@ -863,7 +885,8 @@ struct DuplicatesView<Sidebar: View>: View {
         let update = set.members.indices.filter { action(set, $0, kept: kept) == .update }
         workTask?.cancel()
         workTask = Task {
-            if !trash.isEmpty { await onDisk(set, keeping: kept, trash, then: .trash) }
+            // Refused or cancelled trashing stops Apply: the update is half of the same picks
+            if !trash.isEmpty, !(await onDisk(set, keeping: kept, trash, then: .trash)) { return }
             if !update.isEmpty && !Task.isCancelled { await onDisk(set, keeping: kept, update, then: .update) }
         }
     }
@@ -938,7 +961,7 @@ struct DuplicatesView<Sidebar: View>: View {
 
     /// After the disk check: refuses when an ordinary folder would lose anything, otherwise asks,
     /// listing what each session would lose
-    private func confirmTrash(_ results: [(member: FolderSet.Member, result: FolderComparison)], kept: FolderSet.Member) {
+    private func confirmTrash(_ results: [(member: FolderSet.Member, result: FolderComparison)], kept: FolderSet.Member) async -> Bool {
         let losses = Self.losses
         let refused = results.filter { !$0.member.isSession && losses($0.result) != nil }
         let alert = NSAlert()
@@ -949,7 +972,7 @@ struct DuplicatesView<Sidebar: View>: View {
                 + "\n\nOpen Compare Folders to copy or sync what's missing."
             alert.alertStyle = .warning
             alert.runModal()
-            return
+            return false
         }
         let anyLoss = results.contains { losses($0.result) != nil }
         alert.messageText = results.count == 1 ? "Move 1 folder to the Trash?" : "Move \(results.count) folders to the Trash?"
@@ -961,16 +984,18 @@ struct DuplicatesView<Sidebar: View>: View {
         alert.alertStyle = anyLoss ? .critical : .warning
         alert.addButton(withTitle: "Move to Trash")
         alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        moveToTrash(results.map(\.member.folder))
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        return await moveToTrash(results.map(\.member.folder))
     }
 
     private func moveToTrash(driveUUID: String, relativePath: String) {
-        moveToTrash([FolderLocation(driveUUID: driveUUID, driveName: "", relativePath: relativePath)])
+        Task { await moveToTrash([FolderLocation(driveUUID: driveUUID, driveName: "", relativePath: relativePath)]) }
     }
 
-    /// Trashes files or folders, drops them (and anything inside) from the index, then recomputes the sets once
-    private func moveToTrash(_ items: [FolderLocation]) {
+    /// Trashes files or folders, drops them (and anything inside) from the index, then recomputes the sets once.
+    /// Returns once the sets are reloaded, so nothing after it runs against a reload; true when all were trashed
+    @discardableResult
+    private func moveToTrash(_ items: [FolderLocation]) async -> Bool {
         let trashed = items.filter { item in
             guard let drive = driveMonitor.drives.first(where: { $0.id == item.driveUUID }),
                   let driveURL = driveMonitor.getDriveURL(for: drive),
@@ -981,12 +1006,11 @@ struct DuplicatesView<Sidebar: View>: View {
             return true
         }
         // ponytail: drop them from the index now so they don't reappear before FSEvents rescans; if this fails, that rescan catches up
-        Task {
-            for item in trashed {
-                try? await DatabaseManager.shared.deleteFiles(driveUUID: item.driveUUID, relativePaths: [item.relativePath])
-            }
-            await load()
+        for item in trashed {
+            try? await DatabaseManager.shared.deleteFiles(driveUUID: item.driveUUID, relativePaths: [item.relativePath])
         }
+        await load()
+        return trashed.count == items.count
     }
 }
 

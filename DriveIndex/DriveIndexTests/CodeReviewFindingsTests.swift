@@ -108,3 +108,58 @@ struct SweepTests {
         #expect(!visited.contains("gone"))
     }
 }
+
+struct QuickScanTests {
+    // Web-views review #3: no folder below the root changed, but a file was added straight into
+    // the root. The walk must still yield it, and keep the unchanged folder's rows.
+    @Test func fileAddedToRootIsIndexed() async throws {
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory.appendingPathComponent("DriveIndexTests-\(UUID().uuidString)")
+        try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let root = URL(fileURLWithPath: String(cString: realpath(tmp.path, nil)))
+        defer { try? fm.removeItem(at: root) }
+        let sub = root.appendingPathComponent("sub")
+        try fm.createDirectory(at: sub, withIntermediateDirectories: true)
+        fm.createFile(atPath: sub.appendingPathComponent("old").path, contents: Data())
+        let subDate = try sub.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        fm.createFile(atPath: root.appendingPathComponent("new").path, contents: Data())
+
+        let existing: [String: (id: Int64, modifiedAt: Date?)] = ["sub": (1, subDate), "sub/old": (2, nil)]
+        let marked = OSAllocatedUnfairLock(initialState: Set<String>())
+        let stream = AsyncStream<FileEntry> { continuation in
+            FileIndexer.enumerateFiles(
+                at: [root], basePath: root.path, driveUUID: "A",
+                excludedDirs: [], excludedExts: [],
+                cachedDirectories: ["sub": subDate], existingFiles: existing, directoriesFromFSEvents: nil,
+                onDirectorySkipped: nil,
+                onFilesMarkedVisited: { paths in marked.withLock { $0.formUnion(paths) } },
+                continuation: continuation
+            )
+        }
+        var yielded = Set<String>()
+        for await entry in stream { yielded.insert(entry.relativePath) }
+
+        #expect(yielded.contains("new"))
+        #expect(marked.withLock { $0 }.contains("sub/old"))
+    }
+}
+
+struct LooseFileTrashTests {
+    // Web-views review #2: two files with the same size and ends but different middles share the
+    // index's partial hash. Only a copy that matches in full counts before trashing.
+    @Test func partialHashTwinIsNotAnIdenticalCopy() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("DriveIndexTests-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        var bytes = Data(repeating: 7, count: 200_000)
+        let file = dir.appendingPathComponent("file"), twin = dir.appendingPathComponent("twin"), copy = dir.appendingPathComponent("copy")
+        try bytes.write(to: file)
+        try bytes.write(to: copy)
+        bytes[100_000] = 8  // outside the first and last 32 KB
+        try bytes.write(to: twin)
+
+        #expect(try FolderComparison.identicalCopy(of: file, among: [twin]) == nil)
+        #expect(try FolderComparison.identicalCopy(of: file, among: [twin, copy]) == copy)
+    }
+}
