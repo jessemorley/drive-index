@@ -286,6 +286,8 @@ struct CaptureOneView<Sidebar: View>: View {
             ]
             Text((reasons.filter(\.0).map(\.1) + ["They're deleted right away and can't be recovered."]).joined(separator: " "))
         }
+        // The caution icon when held folders are forced through
+        .dialogSeverity(pendingDelete?.contains(where: \.forced) == true ? .critical : .automatic)
         .alert("Some Items Weren't Deleted", isPresented: Binding { deleteFailures > 0 } set: { if !$0 { deleteFailures = 0 } }) {
         } message: {
             Text("\(deleteFailures) item\(deleteFailures == 1 ? "" : "s") stayed in place: the drive was disconnected, a check just before deleting found it was no longer safe, or it couldn't be deleted.")
@@ -391,11 +393,6 @@ struct CaptureOneView<Sidebar: View>: View {
         .padding([.horizontal, .bottom], 10)
     }
 
-    private func skip() {
-        guard let selection, let i = order.firstIndex(of: selection) else { return }
-        self.selection = order[(i + 1) % order.count]
-    }
-
     // MARK: - Review
 
     private func isConnected(_ driveUUID: String) -> Bool {
@@ -434,12 +431,11 @@ struct CaptureOneView<Sidebar: View>: View {
                     .disabled(!connected)
                     .help(session.file == nil ? "Show this folder in Finder" : "Open this session in Capture One")
                     Spacer()
-                    Button("Skip") { skip() }
-                    // For when the unique files don't matter: every old Settings folder, held ones too
+                    // For when the unique files don't matter: the safe items and every old Settings folder, held ones too
                     if held.contains(where: { if case .settings = $0.item { true } else { false } }) {
-                        Button("Delete All Old Settings…") {
+                        Button("Delete All…") {
                             pendingDelete = group.rows.compactMap { row in
-                                guard case .settings = row.item, row.status != .unverified else { return nil }
+                                guard case .settings = row.item, row.status != .unverified else { return row.status == .safe ? row : nil }
                                 var row = row
                                 row.forced = true
                                 return row
@@ -467,18 +463,15 @@ struct CaptureOneView<Sidebar: View>: View {
                                 .font(.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.bottom, 28)
-                    // A header with more than one view turns grey and small; this matches the plain section headers
-                    Text("Actions")
-                        .font(.headline)
-                        .padding(.bottom, 6)
+                    .padding(.bottom, 12)
                 }
                 .foregroundStyle(.primary)
                 .textCase(nil)
             }
 
-            // What's kept back, under the buttons in a card of its own. A ForEach, not an `if`, for the reason below
-            let issues: [ActionNote] = held.map(ActionNote.held) + (unchecked.isEmpty ? [] : [.unchecked(unchecked.count)])
+            // What's kept back, under the buttons in a card of its own. A ForEach, not an `if`, for the reason below.
+            // Offline, the offline note covers the unchecked items
+            let issues: [ActionNote] = held.map(ActionNote.held) + (unchecked.isEmpty || !connected ? [] : [.unchecked(unchecked.count)])
                 + (connected ? [] : [.offline])
             ForEach(issues.isEmpty ? [] : [0], id: \.self) { _ in
                 Section {
@@ -534,25 +527,23 @@ struct CaptureOneView<Sidebar: View>: View {
         return Section {
             ForEach(rows) { itemRow($0) }
         } header: {
-            Text(kind.rawValue)
-                .padding(.bottom, 6)
-        } footer: {
-            HStack {
-                Button("Reveal in Finder") { revealInFinder(rows) }
-                    .disabled(!isConnected(group.session.driveUUID))
-                    .help("Select this section's items in Finder")
+            // A header with more than one view turns grey and small; this matches the plain "Actions" one
+            HStack(alignment: .firstTextBaseline) {
+                Text(kind.rawValue).font(.headline)
                 Spacer()
-                Button(safe.isEmpty ? "Delete" : "Delete \(formatted(Self.safeSize(safe)))", systemImage: "trash") { pendingDelete = safe }
+                Button("Delete", systemImage: "trash") { pendingDelete = safe }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
                     .disabled(safe.isEmpty || deleting != nil)
-                    .help("Delete the safe items in this section")
+                    .help(safe.isEmpty ? "Nothing in this section is safe to delete" : "Delete the safe items in this section (\(formatted(Self.safeSize(safe))))")
             }
-            .padding(.top, 6)
-            // ponytail: measured, the grouped Form insets footers 10 pt inside the card on macOS 27; this lines the buttons up with its edges
-            .padding(.horizontal, -10)
+            .foregroundStyle(.primary)
+            .textCase(nil)
+            .padding(.bottom, 6)
         }
     }
 
-    /// What the safe items are, counted by kind, and their total size: "3 old Settings folders, 12 mask backups · 1.2 GB"
+    /// What the safe items are, counted by kind, and their total size: "3 old settings folders, 12 mask backups · 1.2 GB"
     private static func safeSummary(_ safe: [CleanupRow]) -> String {
         var settings = 0, loose = 0, masks = 0, trash = 0
         for row in safe {
@@ -563,8 +554,8 @@ struct CaptureOneView<Sidebar: View>: View {
             case .trash: trash += 1
             }
         }
-        let parts = [(settings, "old Settings folder", "old Settings folders"), (loose, "CaptureOne folder", "CaptureOne folders"),
-                     (masks, "mask backup", "mask backups"), (trash, "item in the Trash", "items in the Trash")]
+        let parts = [(settings, "old settings folder", "old settings folders"), (loose, "CaptureOne folder", "CaptureOne folders"),
+                     (masks, "mask backup", "mask backups"), (trash, "item in the session trash", "items in the session trash")]
             .filter { $0.0 > 0 }
             .map { "\($0.0) \($0.0 == 1 ? $0.1 : $0.2)" }
         return parts.joined(separator: ", ") + " · " + formatted(safeSize(safe))
