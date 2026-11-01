@@ -8,7 +8,7 @@ Fast, offline searching and housekeeping for external drives on macOS, built on 
 
 ## Overview
 
-A native macOS app built with SwiftUI, so it looks and behaves like part of the system. It lives in the menu bar, indexes external drives as they mount and keeps the index current as files change. File metadata lives in a local SQLite database, so you can search, browse and compare drives even when they're disconnected. It's lightweight and designed to stay running in the background, so drives are indexed without you having to open it.
+A native macOS app built with SwiftUI. It lives in the menu bar, indexes external drives as they mount and keeps the index current as files change. File metadata lives in a local SQLite database, so you can search, browse and compare drives even when they're disconnected. It's lightweight and designed to stay running in the background, so drives are indexed without you having to open it.
 
 ## Screenshots
 
