@@ -16,7 +16,7 @@ struct IndexingView: View {
     @State private var excludedDrives: [DriveMetadata] = []
     @State private var fsEventsEnabled: Bool = true
     @State private var fsEventsBufferDelay: Double = 10.0
-    @State private var minDuplicateFileSize: Double = 5.0  // Default 5 MB
+    @State private var minDuplicateFileSize: Double = 5  // MB
     @State private var isLoading: Bool = true
     @State private var hasUnsavedChanges: Bool = false
     @State private var bufferDelayDebounceTask: Task<Void, Never>?
@@ -82,7 +82,7 @@ struct IndexingView: View {
                         .fixedSize()
                 } label: {
                     Text("Minimum file size")
-                    Text("Only detect duplicates for files larger than this size. Smaller threshold = more thorough but slower. Larger = faster but may miss small duplicates.")
+                    Text("Only detect duplicates for files at least this size. Build folders (target, DerivedData, node_modules, .git) are never compared.")
                 }
             }
 
@@ -162,14 +162,13 @@ struct IndexingView: View {
         let fsEnabled = await FSEventsMonitor.shared.isEnabled()
         let fsDelay = await FSEventsMonitor.shared.getBufferDelay()
 
-        // Load minimum duplicate file size (default 5MB = 5242880 bytes)
         let minSizeBytes: Int64
         do {
-            let minSizeStr = try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "5242880"
-            minSizeBytes = Int64(minSizeStr) ?? 5_242_880
+            minSizeBytes = Int64(try await DatabaseManager.shared.getSetting("min_duplicate_file_size") ?? "")
+                ?? DatabaseManager.defaultMinDuplicateFileSize
         } catch {
             print("Error loading min duplicate file size: \(error)")
-            minSizeBytes = 5_242_880
+            minSizeBytes = DatabaseManager.defaultMinDuplicateFileSize
         }
 
         await loadExcludedDrives()
@@ -179,7 +178,7 @@ struct IndexingView: View {
             excludedExtensions = exts
             fsEventsEnabled = fsEnabled
             fsEventsBufferDelay = fsDelay
-            minDuplicateFileSize = Double(minSizeBytes) / 1_048_576.0  // Convert bytes to MB
+            minDuplicateFileSize = Double(minSizeBytes) / 1_048_576.0  // bytes to MB
             isLoading = false
             hasUnsavedChanges = false
         }

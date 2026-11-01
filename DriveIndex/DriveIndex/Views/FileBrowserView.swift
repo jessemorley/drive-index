@@ -9,41 +9,28 @@ import SwiftUI
 
 struct FileBrowserView: View {
     let drive: DriveInfo
+    /// The folder it opens at; its contents are the table's top level
+    let folder: FileBrowserItem
     private let browserManager = FileBrowserManager()
     @State private var rootItems: [FileBrowserItem]? = nil
     /// Children of each expanded folder, keyed by its relative path; loaded on first expand
     @State private var childrenByPath: [String: [FileBrowserItem]] = [:]
     @State private var selection: FileNode.ID?
     @State private var sortOrder = [KeyPathComparator(\FileNode.name, comparator: .localizedStandard)]
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var error: String?
-
-    init(drive: DriveInfo) {
-        self.drive = drive
-
-        // Populate state synchronously BEFORE first render
-        // No await needed - FileBrowserCache is @MainActor
-        let cached = FileBrowserCache.shared.get(
-            driveUUID: drive.id,
-            currentScanDate: drive.lastScanDate
-        )
-        _rootItems = State(initialValue: cached)
-        // Never start with an empty body: a Form drops empty rows, so .task would never run
-        _isLoading = State(initialValue: cached == nil)
-    }
 
     var body: some View {
         Group {
             if isLoading {
                 ProgressView()
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = error {
                 Text("Error loading files: \(error)")
                     .foregroundStyle(.red)
             } else if let rootItems = rootItems {
                 if rootItems.isEmpty {
-                    Text("No files found")
-                        .foregroundStyle(.secondary)
+                    ContentUnavailableView("Empty Folder", systemImage: "folder")
                 } else {
                     table(rootItems)
                 }
@@ -88,8 +75,6 @@ struct FileBrowserView: View {
         } primaryAction: { ids in
             if let item = file(for: ids) { revealInFinder(item) }
         }
-        // ponytail: fixed height so the Table can scroll inside the drive detail Form
-        .frame(height: 400)
     }
 
     /// Builds the tree from loaded data. A folder whose children aren't loaded yet gets a
@@ -114,31 +99,12 @@ struct FileBrowserView: View {
     }
 
     private func loadRootItems() async {
-        // If we already have items from cache init, don't reload
-        if rootItems != nil {
-            return
-        }
-
-        // No cache hit during init - load from database
-        isLoading = true
-        error = nil
-
         do {
-            let items = try await browserManager.getChildren(driveUUID: drive.id, parentPath: "")
-            rootItems = items
-
-            // Cache the result for future use
-            FileBrowserCache.shared.set(
-                driveUUID: drive.id,
-                rootItems: items,
-                scanDate: drive.lastScanDate
-            )
-
-            isLoading = false
+            rootItems = try await browserManager.getChildren(driveUUID: drive.id, parentPath: folder.relativePath)
         } catch {
             self.error = error.localizedDescription
-            isLoading = false
         }
+        isLoading = false
     }
 
     private func loadChildren(of path: String) async {
@@ -163,6 +129,51 @@ struct FileBrowserView: View {
     }
 }
 
+/// The drive's top-level folders as rows in the drive detail Form; clicking one opens it in `FileBrowserView`.
+struct RootFolderList: View {
+    let drive: DriveInfo
+    @State private var rootItems: [FileBrowserItem]?
+
+    init(drive: DriveInfo) {
+        self.drive = drive
+        // From the cache before the first frame, so a revisit doesn't flash a spinner
+        _rootItems = State(initialValue: FileBrowserCache.shared.get(driveUUID: drive.id, currentScanDate: drive.lastScanDate))
+    }
+
+    var body: some View {
+        Group {
+            if let folders = rootItems?.filter(\.isDirectory).sorted(using: KeyPathComparator(\.name, comparator: .localizedStandard)) {
+                if folders.isEmpty {
+                    Text("No folders").foregroundStyle(.secondary)
+                }
+                ForEach(folders) { folder in
+                    NavigationLink(value: folder) {
+                        HStack {
+                            Label {
+                                Text(folder.name)
+                            } icon: {
+                                Image(nsImage: NSWorkspace.shared.listIcon(name: folder.name, isDirectory: true))
+                            }
+                            Spacer()
+                            Text(folder.formattedDate)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } else {
+                // Never an empty body: a Form drops empty rows, so .task would never run
+                ProgressView().frame(maxWidth: .infinity)
+            }
+        }
+        .task {
+            guard rootItems == nil,
+                  let items = try? await FileBrowserManager().getChildren(driveUUID: drive.id, parentPath: "") else { return }
+            rootItems = items
+            FileBrowserCache.shared.set(driveUUID: drive.id, rootItems: items, scanDate: drive.lastScanDate)
+        }
+    }
+}
+
 /// A row in the file Table: a file or folder, or a folder's "Loading…" placeholder (`item == nil`).
 struct FileNode: Identifiable {
     let id: String
@@ -178,7 +189,7 @@ struct FileNode: Identifiable {
 // MARK: - Preview
 
 #Preview {
-    FileBrowserView(drive: DriveInfo(
+    let drive = DriveInfo(
         id: "test-uuid",
         name: "My External Drive",
         path: "/Volumes/MyDrive",
@@ -189,6 +200,12 @@ struct FileNode: Identifiable {
         lastScanDate: Date(),
         fileCount: 15432,
         isExcluded: false
-    ))
-    .padding()
+    )
+    Form {
+        Section("Files") {
+            RootFolderList(drive: drive)
+        }
+    }
+    .formStyle(.grouped)
 }
+

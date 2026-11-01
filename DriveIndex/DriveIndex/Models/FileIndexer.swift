@@ -754,28 +754,11 @@ actor FileIndexer {
                 }
             }
 
-            // Only use optimization if we actually have changes detected
-            if changedDirs.isEmpty {
-                // No directory changes - skip enumeration entirely and mark all as visited
-                print("🎯 No directory changes detected, skipping enumeration")
-
-                // Mark existing files under the roots visited (nothing changed, nothing to delete)
-                for root in roots {
-                    let rootPath = relative(root)
-                    if rootPath.isEmpty {
-                        existingFiles.map { onFilesMarkedVisited?(Array($0.keys)) }
-                    } else {
-                        markSubtreeVisited(rootPath)
-                    }
-                }
-
-                // Skip enumeration entirely
-                continuation.finish()
-                return
-            } else {
-                dirsToScan = toScan
-                print("🎯 Directory changes detected: \(changedDirs.count) changed, \(toScan.count) total to scan")
-            }
+            // Even with no changed folders each root's own files are listed: the quick scan only
+            // sees folders below the roots, so files added straight into a root (or a newly added
+            // flat local folder) change nothing it checks
+            dirsToScan = toScan
+            print("🎯 Directory changes detected: \(changedDirs.count) changed, \(toScan.count) total to scan")
         }
 
         // Process files synchronously

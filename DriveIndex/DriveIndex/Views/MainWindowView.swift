@@ -16,44 +16,47 @@ struct MainWindowView: View {
     @State private var searchText = ""
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
-                .navigationSplitViewColumnWidth(
-                    min: SidebarWidth.min,
-                    ideal: SidebarWidth.ideal,
-                    max: SidebarWidth.max
-                )
-        } detail: {
-            // Detail view
-            Group {
-                if let selectedItem = selectedItem {
-                    detailView(for: selectedItem)
-                } else {
-                    Text("Select an item from the sidebar")
-                        .foregroundStyle(.secondary)
+        Group {
+            if selectedItem == .duplicates {
+                // Duplicates has a list and a review, so it brings its own three columns
+                DuplicatesView(columnVisibility: $columnVisibility) { sidebar }
+            } else if selectedItem == .captureOne {
+                // So does Capture One: a list of sessions and a review
+                CaptureOneView(columnVisibility: $columnVisibility) { sidebar }
+            } else {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebar
+                } detail: {
+                    // Detail view
+                    Group {
+                        if let selectedItem = selectedItem {
+                            detailView(for: selectedItem)
+                        } else {
+                            Text("Select an item from the sidebar")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .indexingStatusBar(indexManager)
                 }
+                .navigationSplitViewStyle(.balanced)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Indexing progress strip; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
-                if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
-                    IndexingStatusBar()
-                        .environmentObject(indexManager)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .animation(.default, value: indexManager.isIndexing)
-            .animation(.default, value: indexManager.isHashing)
-            .animation(.default, value: indexManager.pendingChanges != nil)
         }
-        .navigationSplitViewStyle(.balanced)
         .onChange(of: searchText) { oldValue, newValue in
             // Automatically switch to Search view when user types in search
             if !newValue.isEmpty && selectedItem != .search {
                 selectedItem = .search
             }
         }
+    }
+
+    private var sidebar: some View {
+        NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
+            .navigationSplitViewColumnWidth(
+                min: SidebarWidth.min,
+                ideal: SidebarWidth.ideal,
+                max: SidebarWidth.max
+            )
     }
 
     @ViewBuilder
@@ -63,22 +66,40 @@ struct MainWindowView: View {
             SearchView(searchText: $searchText)
                 .environmentObject(driveMonitor)
         case .drive(let driveInfo):
-            DriveDetailView(drive: driveInfo)
-                .environmentObject(driveMonitor)
-                .environmentObject(indexManager)
+            // A stack so a clicked folder can open; new per drive so switching drives pops back
+            NavigationStack {
+                DriveDetailView(drive: driveInfo)
+            }
+            .id(driveInfo.id)
+            .environmentObject(driveMonitor)
+            .environmentObject(indexManager)
         case .drives:
             DrivesView(selectedItem: $selectedItem)
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
-        case .duplicates:
-            DuplicatesView()
-        case .captureOne:
-            CaptureOneView()
+        case .duplicates, .captureOne:
+            EmptyView()  // these bring the window's columns, in body
         }
     }
 }
 
 // MARK: - Indexing Progress Overlay
+
+extension View {
+    /// The indexing progress strip under a detail column; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
+    func indexingStatusBar(_ indexManager: IndexManager) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
+                IndexingStatusBar()
+                    .environmentObject(indexManager)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: indexManager.isIndexing)
+        .animation(.default, value: indexManager.isHashing)
+        .animation(.default, value: indexManager.pendingChanges != nil)
+    }
+}
 
 private func formatFileCount(_ count: Int) -> String {
     let absCount = abs(count)
@@ -93,28 +114,29 @@ private func formatFileCount(_ count: Int) -> String {
     }
 }
 
-/// Thin strip at the bottom of the main window while changes are pending, a scan or hash runs, or a scan just finished.
+/// Glass capsule floating at the bottom of the main window while changes are pending, a scan or hash runs, or a scan just finished.
 struct IndexingStatusBar: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .lineLimit(1)
-            .controlSize(.small)
-            .padding(.horizontal)
-            .padding(.vertical, 6)
+        HStack {
+            IndexingStatusContent()
         }
-        .background(.bar)
+        .lineLimit(1)
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .padding([.horizontal, .bottom], 10)
         .animation(nil, value: indexManager.currentProgress?.filesProcessed)
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
+/// Icon and text for the current scan or hash; shared by the status bar and the menu bar menu
+struct IndexingStatusContent: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
         if let pending = indexManager.pendingChanges {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .foregroundStyle(.secondary)
@@ -151,7 +173,6 @@ struct IndexingStatusBar: View {
                 ProgressView()
                 Text("Computing file hashes for duplicate detection")
             }
-            Spacer()
             Button("Cancel", systemImage: "xmark.circle.fill") {
                 indexManager.cancelHashing()
             }
@@ -159,6 +180,31 @@ struct IndexingStatusBar: View {
             .buttonStyle(.borderless)
             .help("Cancel hash computation")
         }
+    }
+}
+
+/// Top row of the menu bar menu (an NSMenuItem view, so it keeps the menu's look): status, as in IndexingStatusBar
+struct MenuBarStatusRow: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
+        HStack {
+            if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
+                IndexingStatusContent()
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Up to date")
+            }
+        }
+        .lineLimit(1)
+        .controlSize(.small)
+        // The menu's own font, so the row matches the items under it
+        .font(Font(NSFont.menuFont(ofSize: 0)))
+        .animation(nil, value: indexManager.currentProgress?.filesProcessed)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .frame(width: 300, alignment: .leading)
     }
 }
 
@@ -188,4 +234,14 @@ struct IndexingStatusBar: View {
     }
     .frame(width: 480)
     .padding(.vertical)
+}
+
+#Preview("Menu bar status") {
+    let indexing = IndexManager()
+    indexing.isIndexing = true
+    indexing.indexingDriveName = "Jesse T72"
+    return VStack {
+        MenuBarStatusRow().environmentObject(indexing)
+        MenuBarStatusRow().environmentObject(IndexManager())
+    }
 }

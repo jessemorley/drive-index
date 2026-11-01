@@ -17,7 +17,7 @@ struct FileBrowserItem: Identifiable, Hashable {
     let isDirectory: Bool
 
     var formattedSize: String {
-        guard !isDirectory else { return "" }
+        guard !isDirectory else { return "--" }  // as Finder shows uncalculated folder sizes
         return ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
 

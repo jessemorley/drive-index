@@ -15,24 +15,14 @@ struct FolderLocation: Hashable {
     let driveName: String
     let relativePath: String  // "" for the drive itself
 
-    /// The folder at a URL, on the mounted drive whose path is its longest prefix ("/" for this Mac)
-    init?(url: URL, drives: [DriveInfo]) {
-        let path = url.standardizedFileURL.path
-        let drive = drives
-            .filter { $0.isConnected && ($0.path == "/" || path == $0.path || path.hasPrefix($0.path + "/")) }
-            .max { $0.path.count < $1.path.count }
-        guard let drive else { return nil }
-        self.init(driveUUID: drive.id, driveName: drive.name,
-                  relativePath: String(path.dropFirst(drive.path.count).drop { $0 == "/" }))
-    }
-
-    init(driveUUID: String, driveName: String, relativePath: String) {
-        self.driveUUID = driveUUID
-        self.driveName = driveName
-        self.relativePath = relativePath
-    }
-
     var name: String { relativePath.isEmpty ? driveName : (relativePath as NSString).lastPathComponent }
+
+    /// Where `other` is relative to this folder, when it's inside it
+    func path(of other: FolderLocation) -> String? {
+        guard other.driveUUID == driveUUID, other.relativePath != relativePath,
+              relativePath.isEmpty || other.relativePath.hasPrefix(relativePath + "/") else { return nil }
+        return relativePath.isEmpty ? other.relativePath : String(other.relativePath.dropFirst(relativePath.count + 1))
+    }
 
     /// Whether a path on a drive is this folder or inside it
     func contains(driveUUID: String, path: String) -> Bool {
@@ -88,11 +78,13 @@ struct FolderComparison {
     var onlyB: [File] = []
     var changed: [Changed] = []
     var moved: [Moved] = []
+    /// Each side's newest file
+    var latest: (a: Date?, b: Date?) = (nil, nil)
     /// On disk: each hashed file's SHA-256, keyed by its path, size and modified date
     var hashes: [String: String] = [:]
 
     /// Where to list each file only one side has: under the highest folder the other side doesn't
-    /// have at all, else under its own folder ("" at the top level). Keyed by path.
+    /// have at all, else on its own (""): a folder row means the folder itself is only on that side. Keyed by path.
     func listingFolders() -> (a: [String: String], b: [String: String]) {
         func parent(_ path: String) -> String { (path as NSString).deletingLastPathComponent }
         func folders(_ side: Side) -> Set<String> {
@@ -111,9 +103,9 @@ struct FolderComparison {
                 var folder = ""
                 for name in parent(file.path).split(separator: "/") {
                     folder = folder.isEmpty ? String(name) : "\(folder)/\(name)"
-                    if !otherFolders.contains(folder) { break }
+                    if !otherFolders.contains(folder) { return (file.path, folder) }
                 }
-                return (file.path, folder)
+                return (file.path, "")
             }) { first, _ in first }
         }
         return (listing(onlyA, otherFolders: folders(.b)), listing(onlyB, otherFolders: folders(.a)))
@@ -128,6 +120,26 @@ struct FolderComparison {
         let edited = changed.filter { counts($0.path) }
         return (latest(edited.map(\.modifiedA) + onlyA.filter { counts($0.path) }.map(\.modified)),
                 latest(edited.map(\.modifiedB) + onlyB.filter { counts($0.path) }.map(\.modified)))
+    }
+
+    /// What trashing B loses while A stays: files only B has, and changed files that aren't older on B.
+    /// Capture One settings for an older version (a SettingsNNNN folder where A has a newer one beside
+    /// it, as when a session is opened in a newer Capture One) are superseded, not lost
+    func lostWithoutB() -> (only: [File], changed: [Changed], superseded: Int) {
+        func settings(_ path: String) -> (parent: String, version: Int)? {
+            let parts = path.split(separator: "/")
+            guard let i = parts.firstIndex(where: { $0.hasPrefix("Settings") && Int($0.dropFirst(8)) != nil }) else { return nil }
+            return (parts[..<i].joined(separator: "/"), Int(parts[i].dropFirst(8))!)
+        }
+        var newest: [String: Int] = [:]  // A's newest settings version in each folder
+        let pathsA = both.map(\.path) + changed.map(\.path) + onlyA.map(\.path) + moved.map { $0.side == .a ? $0.path : $0.otherPath }
+        for case let s? in pathsA.map(settings) { newest[s.parent] = max(newest[s.parent] ?? 0, s.version) }
+        func isSuperseded(_ path: String) -> Bool {
+            guard let s = settings(path), let n = newest[s.parent] else { return false }
+            return n > s.version
+        }
+        let only = onlyB.filter { !isSuperseded($0.path) }
+        return (only, changed.filter { $0.newer != .a }, onlyB.count - only.count)
     }
 
     var verdict: Verdict {
@@ -171,6 +183,7 @@ extension FolderComparison {
     static func compare(_ a: [String: File], _ b: [String: File], content: (Side, File) throws -> String) throws -> FolderComparison {
         let a = a.filter { !isJunk($0.key) }, b = b.filter { !isJunk($0.key) }
         var result = FolderComparison()
+        result.latest = (a.values.compactMap(\.modified).max(), b.values.compactMap(\.modified).max())
 
         for path in Set(a.keys).intersection(b.keys).sorted() {
             try Task.checkCancellation()
@@ -220,9 +233,12 @@ extension FolderComparison {
     ///     unchanged isn't hashed again
     ///   - progress: files found, bytes hashed so far, and the most it will hash (including files
     ///     whose earlier hashes are reused, so a rerun finishes early)
-    static func compare(_ a: URL, _ b: URL, reusing known: [String: String] = [:],
+    ///   - skipping: a folder inside A (or B) to leave out, when the other side is that folder: otherwise
+    ///     its files would match themselves
+    static func compare(_ a: URL, _ b: URL, reusing known: [String: String] = [:], skipping: (a: String?, b: String?) = (nil, nil),
                         progress: @escaping @Sendable (_ files: Int, _ hashed: Int64, _ toHash: Int64) -> Void = { _, _, _ in }) async throws -> FolderComparison {
-        let filesA = try walk(a), filesB = try walk(b)
+        func outside(_ inner: String?) -> (String, File) -> Bool { { path, _ in inner.map { !path.hasPrefix($0 + "/") } ?? true } }
+        let filesA = try walk(a).filter(outside(skipping.a)), filesB = try walk(b).filter(outside(skipping.b))
         let count = filesA.count + filesB.count
         let toHash = hashBudget(filesA, filesB)
         progress(count, 0, toHash)
@@ -262,12 +278,14 @@ extension FolderComparison {
             throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: root.path])
         }
         var files: [String: File] = [:]
-        for case let url as URL in enumerator {
+        while let url = autoreleasepool(invoking: { enumerator.nextObject() as? URL }) {
             try Task.checkCancellation()
-            let values = try url.resourceValues(forKeys: Set(keys))
-            guard values.isRegularFile == true else { continue }
-            let path = url.relativePath
-            files[path] = File(path: path, size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate)
+            try autoreleasepool {
+                let values = try url.resourceValues(forKeys: Set(keys))
+                guard values.isRegularFile == true else { return }
+                let path = url.relativePath
+                files[path] = File(path: path, size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate)
+            }
         }
         if let walkError { throw walkError }
         return files
@@ -372,11 +390,23 @@ extension FolderComparison {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
-        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
-            try Task.checkCancellation()
+        // Each chunk is autoreleased; without a pool per read, a whole comparison's reads stay in memory
+        while try autoreleasepool(invoking: {
+            guard let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty else { return false }
             hasher.update(data: chunk)
+            return true
+        }) {
+            try Task.checkCancellation()
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The first of `others` with the same size and full SHA-256 as `file`, or nil. The index only
+    /// matches files on a partial hash (ends and size), so two files differing in the middle pair up there
+    static func identicalCopy(of file: URL, among others: [URL]) throws -> URL? {
+        let size = { (url: URL) in try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize }
+        let hash = try sha256(file)
+        return try others.first { try size($0) == size(file) && sha256($0) == hash }
     }
 
     /// Notes a copy elsewhere in the index for each file only one side has. The index holds
@@ -386,7 +416,7 @@ extension FolderComparison {
     /// - Parameter urls: the folders on disk; nil from the index
     mutating func findCopiesElsewhere(a: FolderLocation, b: FolderLocation, urls: (URL, URL)?) async throws {
         let database = DatabaseManager.shared
-        let minSize = Int64(try await database.getSetting("min_duplicate_file_size") ?? "") ?? 5_242_880
+        let minSize = Int64(try await database.getSetting("min_duplicate_file_size") ?? "") ?? DatabaseManager.defaultMinDuplicateFileSize
         for side in [Side.a, .b] {
             var files = side == .a ? onlyA : onlyB
             let root = side == .a ? urls?.0 : urls?.1

@@ -12,7 +12,6 @@ struct DriveDetailView: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
     @State private var showDeleteConfirmation = false
-    @State private var isPointerInWindow = false
 
     var body: some View {
         Form {
@@ -36,54 +35,51 @@ struct DriveDetailView: View {
                 LocalFoldersSection()
             } else if drive.fileCount > 0 {
                 Section("Files") {
-                    FileBrowserView(drive: drive)
+                    RootFolderList(drive: drive)
                         .id(drive.id)  // Force new view instance for each drive
                 }
             }
 
-            if drive.isConnected {
-                Section {
-                    HStack {
-                        Spacer()
-                        Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
-                            .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
-                        Button("Show in Finder", action: revealInFinder)
-                        if !drive.isLocal {
-                            Button("Eject", action: ejectDrive)
-                        }
-                    }
-                }
+            // Destructive and rare, so at the end of the page rather than in the toolbar
+            Section {
+                Button("Remove from Index…", role: .destructive) { showDeleteConfirmation = true }
             }
         }
         .formStyle(.grouped)
-        // Covers the toolbar too, so the pointer can reach the toolbar Eject button without it vanishing
-        .background {
-            Color.clear
-                .ignoresSafeArea()
-                .onHover { isPointerInWindow = $0 }
+        // Full-height browser for a clicked folder: a Table can't scroll inside the Form
+        .navigationDestination(for: FileBrowserItem.self) { folder in
+            FileBrowserView(drive: drive, folder: folder)
+                .navigationTitle(folder.name)
+                .navigationSubtitle(drive.name)
         }
         .navigationTitle(drive.name)
         .navigationSubtitle(drive.formattedTotal)
         .toolbar {
-            if drive.isConnected && !drive.isLocal && isPointerInWindow {
+            if drive.isConnected {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Eject", systemImage: "eject", action: ejectDrive)
-                        .help("Eject drive")
+                    Button(drive.lastScanDate == nil ? "Scan" : "Rescan", systemImage: "arrow.clockwise", action: rescanDrive)
+                        .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
+                        .help(drive.lastScanDate == nil ? "Scan drive" : "Rescan drive")
                 }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button("Delete", systemImage: "trash") {
-                    showDeleteConfirmation = true
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Show in Finder", systemImage: "folder", action: revealInFinder)
+                        .help("Show in Finder")
                 }
-                .help("Remove drive from database")
+                if !drive.isLocal {
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Eject", systemImage: "eject", action: ejectDrive)
+                            .help("Eject drive")
+                    }
+                }
             }
         }
         .confirmationDialog(
-            "Are you sure you want to remove \"\(drive.name)\" from the database?",
+            "Remove \"\(drive.name)\" from the index?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
+            Button("Remove", role: .destructive) {
                 Task {
                     do {
                         try await driveMonitor.deleteDrive(drive.id)
@@ -94,7 +90,7 @@ struct DriveDetailView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("All indexed files for this drive will be permanently deleted.")
+            Text("Its file list is removed from DriveIndex. Nothing on the drive is deleted.")
         }
     }
 

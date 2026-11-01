@@ -14,8 +14,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Properties
 
-    /// Status bar item (menu bar icon)
+    /// Status bar item (menu bar icon); its menu opens on click
     private var statusItem: NSStatusItem?
+    private var cancellables = Set<AnyCancellable>()
 
     /// The main application window for browsing drives
     private var mainWindow: MainWindow?
@@ -27,9 +28,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let driveMonitor = DriveMonitor()
     private let indexManager = IndexManager()
 
-    /// Combine cancellables for observing IndexManager state
-    private var cancellables = Set<AnyCancellable>()
-
     // MARK: - Application Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,11 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Apply saved theme preference
         applySavedTheme()
 
-        // Set up status bar item
         setupStatusItem()
-
-        // Observe IndexManager state for menubar icon updates
-        observeIndexManagerState()
     }
 
     /// Opening the app again (Finder, Spotlight) shows the main window
@@ -55,10 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         Task {
             try? await DatabaseManager.shared.optimize()
         }
-    }
-
-    @objc private func handleOpenMainWindow() {
-        showMainWindow()
     }
 
     // MARK: - Theme Management
@@ -85,89 +75,60 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.appearance = appearance
     }
 
-    // MARK: - Status Item Setup
+    // MARK: - Status Item
 
     private func setupStatusItem() {
-        // Create status item in menu bar
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
-        guard let button = statusItem?.button else {
-            print("Failed to create status item button")
-            return
-        }
+        // Status row as a hosted SwiftUI view, so it gets a spinner and progress yet keeps the menu's look
+        let host = NSHostingView(rootView: MenuBarStatusRow().environmentObject(indexManager))
+        host.frame.size = host.fittingSize
+        let statusRow = NSMenuItem()
+        statusRow.view = host
 
-        // Configure button appearance
-        button.image = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex")
-        button.action = #selector(statusItemClicked)
-        button.target = self
+        let menu = NSMenu()
+        menu.addItem(statusRow)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Open DriveIndex", action: #selector(handleOpenMainWindow), keyEquivalent: "o"))
+        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsWindow), keyEquivalent: ","))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        statusItem.menu = menu
+        self.statusItem = statusItem
+
+        // DispatchQueue (not RunLoop.main) so the icon also updates while the menu is open; after the change, not before
+        indexManager.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateMenubarIcon() }
+            .store(in: &cancellables)
+        updateMenubarIcon()
     }
 
-    /// Observe IndexManager state changes to update menubar icon
-    private func observeIndexManagerState() {
-        // Observe all relevant state changes
-        Publishers.CombineLatest4(
-            indexManager.$isIndexing,
-            indexManager.$currentProgress,
-            indexManager.$pendingChanges,
-            indexManager.$isHashing
-        )
-        .sink { [weak self] isIndexing, currentProgress, pendingChanges, isHashing in
-            self?.updateMenubarIcon(
-                isIndexing: isIndexing,
-                currentProgress: currentProgress,
-                pendingChanges: pendingChanges,
-                isHashing: isHashing
-            )
-        }
-        .store(in: &cancellables)
+    @objc private func handleOpenMainWindow() {
+        showMainWindow()
     }
 
-    /// Update the menubar icon with a status indicator dot
-    private func updateMenubarIcon(
-        isIndexing: Bool,
-        currentProgress: IndexProgress?,
-        pendingChanges: PendingChanges?,
-        isHashing: Bool
-    ) {
-        guard let button = statusItem?.button else { return }
+    private func updateMenubarIcon() {
+        statusItem?.button?.image = Self.createMenubarIcon(withStatusColor: Self.menubarStatusColor(for: indexManager))
+    }
 
-        // Determine the status color based on current state
-        let statusColor: NSColor?
+    // MARK: - Menu Bar Icon
 
-        // Priority order: indexing/scanning > hashing > pending changes > complete
-        if isIndexing {
-            if let progress = currentProgress {
-                if progress.isComplete {
-                    // Indexing complete - green (shown for 2 seconds)
-                    statusColor = .systemGreen
-                } else if progress.filesProcessed == 0 {
-                    // Scanning - orange
-                    statusColor = .systemOrange
-                } else {
-                    // Indexing - orange
-                    statusColor = .systemOrange
-                }
-            } else {
-                // Starting to index - orange
-                statusColor = .systemOrange
-            }
-        } else if isHashing {
-            // Analysing/hashing - purple
-            statusColor = .systemPurple
-        } else if pendingChanges != nil {
-            // Changes detected - blue
-            statusColor = .systemBlue
-        } else {
-            // No active status - no dot
-            statusColor = nil
+    /// Status dot for the menu bar icon. Priority: indexing/scanning > hashing > pending changes > none
+    private static func menubarStatusColor(for indexManager: IndexManager) -> NSColor? {
+        if indexManager.isIndexing {
+            // Green while the finished scan's summary shows, orange while scanning or indexing
+            return indexManager.currentProgress?.isComplete == true ? .systemGreen : .systemOrange
+        } else if indexManager.isHashing {
+            return .systemPurple
+        } else if indexManager.pendingChanges != nil {
+            return .systemBlue
         }
-
-        // Create the icon with or without status dot
-        button.image = createMenubarIcon(withStatusColor: statusColor)
+        return nil
     }
 
     /// Create the menubar icon with an optional status indicator dot
-    private func createMenubarIcon(withStatusColor statusColor: NSColor?) -> NSImage? {
+    private static func createMenubarIcon(withStatusColor statusColor: NSColor?) -> NSImage? {
         guard let baseSymbol = NSImage(systemSymbolName: "externaldrive.fill", accessibilityDescription: "DriveIndex") else {
             return nil
         }
@@ -232,24 +193,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         compositeImage.isTemplate = false
 
         return compositeImage
-    }
-
-    // MARK: - Status Menu
-
-    /// Status item clicked - show menu with options
-    @objc private func statusItemClicked() {
-        guard let button = statusItem?.button else { return }
-        
-        let menu = NSMenu()
-
-        menu.addItem(NSMenuItem(title: "Show Main Window", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsWindow), keyEquivalent: ","))
-        menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        
-        statusItem?.menu = menu
-        button.performClick(nil)
-        statusItem?.menu = nil
     }
 
     // MARK: - Main Window Management
