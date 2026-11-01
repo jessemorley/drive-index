@@ -38,19 +38,24 @@ struct DrivesView: View {
             Group {
                 if viewMode == .list {
                     Form {
-                        ForEach(sortedDrives) { drive in
-                            DriveDetailCard(drive: drive)
+                        ForEach(sections, id: \.title) { section in
+                            Section(section.title) {
+                                ForEach(section.drives) { DriveRow(drive: $0) }
+                            }
                         }
                     }
                     .formStyle(.grouped)
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)]) {
-                            ForEach(sortedDrives) { drive in
-                                NavigationLink(value: drive) {
-                                    DriveCard(drive: drive)
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .top), GridItem(.flexible(), alignment: .top)], alignment: .leading) {
+                            ForEach(sections, id: \.title) { section in
+                                Section {
+                                    ForEach(section.drives) { DriveCard(drive: $0) }
+                                } header: {
+                                    Text(section.title)
+                                        .font(.headline)
+                                        .padding(.top, 8)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding()
@@ -100,6 +105,13 @@ struct DrivesView: View {
         .frame(minWidth: 600, minHeight: 400)
     }
 
+    /// As Disk Utility: Connected, then Offline, so rows and cards carry no status chip
+    private var sections: [(title: String, drives: [DriveInfo])] {
+        let drives = sortedDrives
+        return [("Connected", drives.filter(\.isConnected)), ("Offline", drives.filter { !$0.isConnected })]
+            .filter { !$0.drives.isEmpty }
+    }
+
     private var sortedDrives: [DriveInfo] {
         var drives = driveMonitor.drives
 
@@ -125,100 +137,53 @@ struct DrivesView: View {
 
 struct DriveCard: View {
     let drive: DriveInfo
-    @EnvironmentObject var driveMonitor: DriveMonitor
-    @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 14) {
+        NavigationLink(value: drive) {
+            GroupBox {
                 DriveSummary(drive: drive, stacksLastScanned: true)
-
-                // Rescan and Show in Finder on left, Eject on right; disabled (not hidden) when
-                // disconnected so every card in the grid is the same height
-                HStack {
-                    Button(drive.lastScanDate == nil ? "Scan" : "Rescan") {
-                        scanDrive(drive)
-                    }
-                    .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
-
-                    Button("Show in Finder") {
-                        revealInFinder(drive)
-                    }
-                    .disabled(!drive.isConnected)
-
-                    Spacer()
-
-                    Button("Eject") {
-                        ejectDrive(drive)
-                    }
-                    .disabled(!drive.isConnected || drive.isLocal)
-                    .help("Eject drive")
-                }
+                    .padding(10)
+                    .opacity(drive.isConnected ? 1 : 0.6)  // greyed like the sidebar's offline drives
             }
-            .padding(10)
+            .contentShape(Rectangle())
         }
-    }
-
-    private func scanDrive(_ drive: DriveInfo) {
-        guard let driveURL = driveMonitor.getDriveURL(for: drive) else {
-            return
-        }
-
-        Task {
-            await indexManager.indexDrive(url: driveURL, uuid: drive.id)
-        }
-    }
-
-    private func revealInFinder(_ drive: DriveInfo) {
-        guard let driveURL = driveMonitor.getDriveURL(for: drive) else {
-            return
-        }
-
-        NSWorkspace.shared.open(driveURL)
-    }
-
-    private func ejectDrive(_ drive: DriveInfo) {
-        guard let driveURL = driveMonitor.getDriveURL(for: drive) else {
-            return
-        }
-
-        try? NSWorkspace.shared.unmountAndEjectDevice(at: driveURL)
+        .buttonStyle(.plain)
+        .contextMenu { DriveActions(drive: drive) }
     }
 }
 
-// MARK: - Drive Detail Card (List View)
+// MARK: - Drive Row (List View)
 
-struct DriveDetailCard: View {
+struct DriveRow: View {
+    let drive: DriveInfo
+
+    var body: some View {
+        NavigationLink(value: drive) {
+            DriveSummary(drive: drive)
+                .contentShape(Rectangle())
+                .opacity(drive.isConnected ? 1 : 0.6)  // greyed like the sidebar's offline drives
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 6)
+        .contextMenu { DriveActions(drive: drive) }
+    }
+}
+
+/// Right-click actions for a drive row or card, as Finder has them, not as buttons in the row
+struct DriveActions: View {
     let drive: DriveInfo
     @EnvironmentObject var driveMonitor: DriveMonitor
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        Section {
-            // One row, so the Form draws no separator between the summary and its buttons
-            VStack(alignment: .leading, spacing: 14) {
-                NavigationLink(value: drive) {
-                    DriveSummary(drive: drive)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                // No chevron, so the bar and size line up with the buttons' right edge
-                .navigationLinkIndicatorVisibility(.hidden)
-
-                if drive.isConnected {
-                    HStack {
-                        Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
-                            .disabled(indexManager.isIndexing || !driveMonitor.canScan(drive))
-                        Button("Show in Finder", action: revealInFinder)
-                        Spacer()
-                        if !drive.isLocal {
-                            Button("Eject", action: ejectDrive)
-                                .help("Eject drive")
-                        }
-                    }
-                }
-            }
-            .padding(.vertical, 10)
+        Button(drive.lastScanDate == nil ? "Scan" : "Rescan", action: rescanDrive)
+            .disabled(!drive.isConnected || indexManager.isIndexing || !driveMonitor.canScan(drive))
+        Button("Show in Finder", action: revealInFinder)
+            .disabled(!drive.isConnected)
+        if !drive.isLocal {
+            Divider()
+            Button("Eject", action: ejectDrive)
+                .disabled(!drive.isConnected)
         }
     }
 
@@ -250,7 +215,7 @@ struct DriveDetailCard: View {
     }
 }
 
-/// Name, status, capacity and scan info shared by the list rows and grid cards.
+/// Name, capacity and scan info shared by the list rows and grid cards; no status chip, the Connected / Offline sections say it.
 struct DriveSummary: View {
     let drive: DriveInfo
     /// Grid cards always put "Last scanned" on its own line; the list keeps it on the right
@@ -265,7 +230,6 @@ struct DriveSummary: View {
                     .frame(width: 24, height: 24)
                 Text(drive.name)
                     .lineLimit(1)
-                ConnectionChip(isConnected: drive.isConnected)
                 Spacer()
                 if drive.totalCapacity > 0 {
                     Text(drive.formattedTotal)
