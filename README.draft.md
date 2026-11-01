@@ -8,7 +8,7 @@ Fast, offline searching and housekeeping for external drives on macOS, built on 
 
 ## Overview
 
-A native macOS app built with SwiftUI. It lives in the menu bar, indexes external drives as they mount and keeps the index current as files change. File metadata lives in a local SQLite database, so you can search, browse and compare drives even when they're disconnected. It's lightweight and designed to stay running in the background, so drives are indexed without you having to open it.
+A lightweight native macOS app that lives in your menu bar and indexes the contents of your external drives. File metadata lives in a local SQLite database, allowing you to search, browse and inspect duplicate files even when they’re disconnected.
 
 ## Screenshots
 
@@ -20,8 +20,8 @@ A native macOS app built with SwiftUI. It lives in the menu bar, indexes externa
 ### Indexing
 
 - Automatic indexing on mount and on file change (FSEvents), with an adjustable buffer delay
-- Re-scans only modified directories to reduce drive wear
-- Exclude specific drives, directories and file extensions
+- Incremental re-scans of modified directories only, to reduce drive wear
+- Exclusion of specific drives, directories and file extensions
 - PRAGMA optimize after 50+ file changes
 
 ### Search & Browse
@@ -31,9 +31,9 @@ A native macOS app built with SwiftUI. It lives in the menu bar, indexes externa
 
 ### Duplicates & Folder Compare
 
-- Finds duplicate files across drives above a configurable size threshold
-- Side-by-side folder comparison between two drives: shows missing, changed and moved files, copies missing files across, and moves extras to the Trash
-- Capture One cleanup: finds files that can be removed without losing edits (mask backups, superseded Settings folders, stray CaptureOne folders, session Trash) and syncs one copy of a session onto another
+- Duplicate file detection across drives, with a configurable minimum file size
+- Side-by-side folder comparison between two drives, with missing, changed and moved files highlighted, copying of missing files and trashing of extras
+- Capture One cleanup of files that can be removed without losing edits (mask backups, superseded Settings folders, stray CaptureOne folders, session Trash), plus session sync between copies
 
 ## Raycast Extension
 
