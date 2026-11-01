@@ -535,25 +535,23 @@ struct CaptureOneView<Sidebar: View>: View {
         return Section {
             ForEach(rows) { itemRow($0) }
         } header: {
-            Text(kind.rawValue)
-                .padding(.bottom, 6)
-        } footer: {
-            HStack {
-                Button("Reveal in Finder") { revealInFinder(rows) }
-                    .disabled(!isConnected(group.session.driveUUID))
-                    .help("Select this section's items in Finder")
+            // A header with more than one view turns grey and small; this matches the plain "Actions" one
+            HStack(alignment: .firstTextBaseline) {
+                Text(kind.rawValue).font(.headline)
                 Spacer()
-                Button(safe.isEmpty ? "Delete" : "Delete \(formatted(Self.safeSize(safe)))", systemImage: "trash") { pendingDelete = safe }
+                Button("Delete", systemImage: "trash") { pendingDelete = safe }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
                     .disabled(safe.isEmpty || deleting != nil)
-                    .help("Delete the safe items in this section")
+                    .help(safe.isEmpty ? "Nothing in this section is safe to delete" : "Delete the safe items in this section (\(formatted(Self.safeSize(safe))))")
             }
-            .padding(.top, 6)
-            // ponytail: measured, the grouped Form insets footers 10 pt inside the card on macOS 27; this lines the buttons up with its edges
-            .padding(.horizontal, -10)
+            .foregroundStyle(.primary)
+            .textCase(nil)
+            .padding(.bottom, 6)
         }
     }
 
-    /// What the safe items are, counted by kind, and their total size: "3 old Settings folders, 12 mask backups · 1.2 GB"
+    /// What the safe items are, counted by kind, and their total size: "3 old settings folders, 12 mask backups · 1.2 GB"
     private static func safeSummary(_ safe: [CleanupRow]) -> String {
         var settings = 0, loose = 0, masks = 0, trash = 0
         for row in safe {
@@ -564,8 +562,8 @@ struct CaptureOneView<Sidebar: View>: View {
             case .trash: trash += 1
             }
         }
-        let parts = [(settings, "old Settings folder", "old Settings folders"), (loose, "CaptureOne folder", "CaptureOne folders"),
-                     (masks, "mask backup", "mask backups"), (trash, "item in the Trash", "items in the Trash")]
+        let parts = [(settings, "old settings folder", "old settings folders"), (loose, "CaptureOne folder", "CaptureOne folders"),
+                     (masks, "mask backup", "mask backups"), (trash, "item in the session trash", "items in the session trash")]
             .filter { $0.0 > 0 }
             .map { "\($0.0) \($0.0 == 1 ? $0.1 : $0.2)" }
         return parts.joined(separator: ", ") + " · " + formatted(safeSize(safe))
