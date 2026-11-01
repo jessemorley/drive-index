@@ -26,12 +26,13 @@ struct SearchView: View {
             // Main content
             if searchText.isEmpty {
                 emptyStateView
-            } else if isSearching {
-                loadingView
-            } else if searchResults.isEmpty {
-                noResultsView
-            } else {
+            } else if !searchResults.isEmpty {
+                // Old results stay up until the new ones replace them, as in Finder
                 searchResultsView
+            } else if isSearching {
+                Color.clear
+            } else {
+                noResultsView
             }
         }
         .navigationTitle("Search")
@@ -44,10 +45,9 @@ struct SearchView: View {
         .searchable(text: $searchText, placement: .automatic, prompt: "Search files")
         .searchFocused($searchFocused)
         .onAppear { searchFocused = true }  // Selecting Search in the sidebar puts the cursor in the field
-        .onChange(of: searchText) { oldValue, newValue in
-            Task {
-                await performSearch(newValue)
-            }
+        // A new keystroke cancels the pending search, so only a pause in typing runs one
+        .task(id: searchText) {
+            await performSearch(searchText)
         }
     }
 
@@ -68,11 +68,6 @@ struct SearchView: View {
             systemImage: "magnifyingglass",
             description: Text("Use the search bar above to find files across all indexed drives")
         )
-    }
-
-    private var loadingView: some View {
-        ProgressView("Searching...")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var noResultsView: some View {
@@ -183,7 +178,9 @@ struct SearchView: View {
         isSearching = true
 
         do {
+            try await Task.sleep(for: .milliseconds(250))
             let results = try await searchManager.search(query)
+            try Task.checkCancellation()
             // Convert SearchResult to FileDisplayItem
             searchResults = results.map { result in
                 FileDisplayItem(
@@ -199,6 +196,8 @@ struct SearchView: View {
                     isDirectory: result.isDirectory
                 )
             }
+        } catch is CancellationError {
+            return  // Superseded by a newer query, which owns isSearching
         } catch {
             print("Search error: \(error)")
             searchResults = []
