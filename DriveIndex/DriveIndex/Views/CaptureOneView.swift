@@ -370,26 +370,23 @@ struct CaptureOneView<Sidebar: View>: View {
 
     /// Under the list: the deletion's progress while it runs, else the space freed so far
     private var footer: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                if let deleting {
-                    ProgressView().controlSize(.small)
-                    Text("Deleting…")
-                    ProgressView(value: Double(deleting.done), total: Double(max(deleting.total, 1)))
-                } else {
-                    Text("\(formatted(Int64(freedSettings + freedMasks + freedTrash))) saved")
-                        .contentTransition(.numericText())
-                        .help("Settings \(formatted(Int64(freedSettings))), \(CaptureOneTab.masks.rawValue) \(formatted(Int64(freedMasks))), \(CaptureOneTab.trash.rawValue) \(formatted(Int64(freedTrash)))")
-                    Spacer()
-                }
+        HStack {
+            if let deleting {
+                ProgressView().controlSize(.small)
+                Text("Deleting…")
+                ProgressView(value: Double(deleting.done), total: Double(max(deleting.total, 1)))
+            } else {
+                Text("\(formatted(Int64(freedSettings + freedMasks + freedTrash))) saved")
+                    .contentTransition(.numericText())
+                    .help("Settings \(formatted(Int64(freedSettings))), \(CaptureOneTab.masks.rawValue) \(formatted(Int64(freedMasks))), \(CaptureOneTab.trash.rawValue) \(formatted(Int64(freedTrash)))")
             }
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .padding(.horizontal)
-            .padding(.vertical, 6)
         }
-        .background(.bar)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .padding([.horizontal, .bottom], 10)
     }
 
     private func skip() {

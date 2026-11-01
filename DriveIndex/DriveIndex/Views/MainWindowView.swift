@@ -110,23 +110,20 @@ private func formatFileCount(_ count: Int) -> String {
     }
 }
 
-/// Thin strip at the bottom of the main window while changes are pending, a scan or hash runs, or a scan just finished.
+/// Glass capsule floating at the bottom of the main window while changes are pending, a scan or hash runs, or a scan just finished.
 struct IndexingStatusBar: View {
     @EnvironmentObject var indexManager: IndexManager
 
     var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .lineLimit(1)
-            .controlSize(.small)
-            .padding(.horizontal)
-            .padding(.vertical, 6)
+        HStack {
+            content
         }
-        .background(.bar)
+        .lineLimit(1)
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .capsule)
+        .padding([.horizontal, .bottom], 10)
         .animation(nil, value: indexManager.currentProgress?.filesProcessed)
     }
 
@@ -168,7 +165,6 @@ struct IndexingStatusBar: View {
                 ProgressView()
                 Text("Computing file hashes for duplicate detection")
             }
-            Spacer()
             Button("Cancel", systemImage: "xmark.circle.fill") {
                 indexManager.cancelHashing()
             }
