@@ -89,7 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
         menu.addItem(statusRow)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Open DriveIndex", action: #selector(handleOpenMainWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Open DriveIndex", action: #selector(handleOpenMainWindow), keyEquivalent: "o"))
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsWindow), keyEquivalent: ","))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit DriveIndex", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
