@@ -110,8 +110,13 @@ private let paddedBytes: ByteCountFormatter = {
     return formatter
 }()
 
-struct DuplicatesView: View {
+/// The whole window while Duplicates is selected: the app's sidebar, the list of sets and loose files, and
+/// the review. Three native columns, so the toolbar title sits over the review
+struct DuplicatesView<Sidebar: View>: View {
     @EnvironmentObject var driveMonitor: DriveMonitor
+    @EnvironmentObject var indexManager: IndexManager
+    @Binding var columnVisibility: NavigationSplitViewVisibility
+    @ViewBuilder let sidebar: Sidebar
 
     // Kept sorted
     @State private var sets: [FolderSet] = []
@@ -137,54 +142,66 @@ struct DuplicatesView: View {
     @AppStorage("duplicates.excludeLocal") private var excludeLocal = false
 
     var body: some View {
-        content
-            .navigationTitle(titles.title)
-            .navigationSubtitle(titles.subtitle)
-            .toolbarTitleDisplayMode(.inline)
-            .toolbar(id: "duplicates-toolbar") {
-                ToolbarItem(id: "sort", placement: .automatic) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
+        } content: {
+            Group {
+                if loaded && errorMessage == nil && !(sets.isEmpty && loose.isEmpty) { list } else { Color.clear }
+            }
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 440)
+            .navigationTitle("Duplicates")
+            .toolbar {
+                // As Mail's filter: filled while it hides something
+                Menu("Filter", systemImage: excludeLocal ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease") {
                     Picker("Sort By", selection: $sort) {
                         ForEach(DuplicateSort.allCases, id: \.self) { Text($0.rawValue) }
                     }
-                    .pickerStyle(.menu)
-                    .help("Sort duplicates")
-                }
-                if let mac = driveMonitor.drives.first(where: \.isLocal) {
-                    ToolbarItem(id: "excludeLocal", placement: .automatic) {
-                        Toggle("Exclude \(mac.name)", systemImage: "laptopcomputer", isOn: $excludeLocal)
-                            .help("Hide copies on \(mac.name)")
+                    .pickerStyle(.inline)
+                    if let mac = driveMonitor.drives.first(where: \.isLocal) {
+                        Toggle("Exclude \(mac.name)", isOn: $excludeLocal)
                     }
                 }
-                ToolbarItem(id: "compare", placement: .automatic) {
-                    let pairs = comparablePairs
-                    if pairs.count > 1 {
-                        Menu("Compare Folders", systemImage: "arrow.left.arrow.right") {
-                            ForEach(pairs.indices, id: \.self) { i in
-                                Button("\(pairs[i].a.driveName): \(pairs[i].a.relativePath)  ↔  \(pairs[i].b.driveName): \(pairs[i].b.relativePath)") { comparing = pairs[i] }
+                .help("Sort and filter duplicates")
+            }
+        } detail: {
+            content
+                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                .indexingStatusBar(indexManager)
+                .toolbar(id: "duplicates-toolbar") {
+                    // Detail-column items start at the column's leading edge otherwise
+                    ToolbarSpacer(.flexible)
+                    ToolbarItem(id: "compare", placement: .automatic) {
+                        let pairs = comparablePairs
+                        if pairs.count > 1 {
+                            Menu("Compare Folders", systemImage: "arrow.left.arrow.right") {
+                                ForEach(pairs.indices, id: \.self) { i in
+                                    Button("\(pairs[i].a.driveName): \(pairs[i].a.relativePath)  ↔  \(pairs[i].b.driveName): \(pairs[i].b.relativePath)") { comparing = pairs[i] }
+                                }
                             }
-                        }
-                        .help("Compare the selected folders")
-                    } else {
-                        Button("Compare Folders", systemImage: "arrow.left.arrow.right") { comparing = pairs.first }
                             .help("Compare the selected folders")
-                            .disabled(pairs.isEmpty)
+                        } else {
+                            Button("Compare Folders", systemImage: "arrow.left.arrow.right") { comparing = pairs.first }
+                                .help("Compare the selected folders")
+                                .disabled(pairs.isEmpty)
+                        }
+                    }
+                    ToolbarItem(id: "refresh", placement: .automatic) {
+                        Button("Refresh", systemImage: "arrow.clockwise") {
+                            Task { await load() }
+                        }
+                        .help("Refresh duplicates")
                     }
                 }
-                ToolbarItem(id: "refresh", placement: .automatic) {
-                    Button("Refresh", systemImage: "arrow.clockwise") {
-                        Task { await load() }
-                    }
-                    .help("Refresh duplicates")
-                }
-            }
-            .task(id: excludeLocal) { await load() }
-            .task(id: comparisonKey) { await compareKept() }
-            .onChange(of: selection) { workTask?.cancel() }
-            .onChange(of: sort) { (sets, loose) = (sorted(sets), sorted(loose)) }
-            .sheet(item: $comparing) { pair in
-                FolderCompareView(pair: pair) { moveToTrash(driveUUID: $0.driveUUID, relativePath: $0.relativePath) }
-                    .environmentObject(driveMonitor)
-            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .task(id: excludeLocal) { await load() }
+        .task(id: comparisonKey) { await compareKept() }
+        .onChange(of: selection) { workTask?.cancel() }
+        .onChange(of: sort) { (sets, loose) = (sorted(sets), sorted(loose)) }
+        .sheet(item: $comparing) { pair in
+            FolderCompareView(pair: pair) { moveToTrash(driveUUID: $0.driveUUID, relativePath: $0.relativePath) }
+                .environmentObject(driveMonitor)
+        }
     }
 
     @ViewBuilder
@@ -198,12 +215,7 @@ struct DuplicatesView: View {
         } else if sets.isEmpty && loose.isEmpty {
             ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("Files with identical contents will appear here"))
         } else {
-            HSplitView {
-                list
-                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 440)
-                detail
-                    .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-            }
+            detail
         }
     }
 
@@ -215,45 +227,43 @@ struct DuplicatesView: View {
         List(selection: $selection) {
             if !sets.isEmpty {
                 Section {
+                    header("Folders", sets.count.formatted())
                     ForEach(sets) { set in
                         // A session shows Finder's icon for a Capture One session (its .cosessiondb)
                         row(icon: NSWorkspace.shared.listIcon(name: set.members.contains(where: \.isSession) ? "Session.cosessiondb" : "",
-                                                              isDirectory: !set.members.contains(where: \.isSession)), name: set.name,
-                            detail: "\(set.members.count) folders", size: set.wastedBytes)
+                                                              isDirectory: !set.members.contains(where: \.isSession)), name: set.name, copies: set.members.count, size: set.wastedBytes)
                             .tag(DuplicateSelection.set(set.id))
                     }
-                } header: {
-                    header("Folders", "\(sets.count.formatted()) sets of copies")
                 }
             }
             if !loose.isEmpty {
                 Section {
+                    header("Files", loose.count.formatted())
                     ForEach(loose, id: \.cardID) { group in
-                        row(icon: NSWorkspace.shared.listIcon(name: group.name, isDirectory: false), name: group.name,
-                            detail: "\(group.files.count) copies · \(bytes(group.size))", size: group.wastedBytes)
+                        row(icon: NSWorkspace.shared.listIcon(name: group.name, isDirectory: false), name: group.name, copies: group.files.count, size: group.wastedBytes)
                             .tag(DuplicateSelection.file(group.cardID))
                     }
-                } header: {
-                    header("Files", "\(loose.count.formatted()) with a copy outside those folders")
                 }
             }
         }
     }
 
+    /// A row, not a section header: section headers pin under the toolbar
     private func header(_ title: String, _ count: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title)
-            Text(count).foregroundStyle(.secondary).fontWeight(.regular)
+            Text(title).font(.headline)
+            Text(count).foregroundStyle(.secondary)
         }
+        .padding(.top, 8)
+        .selectionDisabled()
     }
 
-    private func row(icon: NSImage, name: String, detail: String, size: Int64) -> some View {
+    private func row(icon: NSImage, name: String, copies: Int, size: Int64) -> some View {
         HStack {
             Image(nsImage: icon)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).lineLimit(1)
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-            }
+            Text(name).lineLimit(1)
+            StatusChip(title: copies.formatted(), color: nil)
+                .help("\(copies) copies")
             Spacer()
             Text(bytes(size)).foregroundStyle(.secondary)
         }
@@ -284,11 +294,11 @@ struct DuplicatesView: View {
     }
 
     @ViewBuilder
-    private func driveIcon(_ driveUUID: String) -> some View {
+    private func driveIcon(_ driveUUID: String, size: CGFloat = 16) -> some View {  // Finder list-view icon size
         if let drive = driveMonitor.drives.first(where: { $0.id == driveUUID }) {
             Image(nsImage: drive.finderIcon)
                 .resizable()
-                .frame(width: 16, height: 16)  // Finder list-view icon size
+                .frame(width: size, height: size)
         }
     }
 
@@ -305,6 +315,7 @@ struct DuplicatesView: View {
                         .onTapGesture { keep[set.id] = i }
                 }
             } header: {
+                paneTitle
                 HStack {
                     Text("Keep which folder?")
                     Spacer()
@@ -332,6 +343,13 @@ struct DuplicatesView: View {
                                 Image(systemName: "xmark.circle").foregroundStyle(.red)
                             }
                         }
+                    }
+                } else if let session = removed.map({ set.members[$0] }).first(where: { $0.isSession && $0.onlyHere + $0.changed > 0 }) {
+                    // Sessions have no index blockers, but the index still sees their photos
+                    Label {
+                        Text("\(session.folder.name) has \((session.onlyHere + session.changed).formatted()) files the kept folder lacks or has changed. It's in a Capture One session, so Check on Disk decides")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                     }
                 } else if blockers.isEmpty {
                     Label {
@@ -500,12 +518,13 @@ struct DuplicatesView: View {
         let status = kept ? nil
             : blockers.isEmpty ? nil
             : blockers.map { $0.0.short($0.1) }.joined(separator: ", ")
-        return HStack(spacing: 14) {
+        return HStack(spacing: 8) {  // the drive icon's own transparent margin adds to this
             Image(systemName: kept ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(kept ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .padding(.trailing, -4)
+            driveIcon(m.folder.driveUUID, size: 48)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    driveIcon(m.folder.driveUUID)
                     Text(m.folder.driveName).fontWeight(.medium)
                     Text(m.folder.relativePath).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer()
@@ -558,13 +577,24 @@ struct DuplicatesView: View {
                     }
                 }
             } header: {
+                paneTitle
                 Text("Copies")
             }
         }
         .formStyle(.grouped)
     }
 
-    /// In the toolbar: the selected set or file, and its copies
+    /// Atop the review: a three-column window titles the middle column (as Mail does), not this one
+    private var paneTitle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(titles.title).font(.title2.bold()).foregroundStyle(.primary)
+            Text(titles.subtitle).font(.body).foregroundStyle(.secondary)
+        }
+        .textCase(nil)
+        .padding(.bottom, 16)
+    }
+
+    /// The selected set or file, and its copies
     private var titles: (title: String, subtitle: String) {
         switch selection {
         case .set(let id):
@@ -897,7 +927,8 @@ private struct OverlapBar: View {
 }
 
 #Preview {
-    DuplicatesView()
+    DuplicatesView(columnVisibility: .constant(.all)) { Text("Sidebar") }
         .environmentObject(DriveMonitor())
+        .environmentObject(IndexManager())
         .frame(width: 900, height: 700)
 }

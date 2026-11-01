@@ -16,44 +16,44 @@ struct MainWindowView: View {
     @State private var searchText = ""
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
-                .navigationSplitViewColumnWidth(
-                    min: SidebarWidth.min,
-                    ideal: SidebarWidth.ideal,
-                    max: SidebarWidth.max
-                )
-        } detail: {
-            // Detail view
-            Group {
-                if let selectedItem = selectedItem {
-                    detailView(for: selectedItem)
-                } else {
-                    Text("Select an item from the sidebar")
-                        .foregroundStyle(.secondary)
+        Group {
+            if selectedItem == .duplicates {
+                // Duplicates has a list and a review, so it brings its own three columns
+                DuplicatesView(columnVisibility: $columnVisibility) { sidebar }
+            } else {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebar
+                } detail: {
+                    // Detail view
+                    Group {
+                        if let selectedItem = selectedItem {
+                            detailView(for: selectedItem)
+                        } else {
+                            Text("Select an item from the sidebar")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .indexingStatusBar(indexManager)
                 }
+                .navigationSplitViewStyle(.balanced)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                // Indexing progress strip; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
-                if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
-                    IndexingStatusBar()
-                        .environmentObject(indexManager)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .animation(.default, value: indexManager.isIndexing)
-            .animation(.default, value: indexManager.isHashing)
-            .animation(.default, value: indexManager.pendingChanges != nil)
         }
-        .navigationSplitViewStyle(.balanced)
         .onChange(of: searchText) { oldValue, newValue in
             // Automatically switch to Search view when user types in search
             if !newValue.isEmpty && selectedItem != .search {
                 selectedItem = .search
             }
         }
+    }
+
+    private var sidebar: some View {
+        NavigationSidebar(selection: $selectedItem, driveMonitor: driveMonitor)
+            .navigationSplitViewColumnWidth(
+                min: SidebarWidth.min,
+                ideal: SidebarWidth.ideal,
+                max: SidebarWidth.max
+            )
     }
 
     @ViewBuilder
@@ -71,7 +71,7 @@ struct MainWindowView: View {
                 .environmentObject(driveMonitor)
                 .environmentObject(indexManager)
         case .duplicates:
-            DuplicatesView()
+            EmptyView()  // the window's columns come from DuplicatesView, in body
         case .captureOne:
             CaptureOneView()
         }
@@ -79,6 +79,22 @@ struct MainWindowView: View {
 }
 
 // MARK: - Indexing Progress Overlay
+
+extension View {
+    /// The indexing progress strip under a detail column; safeAreaInset (not ZStack) so it pushes content up instead of covering the last rows
+    func indexingStatusBar(_ indexManager: IndexManager) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
+                IndexingStatusBar()
+                    .environmentObject(indexManager)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.default, value: indexManager.isIndexing)
+        .animation(.default, value: indexManager.isHashing)
+        .animation(.default, value: indexManager.pendingChanges != nil)
+    }
+}
 
 private func formatFileCount(_ count: Int) -> String {
     let absCount = abs(count)
