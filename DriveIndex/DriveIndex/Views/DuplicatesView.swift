@@ -2,10 +2,16 @@
 //  DuplicatesView.swift
 //  DriveIndex
 //
-//  Files with identical content (same hash), one card per file, one row per copy
+//  Files with identical content (same hash), or folders with identical contents; one card per file
+//  or folder, one row per copy
 //
 
 import SwiftUI
+
+enum DuplicateKind: String, CaseIterable {
+    case files = "Files"
+    case folders = "Folders"
+}
 
 enum DuplicateSort: String, CaseIterable {
     case wasted = "Wasted Space"
@@ -28,7 +34,9 @@ struct DuplicatesView: View {
     @State private var expanded: Set<Int64> = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var comparing: FolderPair?
     @AppStorage("duplicates.sort") private var sort: DuplicateSort = .wasted
+    @AppStorage("duplicates.kind") private var kind: DuplicateKind = .files
     @AppStorage("duplicates.excludeLocal") private var excludeLocal = false
 
     /// The groups shown: without this Mac's copies, a group needs two copies on drives
@@ -45,6 +53,13 @@ struct DuplicatesView: View {
             .navigationTitle("Duplicates")
             .toolbarTitleDisplayMode(.inline)
             .toolbar(id: "duplicates-toolbar") {
+                ToolbarItem(id: "kind", placement: .automatic) {
+                    Picker("Show", selection: $kind) {
+                        ForEach(DuplicateKind.allCases, id: \.self) { Text($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    .help("Show duplicate files or folders")
+                }
                 ToolbarItem(id: "sort", placement: .automatic) {
                     Picker("Sort By", selection: $sort) {
                         ForEach(DuplicateSort.allCases, id: \.self) { Text($0.rawValue) }
@@ -58,6 +73,10 @@ struct DuplicatesView: View {
                             .help("Hide copies on \(mac.name)")
                     }
                 }
+                ToolbarItem(id: "compare", placement: .automatic) {
+                    Button("Compare Folders…", systemImage: "arrow.left.arrow.right") { chooseFoldersToCompare() }
+                        .help("Compare two folders")
+                }
                 ToolbarItem(id: "refresh", placement: .automatic) {
                     Button("Refresh", systemImage: "arrow.clockwise") {
                         Task { await loadGroups() }
@@ -65,19 +84,23 @@ struct DuplicatesView: View {
                     .help("Refresh duplicates")
                 }
             }
-            .task { await loadGroups() }
+            .task(id: kind) { await loadGroups() }
             .onChange(of: sort) { groups = sorted(groups) }
+            .sheet(item: $comparing) { pair in
+                FolderCompareView(pair: pair) { moveToTrash(driveUUID: $0.driveUUID, relativePath: $0.relativePath) }
+                    .environmentObject(driveMonitor)
+            }
     }
 
     @ViewBuilder
     private var content: some View {
         if isLoading {
-            ProgressView("Finding duplicates...")
+            ProgressView(kind == .files ? "Finding duplicates..." : "Comparing folders...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let errorMessage {
             ContentUnavailableView("Couldn't Load Duplicates", systemImage: "exclamationmark.triangle", description: Text(errorMessage))
         } else if shownGroups.isEmpty {
-            ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("Files with identical contents will appear here"))
+            ContentUnavailableView("No Duplicates", systemImage: "doc.on.doc", description: Text("\(kind.rawValue) with identical contents will appear here"))
         } else {
             ScrollView {
                 // Lazy: there can be thousands of groups
@@ -127,7 +150,7 @@ struct DuplicatesView: View {
             Label {
                 Text(group.name)
             } icon: {
-                Image(nsImage: NSWorkspace.shared.listIcon(name: group.name, isDirectory: false))
+                Image(nsImage: NSWorkspace.shared.listIcon(name: group.name, isDirectory: kind == .folders))
             }
             .lineLimit(1)
             .truncationMode(.middle)
@@ -137,7 +160,76 @@ struct DuplicatesView: View {
             Text("\(group.files.count) copies")
                 .foregroundStyle(.secondary)
             Text("\(formatted(group.wastedBytes)) wasted")
+            if kind == .folders {
+                compareParentsButton(group)
+            }
         }
+    }
+
+    /// Opens Folder Compare above the copies: a click takes the highest level whose folders still share
+    /// a name on both sides (a session, not its Capture folder), and the menu lists every level. With
+    /// more than two copies, the menu lists each pair at its highest level.
+    @ViewBuilder
+    private func compareParentsButton(_ group: DuplicateGroup) -> some View {
+        let pairs = group.files.indices.flatMap { i in group.files[(i + 1)...].map { (group.files[i], $0) } }
+        if pairs.count == 1 {
+            let levels = compareLevels(pairs[0].0, pairs[0].1)
+            Menu("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
+                ForEach(levels.indices.reversed(), id: \.self) { i in
+                    Button(levelTitle(levels[i])) { comparing = levels[i] }
+                }
+            } primaryAction: {
+                comparing = levels.last
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
+            .fixedSize()
+            .foregroundStyle(.orange)
+            .help("Compare the folders above these copies; hold for other levels")
+        } else {
+            Menu("Compare Parent Folders", systemImage: "arrow.up.arrow.down") {
+                ForEach(pairs.indices, id: \.self) { i in
+                    let (a, b) = pairs[i]
+                    let pair = compareLevels(a, b).last!
+                    Button("\(a.driveName) and \(b.driveName): \(pair.a.relativePath), \(pair.b.relativePath)") {
+                        comparing = pair
+                    }
+                }
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .foregroundStyle(.orange)
+            .help("Compare the folders above these copies")
+        }
+    }
+
+    /// The folders above two copies, nearest first: their parents, then each level up while both
+    /// sides' folders share a name, stopping at either drive's root
+    private func compareLevels(_ a: DuplicateFile, _ b: DuplicateFile) -> [FolderPair] {
+        func parent(_ path: String) -> String { (path as NSString).deletingLastPathComponent }
+        func name(_ path: String) -> String { (path as NSString).lastPathComponent }
+        func pair(_ pathA: String, _ pathB: String) -> FolderPair {
+            FolderPair(a: FolderLocation(driveUUID: a.driveUUID, driveName: a.driveName, relativePath: pathA),
+                       b: FolderLocation(driveUUID: b.driveUUID, driveName: b.driveName, relativePath: pathB))
+        }
+        var (pathA, pathB) = (parent(a.relativePath), parent(b.relativePath))
+        var levels = [pair(pathA, pathB)]
+        while true {
+            let (upA, upB) = (parent(pathA), parent(pathB))
+            guard !upA.isEmpty, !upB.isEmpty, name(upA) == name(upB) else { break }
+            (pathA, pathB) = (upA, upB)
+            levels.append(pair(pathA, pathB))
+        }
+        return levels
+    }
+
+    private func levelTitle(_ pair: FolderPair) -> String {
+        let (a, b) = (pair.a.name, pair.b.name)
+        return a == b ? "Compare “\(a)” Folders" : "Compare “\(a)” and “\(b)”"
     }
 
     private func copyRow(_ file: DuplicateFile) -> some View {
@@ -163,12 +255,19 @@ struct DuplicatesView: View {
                 Text(modifiedAt, format: .dateTime.day().month().year())
                     .foregroundStyle(.secondary)
             }
+            Button("Move to Trash", systemImage: "trash") { moveToTrash(file) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .disabled(!connected)
+                .help("Move this copy to the Trash")
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { revealInFinder(file) }
         .contextMenu {
             Button("Reveal in Finder") { revealInFinder(file) }
+                .disabled(!connected)
+            Button("Move to Trash") { moveToTrash(file) }
                 .disabled(!connected)
         }
     }
@@ -187,7 +286,9 @@ struct DuplicatesView: View {
         isLoading = true
         errorMessage = nil
         do {
-            groups = sorted(try await DatabaseManager.shared.getDuplicateGroups())
+            groups = sorted(try await kind == .files
+                ? DatabaseManager.shared.getDuplicateGroups()
+                : DatabaseManager.shared.getDuplicateFolderGroups())
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -207,6 +308,48 @@ struct DuplicatesView: View {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([driveURL.appendingPathComponent(file.relativePath)])
+    }
+
+    /// Two Open panels, for any two folders
+    private func chooseFoldersToCompare() {
+        func choose(_ message: String) -> FolderLocation? {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.message = message
+            guard panel.runModal() == .OK, let url = panel.url else { return nil }
+            return FolderLocation(url: url, drives: driveMonitor.drives)
+        }
+        guard let a = choose("Choose the first folder to compare"),
+              let b = choose("Choose the folder to compare it with") else { return }
+        comparing = FolderPair(a: a, b: b)
+    }
+
+    private func moveToTrash(_ file: DuplicateFile) {
+        moveToTrash(driveUUID: file.driveUUID, relativePath: file.relativePath)
+    }
+
+    /// Trashes a file or folder, then drops it (and anything inside it) from the index and the cards
+    private func moveToTrash(driveUUID: String, relativePath: String) {
+        guard let drive = driveMonitor.drives.first(where: { $0.id == driveUUID }),
+              let driveURL = driveMonitor.getDriveURL(for: drive),
+              (try? FileManager.default.trashItem(at: driveURL.appendingPathComponent(relativePath), resultingItemURL: nil)) != nil else {
+            NSSound.beep()
+            return
+        }
+        // ponytail: drop it from the index now so it doesn't reappear before FSEvents rescans; if this fails, that rescan catches up
+        Task { try? await DatabaseManager.shared.deleteFiles(driveUUID: driveUUID, relativePaths: [relativePath]) }
+
+        func isGone(_ copy: DuplicateFile) -> Bool {
+            copy.driveUUID == driveUUID
+                && (copy.relativePath == relativePath || copy.relativePath.hasPrefix(relativePath + "/"))
+        }
+        withAnimation {
+            groups = groups.compactMap { group in
+                let files = group.files.filter { !isGone($0) }
+                return files.count > 1 ? DuplicateGroup(name: group.name, size: group.size, count: files.count, files: files) : nil
+            }
+        }
     }
 }
 
