@@ -472,39 +472,39 @@ struct DuplicatesView<Sidebar: View>: View {
             let unique = results.dropFirst().reduce(Set(results[0].result.onlyA.map(\.path))) { $0.intersection($1.result.onlyA.map(\.path)) }
             let files = results[0].result.onlyA.filter { unique.contains($0.path) }
             let changed = results.flatMap { r in r.result.changed.map { (other: r.other, file: $0) } }
-            if !files.isEmpty || !changed.isEmpty {
+            if !files.isEmpty {
                 Section {
-                    if !files.isEmpty {
-                        subheader("Unique files: \(files.count.formatted()) \(files.count == 1 ? "file" : "files"), \(bytes(files.reduce(0) { $0 + $1.size }))")
-                        OnlyHereList(files: files, listing: results[0].result.listingFolders().a, changed: 0, otherName: "",
-                                     root: root, boxed: false) { EmptyView() }
+                    subheader("Unique files: \(files.count.formatted()) \(files.count == 1 ? "file" : "files"), \(bytes(files.reduce(0) { $0 + $1.size }))")
+                    OnlyHereList(files: files, listing: results[0].result.listingFolders().a, changed: 0, otherName: "",
+                                 root: root, boxed: false) { EmptyView() }
+                }
+            }
+            if !changed.isEmpty {
+                Section {
+                    subheader("Changed: \(changed.count.formatted()) \(changed.count == 1 ? "file" : "files")")
+                    // ponytail: the first 200; a session can change thousands of files
+                    ForEach(changed.prefix(200).indices, id: \.self) { i in
+                        let (other, file) = changed[i]
+                        HStack {
+                            Label {
+                                Text(file.path).lineLimit(1).truncationMode(.middle)
+                            } icon: {
+                                Image(nsImage: NSWorkspace.shared.listIcon(name: (file.path as NSString).lastPathComponent, isDirectory: false))
+                            }
+                            Spacer()
+                            switch file.newer {
+                            case .a: Text("Newer here").foregroundStyle(.secondary)
+                            case .b: Text("Newer on \(other.folder.driveName)").foregroundStyle(.orange)
+                            case nil: Text("Same date on \(other.folder.driveName)").foregroundStyle(.secondary)
+                            }
+                        }
+                        .contextMenu {
+                            Button("Reveal in Finder") { root.map { NSWorkspace.shared.activateFileViewerSelecting([$0.appending(path: file.path)]) } }
+                                .disabled(root == nil)
+                        }
                     }
-                    if !changed.isEmpty {
-                        subheader("Changed: \(changed.count.formatted()) \(changed.count == 1 ? "file" : "files")")
-                        // ponytail: the first 200; a session can change thousands of files
-                        ForEach(changed.prefix(200).indices, id: \.self) { i in
-                            let (other, file) = changed[i]
-                            HStack {
-                                Label {
-                                    Text(file.path).lineLimit(1).truncationMode(.middle)
-                                } icon: {
-                                    Image(nsImage: NSWorkspace.shared.listIcon(name: (file.path as NSString).lastPathComponent, isDirectory: false))
-                                }
-                                Spacer()
-                                switch file.newer {
-                                case .a: Text("Newer here").foregroundStyle(.secondary)
-                                case .b: Text("Newer on \(other.folder.driveName)").foregroundStyle(.orange)
-                                case nil: Text("Same date on \(other.folder.driveName)").foregroundStyle(.secondary)
-                                }
-                            }
-                            .contextMenu {
-                                Button("Reveal in Finder") { root.map { NSWorkspace.shared.activateFileViewerSelecting([$0.appending(path: file.path)]) } }
-                                    .disabled(root == nil)
-                            }
-                        }
-                        if changed.count > 200 {
-                            Text("…and \((changed.count - 200).formatted()) more").foregroundStyle(.secondary)
-                        }
+                    if changed.count > 200 {
+                        Text("…and \((changed.count - 200).formatted()) more").foregroundStyle(.secondary)
                     }
                 }
             }
@@ -1022,15 +1022,15 @@ private struct OverlapBar: View {
         GeometryReader { g in
             let unit = g.size.width / CGFloat(max(member.files, 1))
             HStack(spacing: 0) {
-                Rectangle().fill(.tertiary).frame(width: unit * CGFloat(member.shared))
-                Rectangle().fill(.orange).frame(width: unit * CGFloat(member.changed))
                 Rectangle().fill(.blue).frame(width: unit * CGFloat(member.onlyHere))
+                Rectangle().fill(.orange).frame(width: unit * CGFloat(member.changed))
+                Rectangle().fill(.tertiary).frame(width: unit * CGFloat(member.shared))
             }
         }
         .frame(height: 4)
         .background(.quaternary)
         .clipShape(.capsule)
-        .help("\(member.shared.formatted()) copied elsewhere, \(member.changed.formatted()) changed, \(member.onlyHere.formatted()) only here, \(member.unchecked.formatted()) not checked yet")
+        .help("\(member.onlyHere.formatted()) only here, \(member.changed.formatted()) changed, \(member.shared.formatted()) copied elsewhere, \(member.unchecked.formatted()) not checked yet")
     }
 }
 
