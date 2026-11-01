@@ -463,11 +463,7 @@ struct CaptureOneView<Sidebar: View>: View {
                                 .font(.body).foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.bottom, 28)
-                    // A header with more than one view turns grey and small; this matches the plain section headers
-                    Text("Actions")
-                        .font(.headline)
-                        .padding(.bottom, 6)
+                    .padding(.bottom, 12)
                 }
                 .foregroundStyle(.primary)
                 .textCase(nil)
