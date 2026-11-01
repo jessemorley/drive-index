@@ -315,12 +315,10 @@ struct CaptureOneView<Sidebar: View>: View {
 
     // MARK: - List
 
-    /// Sessions on a disconnected drive can't be cleaned up, so they wait below the others
+    /// Sessions on a disconnected drive have nothing safe yet, so they sort to the bottom, greyed out
     private var sections: [(title: String, groups: [SessionGroup])] {
         let groups = groups ?? []
-        let unchecked = { (group: SessionGroup) in group.rows.allSatisfy { $0.status == .unverified } }
-        return [("Sessions", groups.filter { $0.session.file != nil && !unchecked($0) }),
-                ("Not Checked", groups.filter { $0.session.file != nil && unchecked($0) }),
+        return [("Sessions", groups.filter { $0.session.file != nil }),
                 ("Folders", groups.filter { $0.session.file == nil })]
             .filter { !$0.groups.isEmpty }
     }
@@ -361,8 +359,6 @@ struct CaptureOneView<Sidebar: View>: View {
         return HStack {
             Image(nsImage: NSWorkspace.shared.listIcon(name: session.file ?? session.name, isDirectory: session.file == nil))
             Text(session.name).lineLimit(1).truncationMode(.middle)
-            StatusChip(title: group.rows.count.formatted(), color: nil)
-                .help("\(group.rows.count) item\(group.rows.count == 1 ? "" : "s")")
             Spacer()
             if group.safeSize > 0 {
                 Text(formatted(group.safeSize)).foregroundStyle(.secondary)
@@ -520,17 +516,25 @@ struct CaptureOneView<Sidebar: View>: View {
                     .padding(.bottom, 28)
                 }
                 // A header with more than one view turns grey and small; this matches the plain "Actions" one
-                HStack(alignment: .firstTextBaseline) {
-                    Text(kind.rawValue).font(.headline)
-                    Spacer()
-                    Button(safe.isEmpty ? "Delete" : "Delete \(formatted(Self.safeSize(safe)))", systemImage: "trash") { pendingDelete = safe }
-                        .disabled(safe.isEmpty || deleting != nil)
-                        .help("Delete the safe items in this section")
-                }
-                .padding(.bottom, 6)
+                Text(kind.rawValue)
+                    .font(.headline)
+                    .padding(.bottom, 6)
             }
             .foregroundStyle(.primary)
             .textCase(nil)
+        } footer: {
+            HStack {
+                Button("Reveal in Finder") { revealInFinder(rows) }
+                    .disabled(!isConnected(group.session.driveUUID))
+                    .help("Select this section's items in Finder")
+                Spacer()
+                Button(safe.isEmpty ? "Delete" : "Delete \(formatted(Self.safeSize(safe)))", systemImage: "trash") { pendingDelete = safe }
+                    .disabled(safe.isEmpty || deleting != nil)
+                    .help("Delete the safe items in this section")
+            }
+            .padding(.top, 6)
+            // ponytail: measured, the grouped Form insets footers 10 pt inside the card on macOS 27; this lines the buttons up with its edges
+            .padding(.horizontal, -10)
         }
     }
 
@@ -742,11 +746,16 @@ struct CaptureOneView<Sidebar: View>: View {
     }
 
     private func revealInFinder(_ row: CleanupRow) {
-        guard let driveURL = driveURL(row.item.driveUUID) else {
+        revealInFinder([row])
+    }
+
+    /// Rows of one session, so one drive
+    private func revealInFinder(_ rows: [CleanupRow]) {
+        guard let row = rows.first, let driveURL = driveURL(row.item.driveUUID) else {
             NSSound.beep()
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting(row.paths.map { driveURL.appendingPathComponent($0) })
+        NSWorkspace.shared.activateFileViewerSelecting(rows.flatMap(\.paths).map { driveURL.appendingPathComponent($0) })
     }
 
     private func openSession(_ session: CaptureOneSession) {
