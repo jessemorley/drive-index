@@ -120,7 +120,7 @@ struct IndexingStatusBar: View {
 
     var body: some View {
         HStack {
-            content
+            IndexingStatusContent()
         }
         .lineLimit(1)
         .controlSize(.small)
@@ -130,9 +130,13 @@ struct IndexingStatusBar: View {
         .padding([.horizontal, .bottom], 10)
         .animation(nil, value: indexManager.currentProgress?.filesProcessed)
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
+/// Icon and text for the current scan or hash; shared by the status bar and the menu bar menu
+struct IndexingStatusContent: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
         if let pending = indexManager.pendingChanges {
             Image(systemName: "arrow.triangle.2.circlepath")
                 .foregroundStyle(.secondary)
@@ -179,6 +183,31 @@ struct IndexingStatusBar: View {
     }
 }
 
+/// Top row of the menu bar menu (an NSMenuItem view, so it keeps the menu's look): status, as in IndexingStatusBar
+struct MenuBarStatusRow: View {
+    @EnvironmentObject var indexManager: IndexManager
+
+    var body: some View {
+        HStack {
+            if indexManager.pendingChanges != nil || indexManager.isIndexing || indexManager.isHashing {
+                IndexingStatusContent()
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Up to date")
+            }
+        }
+        .lineLimit(1)
+        .controlSize(.small)
+        // The menu's own font, so the row matches the items under it
+        .font(Font(NSFont.menuFont(ofSize: 0)))
+        .animation(nil, value: indexManager.currentProgress?.filesProcessed)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+        .frame(width: 300, alignment: .leading)
+    }
+}
+
 #Preview {
     MainWindowView()
         .environmentObject(DriveMonitor())
@@ -205,4 +234,14 @@ struct IndexingStatusBar: View {
     }
     .frame(width: 480)
     .padding(.vertical)
+}
+
+#Preview("Menu bar status") {
+    let indexing = IndexManager()
+    indexing.isIndexing = true
+    indexing.indexingDriveName = "Jesse T72"
+    return VStack {
+        MenuBarStatusRow().environmentObject(indexing)
+        MenuBarStatusRow().environmentObject(IndexManager())
+    }
 }
