@@ -135,7 +135,7 @@ struct FolderComparisonTests {
         let listing = try await pair.compare().listingFolders()
         #expect(listing.b == ["Images/Photocopy-Textures/Set 1/t1.jpg": "Images/Photocopy-Textures",
                               "Images/Photocopy-Textures/t2.jpg": "Images/Photocopy-Textures",
-                              "Images/loose.jpg": "Images"])
+                              "Images/loose.jpg": ""])  // Images is on both sides
         #expect(listing.a == ["top.zip": ""])
     }
 

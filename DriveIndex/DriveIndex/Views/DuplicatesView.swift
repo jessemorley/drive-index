@@ -26,6 +26,9 @@ extension DuplicateGroup {
 extension FolderSet {
     /// The most recent folder, else the one with the most files
     var defaultKeep: Int { mostRecent ?? members.indices.max { members[$0].files < members[$1].files } ?? 0 }
+
+    /// From the index: every folder's files all have copies in the others
+    var isExactMatch: Bool { members.allSatisfy { $0.shared == $0.files } }
 }
 
 extension FolderSet.Member {
@@ -124,6 +127,9 @@ struct DuplicatesView: View {
     @State private var loads = 0
     /// Check on Disk, by "set id#kept member id": each other folder, and what it has that the kept one lacks (nil: nothing)
     @State private var diskVerdicts: [String: [(folder: FolderLocation, losses: String?)]] = [:]
+    /// Every disk check's hashes, so the next action on the same folders only re-walks them and
+    /// hashes files whose size or modified date changed since
+    @State private var diskHashes: [String: String] = [:]
     /// Checking a set's folders on disk, or updating its older copies: what, and bytes done of the most expected
     @State private var working: (set: String, label: String, done: Int64, total: Int64)?
     @State private var workTask: Task<Void, Never>?
@@ -295,7 +301,7 @@ struct DuplicatesView: View {
         return Form {
             Section {
                 ForEach(Array(set.members.enumerated()), id: \.element.id) { i, _ in
-                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, blockers: set.members[i].blockers(keeping: kept))
+                    member(set.members[i], kept: i == kept, mostRecent: i == set.mostRecent, identical: set.isExactMatch, blockers: set.members[i].blockers(keeping: kept))
                         .onTapGesture { keep[set.id] = i }
                 }
             } header: {
@@ -329,7 +335,9 @@ struct DuplicatesView: View {
                     }
                 } else if blockers.isEmpty {
                     Label {
-                        Text("Nothing blocking")
+                        Text(set.isExactMatch
+                             ?"Safe to delete: the folders are an exact match"
+                             : "Safe to delete: the kept folder has every file")
                     } icon: {
                         Image(systemName: "checkmark.circle").foregroundStyle(.green)
                     }
@@ -390,7 +398,7 @@ struct DuplicatesView: View {
                             Button("Cancel") { workTask?.cancel() }
                         } else {
                             // "Older" only when the kept folder is the most recent
-                            let copies = (kept == set.mostRecent ? "Older " : "Other ") + (removed.count == 1 ? "Copy" : "Copies")
+                            let copies = (kept == set.mostRecent && !set.isExactMatch ? "Older " : "Other ") + (removed.count == 1 ? "Copy" : "Copies")
                             Button("Check on Disk") { onDisk(set, keeping: kept, then: .check) }
                                 .help("Check on disk whether the other copies are clear to delete, including files the index leaves out")
                                 .disabled(!offline.isEmpty || !isConnected(set.members[kept].folder.driveUUID))
@@ -488,11 +496,11 @@ struct DuplicatesView: View {
     }
 
     /// A folder of the set: radio, drive and path, how its files overlap the others, and what blocks trashing it
-    private func member(_ m: FolderSet.Member, kept: Bool, mostRecent: Bool, blockers: [(Blocker, Int)]) -> some View {
+    private func member(_ m: FolderSet.Member, kept: Bool, mostRecent: Bool, identical: Bool, blockers: [(Blocker, Int)]) -> some View {
         let status = kept ? nil
             : blockers.isEmpty ? nil
             : blockers.map { $0.0.short($0.1) }.joined(separator: ", ")
-        return HStack(alignment: .firstTextBaseline) {
+        return HStack(spacing: 14) {
             Image(systemName: kept ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(kept ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             VStack(alignment: .leading, spacing: 8) {
@@ -501,7 +509,11 @@ struct DuplicatesView: View {
                     Text(m.folder.driveName).fontWeight(.medium)
                     Text(m.folder.relativePath).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    if mostRecent { StatusChip(title: "Most recent", color: .green) }
+                    if identical {
+                        StatusChip(title: "Identical", color: .orange)
+                    } else if mostRecent {
+                        StatusChip(title: "Most recent", color: .green)
+                    }
                 }
                 .foregroundStyle(isConnected(m.folder.driveUUID) ? .primary : .secondary)
                 OverlapBar(member: m)
@@ -722,9 +734,10 @@ struct DuplicatesView: View {
             do {
                 for (member, url) in zip(others, urls) {
                     working = (set.id, "Checking on disk…", 0, 0)
-                    let result = try await FolderComparison.compare(keptURL, url, skipping: (kept.folder.path(of: member.folder), member.folder.path(of: kept.folder))) { _, hashed, total in
+                    let result = try await FolderComparison.compare(keptURL, url, reusing: diskHashes, skipping: (kept.folder.path(of: member.folder), member.folder.path(of: kept.folder))) { _, hashed, total in
                         Task { @MainActor in if working?.set == set.id { working = (set.id, "Checking on disk…", hashed, total) } }
                     }
+                    diskHashes = result.hashes
                     results.append((member, result))
                 }
             } catch {

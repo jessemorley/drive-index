@@ -84,7 +84,7 @@ struct FolderComparison {
     var hashes: [String: String] = [:]
 
     /// Where to list each file only one side has: under the highest folder the other side doesn't
-    /// have at all, else under its own folder ("" at the top level). Keyed by path.
+    /// have at all, else on its own (""): a folder row means the folder itself is only on that side. Keyed by path.
     func listingFolders() -> (a: [String: String], b: [String: String]) {
         func parent(_ path: String) -> String { (path as NSString).deletingLastPathComponent }
         func folders(_ side: Side) -> Set<String> {
@@ -103,9 +103,9 @@ struct FolderComparison {
                 var folder = ""
                 for name in parent(file.path).split(separator: "/") {
                     folder = folder.isEmpty ? String(name) : "\(folder)/\(name)"
-                    if !otherFolders.contains(folder) { break }
+                    if !otherFolders.contains(folder) { return (file.path, folder) }
                 }
-                return (file.path, folder)
+                return (file.path, "")
             }) { first, _ in first }
         }
         return (listing(onlyA, otherFolders: folders(.b)), listing(onlyB, otherFolders: folders(.a)))
@@ -278,12 +278,14 @@ extension FolderComparison {
             throw CocoaError(.fileReadNoSuchFile, userInfo: [NSFilePathErrorKey: root.path])
         }
         var files: [String: File] = [:]
-        for case let url as URL in enumerator {
+        while let url = autoreleasepool(invoking: { enumerator.nextObject() as? URL }) {
             try Task.checkCancellation()
-            let values = try url.resourceValues(forKeys: Set(keys))
-            guard values.isRegularFile == true else { continue }
-            let path = url.relativePath
-            files[path] = File(path: path, size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate)
+            try autoreleasepool {
+                let values = try url.resourceValues(forKeys: Set(keys))
+                guard values.isRegularFile == true else { return }
+                let path = url.relativePath
+                files[path] = File(path: path, size: Int64(values.fileSize ?? 0), modified: values.contentModificationDate)
+            }
         }
         if let walkError { throw walkError }
         return files
@@ -388,9 +390,13 @@ extension FolderComparison {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
-        while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
-            try Task.checkCancellation()
+        // Each chunk is autoreleased; without a pool per read, a whole comparison's reads stay in memory
+        while try autoreleasepool(invoking: {
+            guard let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty else { return false }
             hasher.update(data: chunk)
+            return true
+        }) {
+            try Task.checkCancellation()
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
