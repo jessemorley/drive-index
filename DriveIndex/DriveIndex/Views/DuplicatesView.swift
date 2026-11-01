@@ -343,8 +343,12 @@ struct DuplicatesView<Sidebar: View>: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Section {
+        }
+        .formStyle(.grouped)
+        // Pinned under the copies, so Apply stays in reach however long the review gets
+        .safeAreaBar(edge: .bottom) {
+            // Glass, as Capture One's footer: a GroupBox let the rows scrolling under it show through
+            VStack(alignment: .leading, spacing: 10) {
                 if let verdicts = diskVerdicts[set.id + "#" + set.members[kept].id] {
                     if verdicts.allSatisfy({ $0.losses == nil }) {
                         Label {
@@ -372,7 +376,17 @@ struct DuplicatesView<Sidebar: View>: View {
                 }
                 // What Apply will do
                 ForEach(set.members.indices, id: \.self) { i in
-                    if let p = plan(set, i, kept: kept) { Label(p.text, systemImage: p.icon) }
+                    if let p = plan(set, i, kept: kept) {
+                        // As Capture One's "Safe to delete": what happens, then where and how much
+                        HStack {
+                            Image(systemName: p.icon).foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(p.title)
+                                Text(p.detail)
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                            }
+                        }
+                    }
                 }
                 ForEach(blockers.indices, id: \.self) { index in
                     let b = blockers[index]
@@ -432,13 +446,11 @@ struct DuplicatesView<Sidebar: View>: View {
                     }
                 }
                 .padding(.vertical, 4)
-            } header: {
-                Text("Actions")
-                    .padding(.top, 12)
-                    .padding(.bottom, 6)
             }
+            .padding()
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .padding()
         }
-        .formStyle(.grouped)
         // A new set gets a new Form: reusing one across sets mis-laid the rows it added
         .id(set.id)
     }
@@ -788,23 +800,25 @@ struct DuplicatesView<Sidebar: View>: View {
     }
 
     /// What Apply will do to a copy, from the index (the disk check before it has the final say); nil when it's left as is
-    private func plan(_ set: FolderSet, _ i: Int, kept: Int) -> (icon: String, text: String)? {
+    private func plan(_ set: FolderSet, _ i: Int, kept: Int) -> (icon: String, title: String, detail: String)? {
         let m = set.members[i], drive = m.folder.driveName, source = set.members[kept].folder.driveName
         let files = { (n: Int) in "\(n.formatted()) \(n == 1 ? "file" : "files")" }
+        let place = "\(drive) · \(m.folder.relativePath)"
         switch action(set, i, kept: kept) {
         case .leave:
             return nil
         case .trash:
-            return ("trash", "\(drive) · \(m.folder.relativePath) will be moved to the Trash (\(files(m.files)), \(bytes(m.bytes)))")
+            return ("trash", "Move to Trash", "\(place) · \(files(m.files)) · \(bytes(m.bytes))")
         case .update:
+            let title = "Update to match \(source)"
             guard let plan = comparisons[set.members[kept].id + "|" + m.id]?.mirrorPlan(from: .a) else {
-                return ("arrow.triangle.2.circlepath", "\(drive) will be updated to match \(source)")
+                return ("arrow.triangle.2.circlepath", title, place)
             }
             var parts: [String] = []
-            if !plan.add.isEmpty { parts.append("\(files(plan.add.count)) will be copied to \(drive) (\(bytes(plan.add.reduce(0) { $0 + $1.size })))") }
-            if !plan.replace.isEmpty { parts.append("\(files(plan.replace.count)) changed on \(drive) will be replaced") }
-            if !plan.remove.isEmpty { parts.append("\(files(plan.remove.count)) only on \(drive) will be moved to the Trash") }
-            return ("arrow.triangle.2.circlepath", parts.isEmpty ? "\(drive) already matches \(source)" : parts.formatted())
+            if !plan.add.isEmpty { parts.append("\(files(plan.add.count)) copied (\(bytes(plan.add.reduce(0) { $0 + $1.size })))") }
+            if !plan.replace.isEmpty { parts.append("\(files(plan.replace.count)) replaced") }
+            if !plan.remove.isEmpty { parts.append("\(files(plan.remove.count)) moved to the Trash") }
+            return ("arrow.triangle.2.circlepath", title, ([place] + (parts.isEmpty ? ["already matches"] : [parts.joined(separator: ", ")])).joined(separator: " · "))
         }
     }
 
