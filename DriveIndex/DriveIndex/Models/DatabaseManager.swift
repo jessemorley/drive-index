@@ -62,13 +62,15 @@ struct FolderScanRow {
     let hash: String?
     let isDirectory: Bool
     let modifiedAt: Date?
+    /// Under the minimum duplicate size: never hashed, matched by name and size
+    var small = false
 }
 
 actor DatabaseManager {
     static let shared = DatabaseManager()
 
-    /// "min_duplicate_file_size" when it isn't set: every non-empty file is hashed and compared
-    static let defaultMinDuplicateFileSize: Int64 = 1
+    /// "min_duplicate_file_size" when it isn't set. Hashing every small file cost too much CPU and time
+    static let defaultMinDuplicateFileSize: Int64 = 5_242_880
 
     /// SQL condition: not inside build or tool output, which is never worth showing as duplicates,
     /// so it isn't hashed or compared. It stays indexed and searchable.
@@ -1714,8 +1716,8 @@ actor DatabaseManager {
         return files
     }
 
-    /// Every folder, and every file at least the minimum duplicate size, outside build output: the
-    /// input to DuplicateOverview
+    /// Every folder and file outside build output: the input to DuplicateOverview. Files under the
+    /// minimum duplicate size come without a hash, marked small
     func getDuplicateScanRows() throws -> [FolderScanRow] {
         let minSize = Int64(try getSetting("min_duplicate_file_size") ?? "") ?? Self.defaultMinDuplicateFileSize
 
@@ -1727,10 +1729,11 @@ actor DatabaseManager {
         }
 
         let sql = """
-            SELECT f.id, f.drive_uuid, d.name, f.relative_path, f.size, f.hash, f.is_directory, f.modified_at
+            SELECT f.id, f.drive_uuid, d.name, f.relative_path, f.size, CASE WHEN f.size >= ?1 THEN f.hash END,
+                   f.is_directory, f.modified_at, f.size < ?1
             FROM files f
             JOIN drives d ON d.uuid = f.drive_uuid
-            WHERE (f.is_directory = 1 OR f.size >= ?) AND \(Self.notBuildOutput)
+            WHERE \(Self.notBuildOutput)
         """
 
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
@@ -1749,7 +1752,8 @@ actor DatabaseManager {
                 hash: sqlite3_column_text(stmt, 5).map { String(cString: $0) },
                 isDirectory: sqlite3_column_int(stmt, 6) != 0,
                 modifiedAt: sqlite3_column_type(stmt, 7) == SQLITE_NULL ? nil
-                    : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 7)))
+                    : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 7))),
+                small: sqlite3_column_int(stmt, 8) != 0
             ))
         }
 

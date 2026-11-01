@@ -14,7 +14,7 @@ struct FolderSet: Identifiable {
         let folder: FolderLocation
         var files = 0
         var bytes: Int64 = 0
-        /// A copy is in another folder of the card
+        /// A copy is in another folder of the card (a small file: one with its name and size)
         var shared = 0
         /// Not shared, and a file with its name in another folder has different contents
         var changed = 0
@@ -28,6 +28,12 @@ struct FolderSet: Identifiable {
         /// By member index: hashed files with no copy in that folder. With three or more folders, `shared`
         /// can mean the only other copy is in a folder also being trashed; this says what keeping one loses
         var missingFrom: [Int] = []
+        /// In a Capture One session, or holding one. The index leaves out its adjustments (.cos and
+        /// the like), so only a comparison on disk can judge it
+        var isSession = false
+        /// Its newest file, leaving out session databases and Capture One's cache, which change
+        /// whenever a session is opened (as Folder Compare's latest edit does)
+        var latest: Date?
 
         var id: String { folder.driveUUID + ":" + folder.relativePath }
         // ponytail: every file shared; a threshold ("99% shared") if the user wants one
@@ -40,6 +46,11 @@ struct FolderSet: Identifiable {
     let wastedBytes: Int64
 
     var id: String { members.map(\.id).joined(separator: "|") }
+
+    /// The folder with the newest file, when any file has a date
+    var mostRecent: Int? {
+        members.indices.filter { members[$0].latest != nil }.max { members[$0].latest! < members[$1].latest! }
+    }
 
     /// The folders' names, each once
     var name: String {
@@ -60,7 +71,9 @@ struct DuplicateOverview {
             let a, b: Int
             init(_ x: Int, _ y: Int) { (a, b) = (min(x, y), max(x, y)) }
         }
-        struct File { let row: FolderScanRow; let folder: Int?; let hash: Int? }
+        /// `hash` pairs folders and finds loose duplicates; `match` (the hash, or a small file's name and
+        /// size) decides each file's verdict
+        struct File { let row: FolderScanRow; let folder: Int?; let hash: Int?; let match: Int? }
 
         // Folders as Ints; a nil parent is the drive root
         var ids: [Key: Int] = [:]
@@ -94,10 +107,15 @@ struct DuplicateOverview {
                 if let id = folder(row.driveUUID, row.relativePath) { hasRow[id] = true }
                 continue
             }
-            var hash: Int?
-            if let h = row.hash { hash = hashIDs[h, default: hashIDs.count]; hashIDs[h] = hash }
-            files.append(File(row: row, folder: folder(row.driveUUID, (row.relativePath as NSString).deletingLastPathComponent), hash: hash))
+            // ponytail: small files match by name and size, no hash: a heuristic, not a content check
+            let key = row.small ? "\u{1}\((row.relativePath as NSString).lastPathComponent)\u{0}\(row.size)" : row.hash
+            var match: Int?
+            if let key { match = hashIDs[key, default: hashIDs.count]; hashIDs[key] = match }
+            files.append(File(row: row, folder: folder(row.driveUUID, (row.relativePath as NSString).deletingLastPathComponent),
+                              hash: row.small ? nil : match, match: match))
         }
+        // Folders a session database is directly in
+        let sessionFolders = Set(files.filter { $0.row.relativePath.hasSuffix(".cosessiondb") }.compactMap(\.folder))
         var copies = [Int](repeating: 0, count: hashIDs.count)
         for f in files { if let h = f.hash { copies[h] += 1 } }
 
@@ -211,8 +229,8 @@ struct DuplicateOverview {
 
         for (c, card) in cards.enumerated() {
             let slots = cardFiles[c]
-            let hashes = slots.map { Set($0.compactMap { files[$0].hash }) }
-            let names = slots.map { Set($0.filter { files[$0].hash != nil }.map { (files[$0].row.relativePath as NSString).lastPathComponent }) }
+            let hashes = slots.map { Set($0.compactMap { files[$0].match }) }
+            let names = slots.map { Set($0.filter { files[$0].match != nil }.map { (files[$0].row.relativePath as NSString).lastPathComponent }) }
             var count: [Int: Int] = [:]
             var size: [Int: Int64] = [:]
             var members: [FolderSet.Member] = []
@@ -220,15 +238,22 @@ struct DuplicateOverview {
                 var member = FolderSet.Member(folder: FolderLocation(driveUUID: keys[m].drive, driveName: driveNames[keys[m].drive] ?? "",
                                                                      relativePath: keys[m].path))
                 member.holdsAnother = card.contains { $0 != m && ancestors(parent[$0]).contains(m) }
+                member.isSession = ancestors(m).contains(where: sessionFolders.contains)
+                    || slots[s].contains { files[$0].row.relativePath.hasSuffix(".cosessiondb") }
                 let others = slots.indices.filter { $0 != s }
-                member.missingFrom = hashes.map { kept in slots[s].count { files[$0].hash.map { !kept.contains($0) } ?? false } }
+                member.missingFrom = hashes.map { kept in slots[s].count { files[$0].match.map { !kept.contains($0) } ?? false } }
                 for i in slots[s] {
                     let f = files[i]
+                    if let date = f.row.modifiedAt, !f.row.relativePath.hasSuffix(".cosessiondb"), !f.row.relativePath.contains("CaptureOne/Cache/") {
+                        member.latest = max(member.latest ?? date, date)
+                    }
                     member.files += 1
                     member.bytes += f.row.size
-                    guard let h = f.hash else { member.unchecked += 1; continue }
-                    count[h, default: 0] += 1
-                    size[h] = f.row.size
+                    guard let h = f.match else { member.unchecked += 1; continue }
+                    if f.hash != nil {
+                        count[h, default: 0] += 1
+                        size[h] = f.row.size
+                    }
                     if others.contains(where: { hashes[$0].contains(h) }) {
                         member.shared += 1
                     } else if others.contains(where: { names[$0].contains((f.row.relativePath as NSString).lastPathComponent) }) {

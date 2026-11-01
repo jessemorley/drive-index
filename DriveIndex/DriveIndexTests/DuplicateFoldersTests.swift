@@ -105,6 +105,50 @@ struct FolderOverlapTests {
         #expect(set.members.map(\.missingFrom) == [[0, 0, 1], [0, 0, 1], [0, 0, 0]])
     }
 
+    /// Under the size limit nothing is hashed: a file with the same name and size counts as the copy
+    @Test func smallFilesMatchByNameAndSize() throws {
+        func small(_ drive: String, _ path: String, _ size: Int64) -> FolderScanRow {
+            FolderScanRow(id: 0, driveUUID: drive, driveName: drive, relativePath: path, size: size,
+                          hash: nil, isDirectory: false, modifiedAt: nil, small: true)
+        }
+        let o = overview(files("A", "S", five) + files("B", "S", five) + [
+            small("A", "S/a.xmp", 10), small("B", "S/a.xmp", 10),
+            small("A", "S/b.xmp", 10), small("B", "S/b.xmp", 12),
+            small("A", "S/notes.txt", 10)])
+        let a = try #require(o.member("A", "S"))
+        let b = try #require(o.member("B", "S"))
+        #expect([a.files, a.shared, a.changed, a.onlyHere, a.unchecked] == [8, 6, 1, 1, 0] as [Int])
+        #expect([b.files, b.shared, b.changed, b.onlyHere, b.unchecked] == [7, 6, 1, 0, 0] as [Int])
+        #expect(a.missingFrom == [0, 2])
+        #expect(o.loose.isEmpty)
+        #expect(o.sets[0].wastedBytes == 50)
+    }
+
+    /// A Capture One session's adjustments aren't indexed, so the index can't block it: the disk check judges it
+    @Test func sessionsHaveNoIndexBlockers() throws {
+        let o = overview(files("A", "Shoot", five + ["Shoot.cosessiondb"]) + files("B", "Shoot", five + ["Shoot.cosessiondb", "new.NEF"])
+                         + files("C", "Plain", five + ["only"]) + files("D", "Plain", five))
+        let a = try #require(o.member("A", "Shoot")), b = try #require(o.member("B", "Shoot"))
+        let c = try #require(o.member("C", "Plain"))
+        #expect(a.isSession && b.isSession && !c.isSession)
+        #expect(b.onlyHere == 1 && b.blockers(keeping: 0).isEmpty)
+        #expect(!c.blockers(keeping: 1).isEmpty)
+    }
+
+    /// The most recent copy has the newest file, ignoring the session database and Capture One's cache
+    @Test func mostRecentHasTheNewestFile() throws {
+        func dated(_ drive: String, _ path: String, _ day: Double) -> FolderScanRow {
+            FolderScanRow(id: 0, driveUUID: drive, driveName: drive, relativePath: path, size: 10,
+                          hash: String(path.split(separator: "/").last!), isDirectory: false, modifiedAt: Date(timeIntervalSince1970: day * 86_400))
+        }
+        let o = overview(five.map { dated("A", "S/\($0)", 1) } + [dated("A", "S/e.cos", 5)]
+                         + five.map { dated("B", "S/\($0)", 1) } + [dated("B", "S/e.cos", 3), dated("B", "S/S.cosessiondb", 9),
+                                                                   dated("B", "S/CaptureOne/Cache/t.jpg", 9)])
+        let set = try #require(o.sets.first)
+        #expect(set.members.map { $0.latest?.timeIntervalSince1970 } == [5 * 86_400, 3 * 86_400])
+        #expect(set.mostRecent == 0)
+    }
+
     /// Selects picked from several camera folders: no one folder holds enough of them, the shoot's Capture does
     @Test func selectsFromSubfoldersPairWithTheShoot() throws {
         let looks = (1...3).flatMap { look in files("T72", "Shoot/Capture/LOOK \(look)", (1...6).map { "\(look)-\($0).NEF" }) }

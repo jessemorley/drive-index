@@ -33,6 +33,42 @@ private struct Pair {
 }
 
 struct FolderComparisonTests {
+    /// A folder against one inside it: the inner one's files mustn't match themselves in the outer one
+    @Test func innerFolderIsLeftOutOfTheOuter() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        try pair.write(pair.a, "a.NEF", "a")
+        try pair.write(pair.a, "Test/a.NEF", "a")
+        try pair.write(pair.a, "Test/b.NEF", "b")
+        let outer = FolderLocation(driveUUID: "D", driveName: "D", relativePath: "Shoot/Capture")
+        let inner = FolderLocation(driveUUID: "D", driveName: "D", relativePath: "Shoot/Capture/Test")
+        #expect(outer.path(of: inner) == "Test" && inner.path(of: outer) == nil)
+
+        let result = try await FolderComparison.compare(pair.a, pair.a.appending(path: "Test"), skipping: ("Test", nil))
+        #expect(result.both.map(\.path) == ["a.NEF"])
+        #expect(result.onlyB.map(\.path) == ["b.NEF"])
+    }
+
+    /// Trashing B loses what only B has and B's newer edits. Older edits, and Capture One settings for
+    /// an older version where A has a newer settings folder beside them, aren't losses
+    @Test func olderEditsAndSupersededSettingsAreNotLost() async throws {
+        let pair = Pair()
+        defer { pair.remove() }
+        let (early, late) = (Date(timeIntervalSince1970: 1_000), Date(timeIntervalSince1970: 2_000))
+        try pair.write(pair.a, "Capture/CaptureOne/Settings1680/x.cos", "new")
+        try pair.write(pair.b, "Capture/CaptureOne/Settings1670/x.cos", "old settings")
+        try pair.write(pair.b, "Capture/CaptureOne/Other1670/y.cos", "kept")  // not a settings folder
+        try pair.write(pair.a, "edited.txt", "new edit", modified: late)
+        try pair.write(pair.b, "edited.txt", "old", modified: early)
+        try pair.write(pair.a, "theirs.txt", "old", modified: early)
+        try pair.write(pair.b, "theirs.txt", "new edit", modified: late)
+
+        let lost = try await pair.compare().lostWithoutB()
+        #expect(lost.only.map(\.path) == ["Capture/CaptureOne/Other1670/y.cos"])
+        #expect(lost.changed.map(\.path) == ["theirs.txt"])
+        #expect(lost.superseded == 1)
+    }
+
     @Test func supersetIsComplete() async throws {
         let pair = Pair()
         defer { pair.remove() }

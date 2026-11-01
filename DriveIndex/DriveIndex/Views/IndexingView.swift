@@ -16,7 +16,7 @@ struct IndexingView: View {
     @State private var excludedDrives: [DriveMetadata] = []
     @State private var fsEventsEnabled: Bool = true
     @State private var fsEventsBufferDelay: Double = 10.0
-    @State private var minDuplicateFileSize: Double = 0  // MB; 0 = any size
+    @State private var minDuplicateFileSize: Double = 5  // MB
     @State private var isLoading: Bool = true
     @State private var hasUnsavedChanges: Bool = false
     @State private var bufferDelayDebounceTask: Task<Void, Never>?
@@ -73,11 +73,11 @@ struct IndexingView: View {
 
             Section("Duplicate Detection") {
                 LabeledContent {
-                    Slider(value: $minDuplicateFileSize, in: 0...50, step: 1)
+                    Slider(value: $minDuplicateFileSize, in: 1...50, step: 1)
                         .onChange(of: minDuplicateFileSize) { _, newValue in
                             debouncedAutoSaveMinDuplicateSize(newValue)
                         }
-                    Text(minDuplicateFileSize == 0 ? "Any size" : "\(Int(minDuplicateFileSize)) MB")
+                    Text("\(Int(minDuplicateFileSize)) MB")
                         .monospacedDigit()
                         .fixedSize()
                 } label: {
@@ -178,7 +178,7 @@ struct IndexingView: View {
             excludedExtensions = exts
             fsEventsEnabled = fsEnabled
             fsEventsBufferDelay = fsDelay
-            minDuplicateFileSize = (Double(minSizeBytes) / 1_048_576.0).rounded(.down)  // bytes to MB; 1 byte = any size
+            minDuplicateFileSize = Double(minSizeBytes) / 1_048_576.0  // bytes to MB
             isLoading = false
             hasUnsavedChanges = false
         }
@@ -250,8 +250,7 @@ struct IndexingView: View {
             guard !Task.isCancelled else { return }
 
             do {
-                // 0 MB ("Any size") skips empty files: they all hash alike
-                let minSizeBytes = max(Int64(size * 1_048_576.0), DatabaseManager.defaultMinDuplicateFileSize)
+                let minSizeBytes = Int64(size * 1_048_576.0)
                 try await DatabaseManager.shared.setSetting("min_duplicate_file_size", value: String(minSizeBytes))
             } catch {
                 print("Error saving min duplicate file size: \(error)")

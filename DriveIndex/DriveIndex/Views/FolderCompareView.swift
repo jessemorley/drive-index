@@ -54,11 +54,8 @@ struct FolderCompareView: View {
             VStack(alignment: .leading, spacing: 20) {
                 columns { side in
                     GroupBox {
-                        VStack(spacing: 16) {
-                            header(side)
-                            if let result { availability(side, result) }
-                        }
-                        .padding(8)
+                        ComparisonSide(folder: side == .a ? pair.a : pair.b, side: side, result: result, dimmed: isLoading)
+                            .padding(8)
                     }
                 }
                 if let errorMessage {
@@ -119,56 +116,6 @@ struct FolderCompareView: View {
         HStack(alignment: alignment, spacing: 16) {
             content(.a).frame(maxWidth: .infinity, alignment: .topLeading)
             content(.b).frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-    }
-
-    /// The drive and the folder, dimmed until the first comparison is done
-    private func header(_ side: FolderComparison.Side) -> some View {
-        let folder = side == .a ? pair.a : pair.b
-        let drive = driveMonitor.drives.first { $0.id == folder.driveUUID }
-        return VStack(spacing: 6) {
-            if let drive {
-                Image(nsImage: drive.finderIcon)
-                    .resizable()
-                    .frame(width: 64, height: 64)
-                    // ponytail: no system dimmed style for an image; matches the tertiary text
-                    .opacity(isLoading ? 0.4 : 1)
-            }
-            Text(folder.driveName)
-                .font(.headline)
-                .foregroundStyle(isLoading ? .tertiary : .primary)
-            Text(folder.relativePath.isEmpty ? "/" : folder.relativePath)
-                .foregroundStyle(isLoading ? .tertiary : .secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// This side's files by count: shared with the other side (in both, or moved), or only here.
-    /// Changed files are neither.
-    private func availability(_ side: FolderComparison.Side, _ result: FolderComparison) -> some View {
-        let unique = side == .a ? result.onlyA.count : result.onlyB.count
-        let shared = result.both.count + result.moved.count
-        let fileTotal = max(unique + shared, 1)
-        let color: Color = side == .a ? .blue : .orange
-        func percent(_ n: Int) -> String {
-            (Double(n) / Double(fileTotal)).formatted(.percent.precision(.fractionLength(0...1)))
-        }
-
-        return VStack(alignment: .leading, spacing: 8) {
-            GeometryReader { geometry in
-                let scale = geometry.size.width / CGFloat(fileTotal)
-                HStack(spacing: 0) {
-                    Rectangle().fill(.tertiary).frame(width: CGFloat(shared) * scale)
-                    Rectangle().fill(color).frame(width: CGFloat(unique) * scale)
-                }
-            }
-            .frame(height: 8)
-            .clipShape(Capsule())
-            Text("\(percent(unique)) unique files")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -251,116 +198,19 @@ struct FolderCompareView: View {
             : text + Text("\n\nCareful: \(destination) has the newer version of ^[\(plan.replacingNewer) file](inflect: true) being replaced.")
     }
 
-    /// A titled card of rows, divided like the duplicate cards
-    private func card<Item>(_ title: LocalizedStringKey, _ items: [Item], id: KeyPath<Item, String>,
-                            @ViewBuilder row: @escaping (Item) -> some View) -> some View {
-        VStack(alignment: .leading) {
-            Text(title)
-                .font(.headline)
-            GroupBox {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(items, id: id) { item in
-                        if item[keyPath: id] != items[0][keyPath: id] { Divider() }
-                        row(item)
-                    }
-                }
-                .padding(4)
-            }
-        }
-    }
-
-    /// The files only this side has: folders first, one row each, then the loose files. With none,
-    /// the trash button for this folder, when the other side has everything.
-    @ViewBuilder
+    /// The files only this side has. With none, the trash button for this folder, when the other side has everything.
     private func filesList(_ side: FolderComparison.Side, _ files: [FolderComparison.File], _ listing: [String: String],
                            root: URL?) -> some View {
-        if files.isEmpty {
-            // The side with nothing of its own is the one that can go
-            VStack(spacing: 12) {
-                let other: FolderComparison.Side = side == .a ? .b : .a
-                let changed = result?.changed.count ?? 0
-                Text(changed == 0
-                     ? "Everything from this folder is available on \(driveName(other))."
-                     : "Everything else from this folder is available on \(driveName(other)). ^[\(changed) changed file](inflect: true) are listed below.")
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
-                    let folder = side == .a ? pair.a : pair.b
-                    Button("Move “\(folder.name)” to Trash", role: .destructive) {
-                        onTrash(folder)
-                        dismiss()
-                    }
+        OnlyHereList(files: files, listing: listing, changed: result?.changed.count ?? 0,
+                     otherName: driveName(side == .a ? .b : .a), root: root,
+                     trash: { trash($0, on: side, removing: $1) }, trashDisabled: copying != nil || checking) {
+            if let result, !fromIndex, copying == nil, !checking, trashable(result.verdict).contains(side) {
+                let folder = side == .a ? pair.a : pair.b
+                Button("Move “\(folder.name)” to Trash", role: .destructive) {
+                    onTrash(folder)
+                    dismiss()
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-        } else {
-            let groups = Dictionary(grouping: files) { listing[$0.path] ?? "" }
-            let folders = groups.keys.filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            let entries = folders.map { ListEntry(folder: $0, files: groups[$0]!) }
-                + (groups[""] ?? []).map { ListEntry(folder: "", files: [$0]) }
-            card("Only here: ^[\(files.count) file](inflect: true), \(formatted(total(files)))", entries, id: \.id) { entry in
-                if entry.folder.isEmpty {
-                    let file = entry.files[0]
-                    row(file.path, size: file.size, note: file.elsewhere.map(safeNote), at: root?.appending(path: file.path)) {
-                        trash(file.path, on: side, removing: [file.path])
-                    }
-                } else {
-                    let safe = entry.files.filter { $0.elsewhere != nil }
-                    let note = safe.count == entry.files.count
-                        ? safeNote(safe[0].elsewhere!)
-                        : safe.isEmpty ? nil : "\(safe.count) of \(entry.files.count) files safe elsewhere"
-                    row(entry.folder, isFolder: true, size: total(entry.files), note: note, at: root?.appending(path: entry.folder)) {
-                        trash(entry.folder, on: side, removing: Set(entry.files.map(\.path)))
-                    }
-                }
-            }
-        }
-    }
-
-    /// A folder and its files, or one loose file
-    private struct ListEntry {
-        let folder: String  // "" for a loose file
-        let files: [FolderComparison.File]
-        var id: String { folder.isEmpty ? files[0].path : folder + "/" }
-    }
-
-    /// A copy's folder; for a folder row, the first file's copy stands for the rest
-    private func safeNote(_ copy: DuplicateFile) -> String {
-        "Safe elsewhere: \(copy.driveName) \((copy.relativePath as NSString).deletingLastPathComponent)/"
-    }
-
-    /// A file, or a folder of files, only one side has
-    private func row(_ name: String, isFolder: Bool = false, size: Int64, note: String?, at url: URL?,
-                     moveToTrash: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Label {
-                    Text(name)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } icon: {
-                    Image(nsImage: NSWorkspace.shared.listIcon(name: (name as NSString).lastPathComponent, isDirectory: isFolder))
-                }
-                Spacer()
-                Text(formatted(size))
-                    .foregroundStyle(.secondary)
-            }
-            if let note {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button("Reveal in Finder") { reveal(url.map { [$0] }) }
-                .disabled(url == nil)
-            Divider()
-            Button("Move to Trash", action: moveToTrash)
-                .disabled(url == nil || copying != nil || checking)
         }
     }
 
@@ -372,7 +222,7 @@ struct FolderCompareView: View {
                 let n = changed.filter { $0.newer == side }.count
                 return n > 0 ? ("newer on \(driveName(side))", n) : nil
             } + [("with the same date on both", changed.filter { $0.newer == nil }.count)].filter { $0.1 > 0 }
-            card("Changed: ^[\(changed.count) file](inflect: true)", lines, id: \.0) { line in
+            titledCard("Changed: ^[\(changed.count) file](inflect: true)", lines, id: \.0) { line in
                 Text("^[\(line.1) file](inflect: true) \(line.0)")
             }
         }
@@ -381,7 +231,7 @@ struct FolderCompareView: View {
     @ViewBuilder
     private func movedList(_ moved: [FolderComparison.Moved]) -> some View {
         if !moved.isEmpty {
-            card("Moved", [moved.count], id: \.description) { count in
+            titledCard("Moved", [moved.count], id: \.description) { count in
                 Text("^[\(count) file](inflect: true) in both, at different paths")
             }
         }
@@ -444,10 +294,6 @@ struct FolderCompareView: View {
         return LooseCaptureOneFolder.isInSession(folder.relativePath + "/.", on: URL(filePath: drive.path))
     }
 
-    private func reveal(_ urls: [URL]?) {
-        guard let urls else { return NSSound.beep() }
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
-    }
 
     private func startSync(from source: FolderComparison.Side) {
         copyTask = Task { await syncSession(from: source) }
@@ -538,6 +384,242 @@ struct FolderCompareView: View {
         } catch is CancellationError {
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// A titled card of rows, divided like the duplicate cards
+func titledCard<Item>(_ title: LocalizedStringKey, _ items: [Item], id: KeyPath<Item, String>,
+                        @ViewBuilder row: @escaping (Item) -> some View) -> some View {
+    VStack(alignment: .leading) {
+        Text(title)
+            .font(.headline)
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(items, id: id) { item in
+                    if item[keyPath: id] != items[0][keyPath: id] { Divider() }
+                    row(item)
+                }
+            }
+            .padding(4)
+        }
+    }
+}
+
+/// The files only one side of a comparison has: folders first, one row each, then the loose files.
+/// With none, says the other side has everything. Folder Compare and the Duplicates review both show it
+struct OnlyHereList<Accessory: View>: View {
+    let files: [FolderComparison.File]
+    /// File path → the folder row it's listed under ("" for a loose file), from listingFolders()
+    let listing: [String: String]
+    /// Changed files, listed elsewhere
+    let changed: Int
+    let otherName: String
+    let root: URL?
+    /// nil: rows can't be trashed from here
+    var trash: ((_ path: String, _ removing: Set<String>) -> Void)?
+    var trashDisabled = false
+    var title = "Only here"
+    /// Say so when this side has nothing of its own
+    var showsEmpty = true
+    /// In its own titled card; false: just the rows, for a Form section with its own header
+    var boxed = true
+    /// Under the message when this side has nothing of its own
+    @ViewBuilder var accessory: Accessory
+
+    var body: some View {
+        if files.isEmpty && showsEmpty {
+            // The side with nothing of its own is the one that can go
+            VStack(spacing: 12) {
+                Text(changed == 0
+                     ? "Everything from this folder is available on \(otherName)."
+                     : "Everything else from this folder is available on \(otherName). ^[\(changed) changed file](inflect: true) are listed below.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                accessory
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+        } else if files.isEmpty {
+            // Still a view, so this side keeps its column beside the other's list
+            Color.clear.frame(height: 0)
+        } else {
+            let groups = Dictionary(grouping: files) { listing[$0.path] ?? "" }
+            let folders = groups.keys.filter { !$0.isEmpty }.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            let entries = folders.map { ListEntry(folder: $0, files: groups[$0]!) } + similar(groups[""] ?? [])
+            if boxed {
+                titledCard("\(title): ^[\(files.count) file](inflect: true), \(formatted(total(files)))", entries, id: \.id, row: entryRow)
+            } else {
+                ForEach(entries, id: \.id, content: entryRow)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func entryRow(_ entry: ListEntry) -> some View {
+        let file = entry.files[0]
+        if entry.folder.isEmpty && entry.files.count == 1 {
+            row(file.path, size: file.size, note: file.elsewhere.map(safeNote), at: root.map { [$0.appending(path: file.path)] },
+                removing: [file.path])
+        } else if entry.folder.isEmpty {
+            // Not one path to trash, so no Move to Trash; Reveal selects them all
+            row("\(file.path) + \((entry.files.count - 1).formatted()) others", icon: file.path, size: total(entry.files),
+                note: note(entry.files), at: root.map { root in entry.files.map { root.appending(path: $0.path) } }, removing: [])
+        } else {
+            row(entry.folder, isFolder: true, size: total(entry.files), note: note(entry.files),
+                at: root.map { [$0.appending(path: entry.folder)] }, removing: Set(entry.files.map(\.path)))
+        }
+    }
+
+    /// A folder and its files, or one loose file
+    private struct ListEntry {
+        let folder: String  // "" for a loose file
+        let files: [FolderComparison.File]
+        var id: String { folder.isEmpty ? files[0].path : folder + "/" }
+    }
+
+    /// Loose files in order, with more than a few of one type in one folder as one row
+    private func similar(_ files: [FolderComparison.File]) -> [ListEntry] {
+        var order: [String] = []
+        var byKind: [String: [FolderComparison.File]] = [:]
+        for file in files {
+            let kind = (file.path as NSString).deletingLastPathComponent + "\u{0}" + (file.path as NSString).pathExtension.lowercased()
+            if byKind[kind] == nil { order.append(kind) }
+            byKind[kind, default: []].append(file)
+        }
+        // ponytail: over 5 of a kind collapse; a tuning knob
+        return order.flatMap { kind in
+            let group = byKind[kind]!
+            return group.count > 5 ? [ListEntry(folder: "", files: group)] : group.map { ListEntry(folder: "", files: [$0]) }
+        }
+    }
+
+    /// For a row of several files: where they're safe elsewhere, when any are
+    private func note(_ files: [FolderComparison.File]) -> String? {
+        let safe = files.filter { $0.elsewhere != nil }
+        return safe.count == files.count
+            ? safeNote(safe[0].elsewhere!)
+            : safe.isEmpty ? nil : "\(safe.count) of \(files.count) files safe elsewhere"
+    }
+
+    /// A copy's folder; for a folder row, the first file's copy stands for the rest
+    private func safeNote(_ copy: DuplicateFile) -> String {
+        "Safe elsewhere: \(copy.driveName) \((copy.relativePath as NSString).deletingLastPathComponent)/"
+    }
+
+    private func total(_ files: [FolderComparison.File]) -> Int64 { files.reduce(0) { $0 + $1.size } }
+
+    private func formatted(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    /// A file, a folder of files, or files of one kind, only one side has. No paths to remove: no Move to Trash
+    private func row(_ name: String, icon: String? = nil, isFolder: Bool = false, size: Int64, note: String?, at urls: [URL]?,
+                     removing paths: Set<String>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Label {
+                    Text(name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } icon: {
+                    Image(nsImage: NSWorkspace.shared.listIcon(name: ((icon ?? name) as NSString).lastPathComponent, isDirectory: isFolder))
+                }
+                Spacer()
+                Text(formatted(size))
+                    .foregroundStyle(.secondary)
+            }
+            if let note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Reveal in Finder") { urls.map { NSWorkspace.shared.activateFileViewerSelecting($0) } ?? NSSound.beep() }
+                .disabled(urls == nil)
+            if let trash, !paths.isEmpty {
+                Divider()
+                Button("Move to Trash") { trash(name, paths) }
+                    .disabled(urls == nil || trashDisabled)
+            }
+        }
+    }
+}
+
+/// One folder of a comparison: its drive and path, the share of its files the other side lacks, and
+/// its newest file. Folder Compare and the Duplicates review both show it
+struct ComparisonSide: View {
+    let folder: FolderLocation
+    let side: FolderComparison.Side
+    let result: FolderComparison?
+    /// Until the first comparison is done
+    var dimmed = false
+    var iconSize: CGFloat = 64
+
+    @EnvironmentObject var driveMonitor: DriveMonitor
+
+    var body: some View {
+        VStack(spacing: 16) {
+            header
+            if let result { availability(result) }
+        }
+    }
+
+    private var header: some View {
+        let drive = driveMonitor.drives.first { $0.id == folder.driveUUID }
+        return VStack(spacing: 6) {
+            if let drive {
+                Image(nsImage: drive.finderIcon)
+                    .resizable()
+                    .frame(width: iconSize, height: iconSize)
+                    // ponytail: no system dimmed style for an image; matches the tertiary text
+                    .opacity(dimmed ? 0.4 : 1)
+            }
+            Text(folder.driveName)
+                .font(.headline)
+                .foregroundStyle(dimmed ? .tertiary : .primary)
+            Text(folder.relativePath.isEmpty ? "/" : folder.relativePath)
+                .foregroundStyle(dimmed ? .tertiary : .secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// This side's files by count: shared with the other side (in both, or moved), or only here.
+    /// Changed files are neither.
+    private func availability(_ result: FolderComparison) -> some View {
+        let unique = side == .a ? result.onlyA.count : result.onlyB.count
+        let shared = result.both.count + result.moved.count
+        let fileTotal = max(unique + shared, 1)
+        let color: Color = side == .a ? .blue : .orange
+        let latest = side == .a ? result.latest.a : result.latest.b
+        func percent(_ n: Int) -> String {
+            (Double(n) / Double(fileTotal)).formatted(.percent.precision(.fractionLength(0...1)))
+        }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geometry in
+                let scale = geometry.size.width / CGFloat(fileTotal)
+                HStack(spacing: 0) {
+                    Rectangle().fill(.tertiary).frame(width: CGFloat(shared) * scale)
+                    Rectangle().fill(color).frame(width: CGFloat(unique) * scale)
+                }
+            }
+            .frame(height: 8)
+            .clipShape(Capsule())
+            Text("\(percent(unique)) unique files")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let latest {
+                Text("Last modified \(latest.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }
